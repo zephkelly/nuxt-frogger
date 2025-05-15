@@ -1,12 +1,14 @@
 import { H3Event } from 'h3';
 
 import {
-    type RequestTraceId,
     requestTraceIdSchema,
-
-    type SessionTraceId,
     sessionTraceIdSchema,
-} from '../../shared/types/ids';
+} from '../../shared/schemas/trace-ids';
+
+import {
+    type RequestTraceId,
+    type SessionTraceId,
+} from '../../shared/types/trace-ids';
 
 
 

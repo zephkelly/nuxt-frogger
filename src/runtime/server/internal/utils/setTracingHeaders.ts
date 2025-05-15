@@ -1,5 +1,5 @@
 import { H3Event } from "h3";
-import { uuidv7 } from "../../shared/utils/uuid";
+import { uuidv7 } from "../../../shared/utils/uuid";
 import { getHeader, setHeader } from "#imports";
 
 
@@ -25,7 +25,7 @@ export function setTracingHeaders(event: H3Event) {
 
     console.log('setting tracing headers', {
         traceId,
-        // sessionTraceId,
+        // sessionTaraceId,
         event: event.node.req.url,
     })
 }

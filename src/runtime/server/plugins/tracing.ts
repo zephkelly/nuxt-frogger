@@ -1,5 +1,5 @@
 import { defineNitroPlugin } from "#imports";
-import { setTracingHeaders } from "../utils/setTracingHeaders";
+import { setTracingHeaders } from "../internal/utils/setTracingHeaders";
 
 
 

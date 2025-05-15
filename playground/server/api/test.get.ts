@@ -1,6 +1,5 @@
-import { getSessionTraceId, getTraceId } from "../utils/trace";
-
 export default defineEventHandler((event) => {
+
     const traceId = getTraceId(event);
     // const sessionTraceId = getSessionTraceId(event);
 

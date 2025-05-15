@@ -1,11 +1,15 @@
-import { defineNuxtModule, addPlugin, createResolver, addServerPlugin } from '@nuxt/kit'
+import { defineNuxtModule, addPlugin, createResolver, addServerPlugin, addImportsDir, addImports, addServerImportsDir } from '@nuxt/kit'
+
+import { getTraceId, getSessionTraceId } from './runtime/server/utils/trace'
+
+
 
 export interface ModuleOptions {}
 
 export default defineNuxtModule<ModuleOptions>({
     meta: {
-        name: 'my-module',
-        configKey: 'myModule',
+        name: 'nuxt-trace',
+        configKey: 'nuxt-trace',
     },
     // Default configuration options of the Nuxt module
     defaults: {},
@@ -15,5 +19,7 @@ export default defineNuxtModule<ModuleOptions>({
         // Do not add the extension since the `.ts` will be transpiled to `.mjs` after `npm run prepack`
         addPlugin(resolver.resolve('./runtime/plugin'))
         addServerPlugin(resolver.resolve('./runtime/server/plugins/tracing'))
+
+        addServerImportsDir(resolver.resolve('./runtime/server/utils'))
     },
 })

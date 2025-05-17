@@ -8,4 +8,4 @@ export function createFrogger(options: ServerLoggerOptions = {}): Frogger {
     return new ServerFrogger(options);
 }
 
-export const serverFrogger: Frogger = createFrogger();
+export const frogger: Frogger = createFrogger();

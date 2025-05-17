@@ -6,7 +6,8 @@ import {
     createResolver,
     addServerPlugin,
     addImportsDir,
-    addServerImportsDir
+    addServerImportsDir,
+    addServerHandler
 } from '@nuxt/kit'
 
 
@@ -23,12 +24,15 @@ export default defineNuxtModule<ModuleOptions>({
         const resolver = createResolver(import.meta.url)
         const runtimeDir = resolve('./runtime')
 
-        // _nuxt.options.alias['#frogger'] = runtimeDir
-
         addServerImportsDir(resolver.resolve('./runtime/server/utils'))
 
         addImportsDir(resolver.resolve('./runtime/app/utils'))
 
+        addImportsDir(resolver.resolve('./runtime/app/composables'))
 
+        addServerHandler({
+            route: '/api/_frogger/logs',
+            handler: resolver.resolve('./runtime/server/api/logger.post'),
+        })
     },
 })

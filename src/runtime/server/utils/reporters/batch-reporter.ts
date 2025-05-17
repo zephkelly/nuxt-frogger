@@ -217,18 +217,17 @@ export function createHttpBatchReporter(
             }, options.timeout || 10000);
             
             try {
-                const response = await fetch(url, {
-                    method: options.method || 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...options.headers
-                    },
-                    body: JSON.stringify({ logs }),
+                const response = await $fetch(url, {
+                    method: 'POST',
+                    body: { logs },
                     signal: controller.signal
                 });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+            }
+            catch (error: any) {
+                if (error.name === 'AbortError') {
+                    console.error('Request timed out');
+                } else {
+                    console.error('Failed to send logs:', error);
                 }
             }
             finally {

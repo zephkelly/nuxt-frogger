@@ -47,16 +47,16 @@ export abstract class BaseFrogger implements Frogger {
     protected abstract processLog(logObj: LogObject): void;
     
 
-    fatal(message: any, ...args: any[]): void {
-        this.consola.fatal(message, ...args);
+    trace(message: any, ...args: any[]): void {
+        this.consola.trace(message, ...args);
+    }
+
+    success(message: any, ...args: any[]): void {
+        this.consola.success(message, ...args);
     }
     
-    error(message: any, ...args: any[]): void {
-        this.consola.error(message, ...args);
-    }
-    
-    warn(message: any, ...args: any[]): void {
-        this.consola.warn(message, ...args);
+    debug(message: any, ...args: any[]): void {
+        this.consola.debug(message, ...args);
     }
 
     log(message: any, ...args: any[]): void {
@@ -67,13 +67,18 @@ export abstract class BaseFrogger implements Frogger {
         this.consola.info(message, ...args);
     }
     
-    debug(message: any, ...args: any[]): void {
-        this.consola.debug(message, ...args);
+    warn(message: any, ...args: any[]): void {
+        this.consola.warn(message, ...args);
+    }
+
+    fatal(message: any, ...args: any[]): void {
+        this.consola.fatal(message, ...args);
     }
     
-    trace(message: any, ...args: any[]): void {
-        this.consola.trace(message, ...args);
+    error(message: any, ...args: any[]): void {
+        this.consola.error(message, ...args);
     }
+    
     
     /**
      * Context management methods

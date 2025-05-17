@@ -39,17 +39,21 @@ export class ServerFrogger extends BaseFrogger {
                 retryDelay: batchOptions.retryDelay,
                 additionalFields: options.additionalFields,
                 onFlush: async (logs) => {
-                    // Send logs to configured endpoint
-                    const response = await fetch(options.endpoint!, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ logs })
-                    });
                     
-                    if (!response.ok) {
-                        throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+                    // Send logs to configured endpoint
+                    try {
+                        await $fetch(options.endpoint || '/api/_frogger/logs', {
+                            method: 'POST',
+                            body: logs,
+                        })
+                    }
+                    catch (error) {
+                        console.error('Failed to send logs:', error);
+                        
+                        if (this.batchReporter && batchOptions.retryOnFailure) {
+
+
+                        }
                     }
                 }
             });

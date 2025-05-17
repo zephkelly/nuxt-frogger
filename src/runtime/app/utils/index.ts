@@ -9,4 +9,4 @@ export function createFrogger(options: ClientLoggerOptions = {}): Frogger {
     return new ClientFrogger(options);
 }
 
-export const clientFrogger: Frogger = createFrogger();
+export const frogger: Frogger = createFrogger();

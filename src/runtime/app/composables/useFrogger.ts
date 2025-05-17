@@ -1,32 +1,23 @@
-import { inject } from 'vue'
 import type { Frogger } from '../../shared/types/frogger'
+import { createFrogger } from '../../app/utils/index'
 
+import { type ClientLoggerOptions } from '../types/logger'
 
 
 /**
  * Composable to access the Frogger logger from any component
  */
-export function useFrogger(): Frogger {
-    const logger = inject<Frogger>('frogger')
-    
-    if (logger) {
-        return logger
-    }
+export function useFrogger(options: ClientLoggerOptions): Frogger {
+    const isServer = import.meta.server
 
-    console.warn('Frogger logger not found in current context')
-    
-    return {
-        fatal: (message: any, ...args: any[]) => console.error('[FATAL]', message, ...args),
-        error: (message: any, ...args: any[]) => console.error('[ERROR]', message, ...args),
-        warn: (message: any, ...args: any[]) => console.warn('[WARN]', message, ...args),
-        info: (message: any, ...args: any[]) => console.info('[INFO]', message, ...args),
-        debug: (message: any, ...args: any[]) => console.debug('[DEBUG]', message, ...args),
-        trace: (message: any, ...args: any[]) => console.trace('[TRACE]', message, ...args),
-        addContext: () => {},
-        setUser: () => {},
-        setSession: () => {},
-        startSpan: () => ({ end: () => {}, context: { traceId: '', spanId: '' } }),
-        getLevel: () => 3,
-        setLevel: () => {}
-    }
+    const logger = createFrogger({
+        captureConsole: true,
+        captureErrors: true,
+        level: 3,
+
+        appName: isServer ? 'nuxt-client-ssr' : 'nuxt-client',
+    });
+
+
+    return logger;
 }

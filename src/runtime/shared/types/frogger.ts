@@ -8,28 +8,36 @@ export interface Frogger {
      * @param message The primary message to log
      * @param args Additional arguments to include
      */
-    fatal(message: any, ...args: any[]): void;
-    
-    /**
-     * Log an error-level message
-     * @param message The primary message to log
-     * @param args Additional arguments to include
-     */
-    error(message: any, ...args: any[]): void;
-    
-    /**
-     * Log a warning-level message
-     * @param message The primary message to log
-     * @param args Additional arguments to include
-     */
-    warn(message: any, ...args: any[]): void;
-    
+    log(message: any, ...args: any[]): void;
+
     /**
      * Log an info-level message
      * @param message The primary message to log
      * @param args Additional arguments to include
      */
     info(message: any, ...args: any[]): void;
+    
+    /**
+     * Log a warning-level message
+     * @param message The primary message to log
+     * @param args Additional arguments to include
+    */
+    warn(message: any, ...args: any[]): void;
+   
+    /**
+    * Log an error-level message
+    * @param message The primary message to log
+    * @param args Additional arguments to include
+    */
+    error(message: any, ...args: any[]): void;
+
+    /**
+     * Log a fatal-level message
+     * @param message The primary message to log
+     * @param args Additional arguments to include
+     */
+    fatal(message: any, ...args: any[]): void;
+    
     
     /**
      * Log a debug-level message

@@ -83,19 +83,13 @@ export class FileReporter {
             ...this.options.additionalFields,
         };
 
-        if (this.options.format === 'json') {
-            return JSON.stringify(enrichedLog);
-        }
-        else {
-            // Text format - human readable
-            const timestamp = new Date(logObj.date).toISOString();
-            const level = logObj.type.toUpperCase().padEnd(5);
-            const message = logObj.args.map(arg => 
-                typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-            ).join(' ');
-            
-            return `[${timestamp}] ${level} ${message}`;
-        }
+        const timestamp = new Date(logObj.date).toISOString();
+        const level = logObj.type.toUpperCase().padEnd(5);
+        const message = logObj.args.map(arg => 
+            typeof arg === 'object' ? arg : String(arg)
+        ).join(' ');
+        
+        return `[${timestamp}] ${level} ${message}`;
     }
 
     /**

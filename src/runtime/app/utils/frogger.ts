@@ -19,7 +19,7 @@ export class ClientFrogger extends BaseFrogger {
         super(options);
         
         this.options = {
-            endpoint: options.endpoint ?? '/api/_logger/logs',
+            endpoint: options.endpoint ?? '/api/_frogger/logs',
             maxBatchSize: options.maxBatchSize ?? 10,
             maxBatchAge: options.maxBatchAge ?? 3000,
             maxQueueSize: options.maxQueueSize ?? 100,
@@ -31,7 +31,6 @@ export class ClientFrogger extends BaseFrogger {
             context: options.context ?? {}
         };
         
-        // Set up error capture if enabled
         if (this.options.captureErrors && typeof window !== 'undefined') {
             window.addEventListener('error', this.handleGlobalError.bind(this));
             window.addEventListener('unhandledrejection', this.handlePromiseRejection.bind(this));
@@ -42,7 +41,6 @@ export class ClientFrogger extends BaseFrogger {
      * Process a log entry from Consola
      */
     protected processLog(logObj: LogObject): void {
-        // Enqueue the log
         this.enqueueLog(logObj.type, logObj.args || []);
     }
     
@@ -50,7 +48,6 @@ export class ClientFrogger extends BaseFrogger {
      * Add a log entry to the queue
      */
     private enqueueLog(type: string, args: any[]): void {
-        // Create the queued log entry
         const log: QueuedLog = {
             type,
             args,
@@ -60,15 +57,12 @@ export class ClientFrogger extends BaseFrogger {
             context: { ...this.context }
         };
         
-        // Add to queue
         this.queue.push(log);
         
-        // Cap queue size if needed
         if (this.queue.length > this.options.maxQueueSize) {
             this.queue = this.queue.slice(-this.options.maxQueueSize);
         }
         
-        // Schedule sending
         this.scheduleSend();
     }
     
@@ -76,18 +70,15 @@ export class ClientFrogger extends BaseFrogger {
      * Schedule sending logs to the server
      */
     private scheduleSend(): void {
-        // If already at max batch size, send immediately
         if (this.queue.length >= this.options.maxBatchSize) {
             this.sendLogs();
             return;
         }
         
-        // If a timer is already set, do nothing
         if (this.timer !== null) {
             return;
         }
         
-        // Set a timer to send after the max age
         this.timer = setTimeout(() => {
             this.timer = null;
             this.sendLogs();
@@ -98,49 +89,43 @@ export class ClientFrogger extends BaseFrogger {
      * Send logs to the server endpoint
      */
     private async sendLogs(): Promise<void> {
-        // If no logs or already sending, do nothing
         if (this.queue.length === 0 || this.sending) {
             return;
         }
         
-        // Clear any existing timer
         if (this.timer !== null) {
             clearTimeout(this.timer);
             this.timer = null;
         }
         
-        // Mark as sending to prevent concurrent sends
         this.sending = true;
         
-        // Get logs to send and clear queue
         const logs = [...this.queue];
         this.queue = [];
         
         try {
-            // Send logs to endpoint
-            await fetch(this.options.endpoint, {
+            if (!this.options.endpoint) {
+                console.warn('No endpoint specified for sending logs');
+                return;
+            }
+            await $fetch(this.options.endpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
+                body: {
                     logs,
                     app: {
                         name: this.options.appName,
                         version: this.options.version
                     }
-                })
+                }
             });
-        } catch (error) {
-            // If sending fails, put logs back in queue
-            // (in a real implementation, you'd add retry logic)
+        }
+        catch (error) {
             console.error('Failed to send logs:', error);
             this.queue = [...logs, ...this.queue].slice(-this.options.maxQueueSize);
-        } finally {
-            // Reset sending flag
+        }
+        finally {
             this.sending = false;
             
-            // If new logs arrived during sending, schedule another send
             if (this.queue.length > 0) {
                 this.scheduleSend();
             }

@@ -1,12 +1,26 @@
+import { createConsola } from "consola";
+
+
 export default defineEventHandler((event) => {
 
-    const traceId = getTraceId(event);
-    // const sessionTraceId = getSessionTraceId(event);
+    const consola = createConsola({
+        level: 3,
+        reporters: [
+            {
+                log(logObj) {
+                    console.log(logObj);
+                }
+            }
+        ]
+    });
 
-    // console.log('sessionTraceId', sessionTraceId);
+    consola.info('Hello world');
+
+    consola.fatal('Hello world');
+
+    consola.log('Hello world');
 
     return {
-        traceId,
-        // sessionTraceId,
+        message: 'Hello world'
     }
 });

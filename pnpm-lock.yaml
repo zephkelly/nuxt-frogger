@@ -11,6 +11,9 @@ importers:
       '@nuxt/kit':
         specifier: ^3.17.3
         version: 3.17.3(magicast@0.3.5)
+      consola:
+        specifier: ^3.4.2
+        version: 3.4.2
       zod:
         specifier: 3.25.0-beta.20250515T061408
         version: 3.25.0-beta.20250515T061408

@@ -24,12 +24,5 @@ export default defineNuxtModule<ModuleOptions>({
         const runtimeDir = resolve('./runtime')
 
         _nuxt.options.alias['#nuxt-trace'] = runtimeDir
-
-
-        addPlugin(resolver.resolve('./runtime/plugin'))
-        addServerPlugin(resolver.resolve('./runtime/server/plugins/tracing'))
-
-        addServerImportsDir(resolver.resolve('./runtime/server/utils'))
-        addImportsDir(resolver.resolve('./runtime/shared/types'))
     },
 })

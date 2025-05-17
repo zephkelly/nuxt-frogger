@@ -1,4 +1,4 @@
-import { type ConsolaInstance, createConsola } from "consola";
+import { type ConsolaInstance, createConsola } from "consola/core";
 import type { Frogger } from "../types/frogger";
 import type { LogObject } from 'consola';
 import type { FroggerOptions, LogContext, TraceContext } from "../types";
@@ -20,15 +20,21 @@ export abstract class BaseFrogger implements Frogger {
         this.level = options.level ?? 3;
         
         this.consola = createConsola({
-            level: this.level,
-            reporters: [
-                {
-                    log: (logObj: LogObject) => {
-                        this.processLog(logObj);
-                    }
-                }
-            ]
+            level: this.level
         });
+        
+        this.consola.addReporter({
+            log: (logObj: LogObject) => {
+                this.processLog(logObj);
+            }
+        });
+
+        // Print to console
+        this.consola.addReporter({
+            log: (logObj: LogObject) => {
+                console.log(logObj);
+            }
+        })
         
         if (options.context) {
             this.context = { ...options.context };
@@ -51,6 +57,10 @@ export abstract class BaseFrogger implements Frogger {
     
     warn(message: any, ...args: any[]): void {
         this.consola.warn(message, ...args);
+    }
+
+    log(message: any, ...args: any[]): void {
+        this.consola.log(message, ...args);
     }
     
     info(message: any, ...args: any[]): void {

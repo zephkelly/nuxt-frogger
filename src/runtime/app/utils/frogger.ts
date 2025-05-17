@@ -1,7 +1,9 @@
-import type { LogObject } from 'consola';
-import { BaseFrogger } from '~/src/runtime/shared/utils/frogger';
+import type { LogObject } from 'consola/browser';
+import { BaseFrogger } from '../../shared/utils/frogger';
 
 import type { ClientLoggerOptions, QueuedLog } from '../types/logger';
+
+
 
 /**
  * Client-side implementation of Frogger
@@ -33,11 +35,6 @@ export class ClientFrogger extends BaseFrogger {
         if (this.options.captureErrors && typeof window !== 'undefined') {
             window.addEventListener('error', this.handleGlobalError.bind(this));
             window.addEventListener('unhandledrejection', this.handlePromiseRejection.bind(this));
-        }
-        
-        // Intercept console if enabled
-        if (this.options.captureConsole && typeof console !== 'undefined') {
-            this.setupConsoleCapture();
         }
     }
     
@@ -170,45 +167,5 @@ export class ClientFrogger extends BaseFrogger {
         this.error('[UNHANDLED REJECTION]', {
             reason: event.reason
         });
-    }
-    
-    /**
-     * Set up console method interception
-     */
-    private setupConsoleCapture(): void {
-        const originalMethods: Record<string, Function> = {};
-        
-        // Store original methods
-        originalMethods.log = console.log;
-        originalMethods.info = console.info;
-        originalMethods.warn = console.warn;
-        originalMethods.error = console.error;
-        originalMethods.debug = console.debug;
-        
-        // Replace with capturing versions
-        console.log = (message: any, ...args: any[]) => {
-            originalMethods.log.call(console, message, ...args);
-            this.info(message, ...args);
-        };
-        
-        console.info = (message: any, ...args: any[]) => {
-            originalMethods.info.call(console, message, ...args);
-            this.info(message, ...args);
-        };
-        
-        console.warn = (message: any, ...args: any[]) => {
-            originalMethods.warn.call(console, message, ...args);
-            this.warn(message, ...args);
-        };
-        
-        console.error = (message: any, ...args: any[]) => {
-            originalMethods.error.call(console, message, ...args);
-            this.error(message, ...args);
-        };
-        
-        console.debug = (message: any, ...args: any[]) => {
-            originalMethods.debug.call(console, message, ...args);
-            this.debug(message, ...args);
-        };
     }
 }

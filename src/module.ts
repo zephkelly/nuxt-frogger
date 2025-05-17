@@ -15,14 +15,20 @@ export interface ModuleOptions {}
 
 export default defineNuxtModule<ModuleOptions>({
     meta: {
-        name: 'nuxt-trace',
-        configKey: 'nuxt-trace',
+        name: 'frogger',
+        configKey: 'frogger',
     },
     defaults: {},
     setup(_options, _nuxt) {
         const resolver = createResolver(import.meta.url)
         const runtimeDir = resolve('./runtime')
 
-        _nuxt.options.alias['#nuxt-trace'] = runtimeDir
+        // _nuxt.options.alias['#frogger'] = runtimeDir
+
+        addServerImportsDir(resolver.resolve('./runtime/server/utils'))
+
+        addImportsDir(resolver.resolve('./runtime/app/utils'))
+
+
     },
 })

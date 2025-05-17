@@ -1,4 +1,4 @@
-import type { LogObject } from 'consola';
+import type { LogObject } from 'consola/basic';
 import { BaseFrogger } from '../../shared/utils/frogger';
 import { BatchReporter } from './reporters/batch-reporter';
 import { FileReporter } from './reporters/file-reporter';

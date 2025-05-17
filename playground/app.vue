@@ -7,6 +7,7 @@
 
 <script setup>
 async function test() {
+    clientFrogger.log('test')
     try {
         const response = await $fetch('/api/test')
         console.log(response)

@@ -6,7 +6,7 @@ import type { LogObject } from 'consola';
 import type { FileReporterOptions } from '../../types/file-reporter';
 
 /**
- * Reporter that writes logs to local files with rotation
+ * Reporter that writes logs to local files
  */
 export class FileReporter {
     private options: Required<FileReporterOptions>;

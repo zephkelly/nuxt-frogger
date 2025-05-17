@@ -1,5 +1,5 @@
-import type { LogContext } from "../../shared/utils/types";
-import type { FroggerOptions } from "../../shared/utils/types";
+import type { LogContext } from "../../shared/types";
+import type { FroggerOptions } from "../../shared/types";
 
 
 

@@ -9,6 +9,8 @@ import { useNuxtApp } from '#app';
 
 import { LogQueueService } from '../services/log-queue';
 
+import type { LogBatch } from '../types/logger';
+
 /**
  * Client-side implementation of Frogger
  * Batches logs and sends them to a server endpoint
@@ -33,7 +35,7 @@ export class ClientFrogger extends BaseFroggerLogger {
         };
         
         // Configure the shared log queue service
-        if (typeof window !== 'undefined') {
+        if (import.meta.client) {
             const nuxtApp = useNuxtApp();
             const logQueue = nuxtApp.$logQueue as LogQueueService;
             
@@ -54,12 +56,15 @@ export class ClientFrogger extends BaseFroggerLogger {
                 window.addEventListener('unhandledrejection', this.handlePromiseRejection.bind(this));
             }
         }
+        else {
+
+        }
     }
     
     /**
      * Process a log entry from Consola
      */
-    protected processLog(logObj: LogObject): void {
+    protected async processLog(logObj: LogObject): Promise<void> {
         const froggerLoggerObject: LoggerObject = {
             type: logObj.type,
             date: new Date(),
@@ -71,7 +76,8 @@ export class ClientFrogger extends BaseFroggerLogger {
             },
 
             context: {
-                message: logObj.args?.[0] || logObj.message,
+                env: (import.meta.server) ? 'ssr' : 'client',
+                message: logObj.args?.[0],
                 ...this.globalContext,
                 ...logObj.args?.slice(1)[0],
             },
@@ -79,10 +85,27 @@ export class ClientFrogger extends BaseFroggerLogger {
         }
         
         // Use the centralized log queue service to enqueue the log
-        if (typeof window !== 'undefined') {
+        if (import.meta.client) {
+            console.log('Logging to client log queue:', froggerLoggerObject);
             const nuxtApp = useNuxtApp();
             const logQueue = nuxtApp.$logQueue as LogQueueService;
             logQueue.enqueueLog(froggerLoggerObject);
+        }
+        else {
+
+            //fetch to the logging endpoint while on server for instant request
+            const batch: LogBatch = {
+                logs: [froggerLoggerObject],
+                app: {
+                    name: this.options.appName,
+                    version: this.options.version
+                }
+            };
+
+            await $fetch(this.options.endpoint, {
+                method: 'POST',
+                body: batch
+            });
         }
     }
     

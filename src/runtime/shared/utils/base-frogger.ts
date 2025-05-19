@@ -32,7 +32,7 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
         // Print to console
         this.consola.addReporter({
             log: (logObj: LogObject) => {
-                // console.log(logObj);
+                console.log(logObj);
             }
         })
         
@@ -47,49 +47,49 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
     protected abstract processLog(logObj: LogObject): void;
     
 
-    trace(message: string, context: Object): void {
+    trace(message: string, context?: Object): void {
         this.consola.trace(message,
             context,
         )
     }
 
-    success(message: string, context: Object): void {
+    success(message: string, context?: Object): void {
         this.consola.success(message,
             context,
         )
     }
     
-    debug(message: string, context: Object): void {
+    debug(message: string, context?: Object): void {
         this.consola.debug(message,
             context,
         )
     }
 
-    log(message: string, context: Object): void {
+    log(message: string, context?: Object): void {
         this.consola.log(message,
             context,
         )
     }
     
-    info(message: string, context: Object): void {
+    info(message: string, context?: Object): void {
         this.consola.info(message,
             context,
         );
     }
     
-    warn(message: string, context: Object): void {
+    warn(message: string, context?: Object): void {
         this.consola.warn(message,
             context,
         )
     }
 
-    fatal(message: string, context: Object): void {
+    fatal(message: string, context?: Object): void {
         this.consola.fatal(message,
             context,
         )
     }
     
-    error(message: string, context: Object): void {
+    error(message: string, context?: Object): void {
         this.consola.error(message,
             context,
         )

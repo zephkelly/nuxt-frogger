@@ -34,13 +34,10 @@ export class FileReporter {
      * Handle a log object and write it to file
      */
     log(logObj: LoggerObject): void {
-        console.log('initial Logging to file:', logObj);
-        // Queue the write operation to avoid concurrent writes
         this.writeQueue = this.writeQueue
             .then(() => this.processLogEntry(logObj))
             .catch(err => {
                 console.error('Error in file reporter write queue:', err);
-                // Recover the queue by resolving the promise
                 return Promise.resolve();
             });
     }
@@ -51,22 +48,12 @@ export class FileReporter {
     private async processLogEntry(logObj: LoggerObject): Promise<void> {
         // Check if this is a batch of logs
         if (logObj && typeof logObj === 'object' && 'logs' in logObj && Array.isArray(logObj.logs)) {
-            // Extract common metadata
             const { logs, ...metadata } = logObj;
             
-            // Process each log individually
             for (const individualLog of logs) {
-                // Merge metadata with individual log
-                const enrichedLog = {
-                    ...individualLog,
-                    // app: metadata.app,  // Preserve app info
-                };
-                
-                // Write each log individually
-                await this.writeLogToFile(enrichedLog);
+                await this.writeLogToFile(individualLog);
             }
         } else {
-            // This is a single log, write it directly
             await this.writeLogToFile(logObj);
         }
     }
@@ -110,7 +97,6 @@ export class FileReporter {
             this.currentFileSize += Buffer.byteLength(logEntry) + 1; // +1 for newline
         }
         catch (error) {
-            // Avoid crashing the application if logging fails
             console.error('Failed to write log to file:', error);
             throw error; // Re-throw to be caught by the queue handler
         }

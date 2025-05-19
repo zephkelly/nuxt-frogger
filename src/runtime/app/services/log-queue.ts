@@ -1,14 +1,7 @@
 import { defineNuxtPlugin } from '#app'
 import type { LoggerObject } from '../../shared/types'
+import type { LogBatch } from '../types/logger';
 
-
-interface LogBatch {
-  logs: LoggerObject[];
-  app: {
-    name: string;
-    version: string;
-  }
-}
 
 /**
  * Centralized log queue service

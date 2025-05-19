@@ -62,6 +62,7 @@ export default defineNuxtModule<ModuleOptions>({
         _nuxt.options.alias['#frogger'] = resolver.resolve('./runtime/frogger');
 
         if (_options.clientModule) {
+            console.log('Adding client module')
             _nuxt.options.alias['#frogger/client'] = resolver.resolve('./runtime/app');
             addImportsDir(resolver.resolve('./runtime/app/utils'))
             addImportsDir(resolver.resolve('./runtime/app/composables'))
@@ -69,8 +70,10 @@ export default defineNuxtModule<ModuleOptions>({
         }
 
         if (_options.serverModule) {
+            console.log('Adding server module')
             _nuxt.options.alias['#frogger/server'] = resolver.resolve('./runtime/server');
-            addServerPlugin(resolver.resolve('./runtime/server/plugin'))
+            addServerImportsDir(resolver.resolve('./runtime/server/utils'))
+            addServerPlugin(resolver.resolve('./runtime/server/plugins/log-queue.server'))
             addServerHandler({
                 route: '/api/_frogger/logs',
                 handler: resolver.resolve('./runtime/server/api/logger.post'),

@@ -8,35 +8,35 @@ export interface FroggerLogger {
      * @param message The primary message to log
      * @param context Additional context to include
      */
-    log(message: string, context: Object): void;
+    log(message: string, context?: Object): void;
 
     /**
      * Log an info-level message
      * @param message The primary message to log
      * @param context Additional context to include
      */
-    info(message: string, context: Object): void;
+    info(message: string, context?: Object): void;
     
     /**
      * Log a warning-level message
      * @param message The primary message to log
      * @param context Additional context to include
     */
-    warn(message: string, context: Object): void;
+    warn(message: string, context?: Object): void;
    
     /**
     * Log an error-level message
     * @param message The primary message to log
     * @param context Additional context to include
     */
-    error(message: string, context: Object): void;
+    error(message: string, context?: Object): void;
 
     /**
      * Log a fatal-level message
      * @param message The primary message to log
      * @param context Additional context to include
      */
-    fatal(message: string, context: Object): void;
+    fatal(message: string, context?: Object): void;
     
     
     /**
@@ -44,14 +44,14 @@ export interface FroggerLogger {
      * @param message The primary message to log
      * @param context Additional context to include
      */
-    debug(message: string, context: Object): void;
+    debug(message: string, context?: Object): void;
     
     /**
      * Log a trace-level message
      * @param message The primary message to log
      * @param context Additional context to include
      */
-    trace(message: string, context: Object): void;
+    trace(message: string, context?: Object): void;
 
 
     /**

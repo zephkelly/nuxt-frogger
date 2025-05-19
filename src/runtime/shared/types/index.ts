@@ -1,4 +1,4 @@
-import type { LogObject, LogType } from "consola";
+import type { LogType } from "consola";
 
 /**
  * Trace context following W3C Trace Context specification

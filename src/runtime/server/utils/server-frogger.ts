@@ -1,9 +1,6 @@
 import type { LogObject } from 'consola/basic';
 import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
-import { BatchReporter } from './reporters/batch-reporter';
-import { FileReporter } from './reporters/file-reporter';
 import type { ServerLoggerOptions } from '../types/logger';
-import { generateSpanId } from '../../shared/utils/tracing';
 import type { LoggerObject } from '../../shared/types';
 
 import { ServerLogQueueService } from '../services/server-log-queue';
@@ -45,14 +42,13 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             return;
         }
 
+        const traceContext = this.generateTraceContext();
+
         const froggerLoggerObject: LoggerObject = {
             type: logObj.type,
             level: logObj.level,
             date: logObj.date,
-            trace: {
-                traceId: this.traceId,
-                spanId: generateSpanId()
-            },
+            trace: traceContext,
             context: {
                 env: 'server',
                 message: logObj.args?.[0],

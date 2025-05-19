@@ -73,14 +73,6 @@ export interface FroggerLogger {
     setSession(sessionId: string): void;
     
     /**
-     * Start a new span for tracing operations
-     * @param name The name of the operation
-     * @param attributes Additional attributes for the span
-     * @returns An object with methods to end the span and access its context
-     */
-    startSpan(name: string, attributes?: Record<string, any>): any;
-    
-    /**
      * Get the current log level
      * @returns The current log level
      */

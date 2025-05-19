@@ -67,7 +67,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
                         const enrichedLogs = logs.map(log => ({
                             ...log,
                             context: {
-                                ...this.context,
+                                ...this.globalContext,
                                 processed: true,  // Flag that this has been processed
                             }
                         }));
@@ -111,7 +111,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
                 spanId: generateSpanId()
             },
             context: {
-                ...this.context,
+                ...this.globalContext,
                 ...logObj.args?.slice(1)[0],
                 message: logObj.args?.[0] || logObj.message,
             },
@@ -132,7 +132,6 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
                 } else {
                     // This is a single log
 
-                    //@ts-expect-error
                     this.fileReporter.log(enrichedLog);
                 }
             } catch (err) {
@@ -145,7 +144,6 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
               typeof enrichedLog.context === 'object')) {
             try {
 
-                //@ts-expect-error
                 this.batchReporter.log(enrichedLog);
             } catch (err) {
                 console.error('Error in batch reporter:', err);
@@ -163,7 +161,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
                 const enrichedLog = {
                     ...logObj,
                     context: {
-                        ...this.context,
+                        ...this.globalContext,
                         processed: true
                     }
                 };

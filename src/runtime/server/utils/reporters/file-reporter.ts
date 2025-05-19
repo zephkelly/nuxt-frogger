@@ -1,9 +1,11 @@
 import { mkdir, appendFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import type { LogObject } from 'consola';
 
 import type { FileReporterOptions } from '../../types/file-reporter';
+
+
 
 /**
  * Reporter that writes logs to local files

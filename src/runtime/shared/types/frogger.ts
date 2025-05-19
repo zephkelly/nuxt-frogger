@@ -58,7 +58,7 @@ export interface FroggerLogger {
      * Add context data to be included with all logs
      * @param context The context data to add
      */
-    addContext(context: LogContext): void;
+    addGlobalContext(context: LogContext): void;
     
     /**
      * Set the user ID for the current logger context

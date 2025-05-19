@@ -49,7 +49,7 @@ export class ClientFrogger extends BaseFroggerLogger {
                 spanId: generateSpanId()
             },
             context: {
-                ...this.context,
+                ...this.globalContext,
                 ...logObj.args?.slice(1)[0][0],
                 message: logObj.args?.[0] || logObj.message,
             },

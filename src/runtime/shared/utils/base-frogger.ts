@@ -9,7 +9,7 @@ import { defu } from "defu";
 
 export abstract class BaseFroggerLogger implements FroggerLogger {
     protected consola: ConsolaInstance;
-    protected context: LogContext = {};
+    protected globalContext: LogContext = {};
     protected traceId: string;
     protected spanId: string;
     protected level: number;
@@ -37,7 +37,7 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
         })
         
         if (options.context) {
-            this.context = { ...options.context };
+            this.globalContext = { ...options.context };
         }
     }
     
@@ -98,16 +98,16 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
     /**
      * Context management methods
      */
-    addContext(context: LogContext): void {
-        this.context = defu(this.context, context);
+    addGlobalContext(context: LogContext): void {
+        this.globalContext = defu(this.globalContext, context);
     }
     
     setUser(userId: string): void {
-        this.context.userId = userId;
+        this.globalContext.userId = userId;
     }
     
     setSession(sessionId: string): void {
-        this.context.sessionId = sessionId;
+        this.globalContext.sessionId = sessionId;
     }
     
     /**

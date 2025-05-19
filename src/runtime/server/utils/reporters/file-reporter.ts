@@ -1,10 +1,10 @@
 import { mkdir, appendFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { LogObject } from 'consola';
 
 import type { FileReporterOptions } from '../../types/file-reporter';
 
+import type { LoggerObject } from '~/src/runtime/shared/types';
 
 
 /**
@@ -21,7 +21,6 @@ export class FileReporter {
             directory: options.directory || join(process.cwd(), 'logs'),
             fileNameFormat: options.fileNameFormat || 'YYYY-MM-DD.log',
             maxSize: options.maxSize || 10 * 1024 * 1024, // 10MB
-            format: options.format || 'json',
             additionalFields: options.additionalFields || {},
         };
         
@@ -34,7 +33,8 @@ export class FileReporter {
     /**
      * Handle a log object and write it to file
      */
-    log(logObj: LogObject): void {
+    log(logObj: LoggerObject): void {
+        console.log('initial Logging to file:', logObj);
         // Queue the write operation to avoid concurrent writes
         this.writeQueue = this.writeQueue
             .then(() => this.processLogEntry(logObj))
@@ -48,7 +48,7 @@ export class FileReporter {
     /**
      * Process a log entry - handles both individual logs and batched logs
      */
-    private async processLogEntry(logObj: LogObject): Promise<void> {
+    private async processLogEntry(logObj: LoggerObject): Promise<void> {
         // Check if this is a batch of logs
         if (logObj && typeof logObj === 'object' && 'logs' in logObj && Array.isArray(logObj.logs)) {
             // Extract common metadata
@@ -59,7 +59,7 @@ export class FileReporter {
                 // Merge metadata with individual log
                 const enrichedLog = {
                     ...individualLog,
-                    app: metadata.app,  // Preserve app info
+                    // app: metadata.app,  // Preserve app info
                 };
                 
                 // Write each log individually
@@ -81,7 +81,7 @@ export class FileReporter {
     /**
      * Write a log entry to the current log file
      */
-    private async writeLogToFile(logObj: LogObject): Promise<void> {
+    private async writeLogToFile(logObj: LoggerObject): Promise<void> {
         try {
             const fileName = this.getLogFileName();
             // If file name changed, reset size tracking and check actual file size
@@ -119,26 +119,15 @@ export class FileReporter {
     /**
      * Format a log entry based on configuration
      */
-    private formatLogEntry(logObj: LogObject): string {
+    private formatLogEntry(logObj: LoggerObject): string {
         // Merge with additional fields
         const enrichedLog = {
             ...logObj,
             ...this.options.additionalFields,
         };
         
-        if (this.options.format === 'json') {
-            // Format as JSON
-            return JSON.stringify(enrichedLog);
-        } else {
-            // Format as text log
-            const timestamp = new Date(logObj.date || logObj.timestamp).toISOString();
-            const level = logObj.type.toUpperCase().padStart(5);
-            const message = logObj.args.map(arg => 
-                typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-            ).join(' ');
-            
-            return `[${timestamp}] ${level} ${message}`;
-        }
+
+        return JSON.stringify(enrichedLog);
     }
 
     /**

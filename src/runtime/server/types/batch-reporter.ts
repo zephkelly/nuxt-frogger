@@ -1,4 +1,5 @@
 import type { LogObject } from 'consola';
+import type { LoggerObject } from '../../shared/types';
 
 
 
@@ -18,7 +19,7 @@ export interface BatchReporterOptions {
     /**
      * Function to call when flushing logs
      */
-    onFlush: (logs: LogObject[]) => Promise<void>;
+    onFlush: (logs: LoggerObject[]) => Promise<void>;
     
     /**
      * Whether to include trace context in flushed logs

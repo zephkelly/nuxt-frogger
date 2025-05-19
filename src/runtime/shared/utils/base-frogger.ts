@@ -32,7 +32,7 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
         // Print to console
         this.consola.addReporter({
             log: (logObj: LogObject) => {
-                console.log(logObj);
+                // console.log(logObj);
             }
         })
         
@@ -47,51 +47,51 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
     protected abstract processLog(logObj: LogObject): void;
     
 
-    trace(message: string, ...args: Record<string, any>[]): void {
+    trace(message: string, context: Object): void {
         this.consola.trace(message,
-            args,
+            context,
         )
     }
 
-    success(message: string, ...args: Record<string, any>[]): void {
+    success(message: string, context: Object): void {
         this.consola.success(message,
-            args,
+            context,
         )
     }
     
-    debug(message: string, ...args: Record<string, any>[]): void {
+    debug(message: string, context: Object): void {
         this.consola.debug(message,
-            args,
+            context,
         )
     }
 
-    log(message: string, ...args: Record<string, any>[]): void {
+    log(message: string, context: Object): void {
         this.consola.log(message,
-            args,
+            context,
         )
     }
     
-    info(message: string, ...args: Record<string, any>[]): void {
+    info(message: string, context: Object): void {
         this.consola.info(message,
-            args,
+            context,
         );
     }
     
-    warn(message: string, ...args: Record<string, any>[]): void {
+    warn(message: string, context: Object): void {
         this.consola.warn(message,
-            args,
+            context,
         )
     }
 
-    fatal(message: string, ...args: Record<string, any>[]): void {
+    fatal(message: string, context: Object): void {
         this.consola.fatal(message,
-            args,
+            context,
         )
     }
     
-    error(message: string, ...args: Record<string, any>[]): void {
+    error(message: string, context: Object): void {
         this.consola.error(message,
-            args,
+            context,
         )
     }
     

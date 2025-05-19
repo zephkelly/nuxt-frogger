@@ -1,8 +1,9 @@
 import type { LogObject } from 'consola/browser';
 import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
 
-import type { ClientLoggerOptions, QueuedLog } from '../types/logger';
+import type { ClientLoggerOptions } from '../types/logger';
 import { generateSpanId } from '../../shared/utils/tracing';
+import type { LoggerObject } from '../../shared/types';
 
 
 /**
@@ -11,7 +12,7 @@ import { generateSpanId } from '../../shared/utils/tracing';
  */
 export class ClientFrogger extends BaseFroggerLogger {
     private options: Required<ClientLoggerOptions>;
-    private queue: QueuedLog[] = [];
+    private queue: LoggerObject[] = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
     private sending: boolean = false;
     
@@ -28,7 +29,7 @@ export class ClientFrogger extends BaseFroggerLogger {
             captureErrors: options.captureErrors ?? true,
             captureConsole: options.captureConsole ?? false,
             level: options.level ?? 3,
-            context: options.context ?? {}
+            context: options.context ?? {},
         };
         
         if (this.options.captureErrors && typeof window !== 'undefined') {
@@ -41,22 +42,25 @@ export class ClientFrogger extends BaseFroggerLogger {
      * Process a log entry from Consola
      */
     protected processLog(logObj: LogObject): void {
-        const log: QueuedLog = {
+        const froggerLoggerObject: LoggerObject = {
             type: logObj.type,
             date: new Date(),
+            level: logObj.level,
+
             trace: {
                 traceId: this.traceId,
                 spanId: generateSpanId()
             },
+
             context: {
-                ...this.globalContext,
-                ...logObj.args?.slice(1)[0][0],
                 message: logObj.args?.[0] || logObj.message,
+                ...this.globalContext,
+                ...logObj.args?.slice(1)[0],
             },
             timestamp: Date.now(),
-        };
+        }
         
-        this.queue.push(log);
+        this.queue.push(froggerLoggerObject);
         
         if (this.queue.length > this.options.maxQueueSize) {
             this.queue = this.queue.slice(-this.options.maxQueueSize);

@@ -64,7 +64,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
                                 }
                             }
                         }
-                        
+                        console.log('Flushing logs to endpoint:', logs);
                         // Send the processed batch to endpoint
                         await $fetch(options.endpoint || '/api/_frogger/logs', {
                             method: 'POST',
@@ -120,21 +120,6 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             timestamp: Date.now()
         };
         
-        // const enrichedLog = {
-        //     type: logObj.type,
-        //     date: logObj.date,
-        //     trace: {
-        //         traceId: this.traceId,
-        //         spanId: generateSpanId()
-        //     },
-        //     context: {
-        //         ...this.globalContext,
-        //         ...logObj.args?.slice(1)[0],
-        //         message: logObj.args?.[0] || logObj.message,
-        //     },
-        //     timestamp: Date.now()
-        // };
-
         if (this.fileReporter) {
             try {
                 // Log to file reporter

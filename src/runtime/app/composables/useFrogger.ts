@@ -15,9 +15,10 @@ export function useFrogger(options?: ClientLoggerOptions): ClientLogger {
         captureErrors: true,
         level: 3,
         
-        appName: isServer ? 'nuxt-client-ssr' : 'nuxt-client',
-        
         ...options,
+        maxBatchSize: 10,
+        maxBatchAge: 3000,
+        maxQueueSize: 100,
     });
 
 

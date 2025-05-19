@@ -11,9 +11,9 @@ importers:
       '@nuxt/kit':
         specifier: ^3.17.3
         version: 3.17.3(magicast@0.3.5)
-      zod:
-        specifier: 3.25.0-beta.20250515T061408
-        version: 3.25.0-beta.20250515T061408
+      consola:
+        specifier: ^3.4.2
+        version: 3.4.2
     devDependencies:
       '@nuxt/devtools':
         specifier: ^2.4.0
@@ -4687,9 +4687,6 @@ packages:
 
   zod@3.24.4:
     resolution: {integrity: sha512-OdqJE9UDRPwWsrHjLN2F8bPxvwJBK22EHLWtanu0LSYr5YqzsaaW3RMgmjwr8Rypg5k+meEJdSPXJZXE/yqOMg==}
-
-  zod@3.25.0-beta.20250515T061408:
-    resolution: {integrity: sha512-YAqrJFda17r64/lzlawJhlSwbkpYIiEc3TvLLklnUwem/X4PJGIW3kme3qwtvEw41WV9o1x2t0EOVAo12XdSQw==}
 
 snapshots:
 
@@ -9960,5 +9957,3 @@ snapshots:
       zod: 3.24.4
 
   zod@3.24.4: {}
-
-  zod@3.25.0-beta.20250515T061408: {}

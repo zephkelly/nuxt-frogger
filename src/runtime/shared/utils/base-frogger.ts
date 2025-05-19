@@ -1,0 +1,151 @@
+import { type ConsolaInstance, createConsola } from "consola/core";
+import type { FroggerLogger } from "../types/frogger";
+import type { LogObject } from 'consola';
+import type { FroggerOptions, LogContext, TraceContext } from "../types";
+
+import { generateTraceId, generateSpanId } from "./tracing";
+import { defu } from "defu";
+
+
+export abstract class BaseFroggerLogger implements FroggerLogger {
+    protected consola: ConsolaInstance;
+    protected context: LogContext = {};
+    protected traceId: string;
+    protected spanId: string;
+    protected level: number;
+    
+    constructor(options: FroggerOptions = {}) {
+        this.traceId = generateTraceId();
+        this.spanId = generateSpanId();
+        this.level = options.level ?? 3;
+        
+        this.consola = createConsola({
+            level: this.level
+        });
+        
+        this.consola.addReporter({
+            log: (logObj: LogObject) => {
+                this.processLog(logObj);
+            }
+        });
+
+        // Print to console
+        this.consola.addReporter({
+            log: (logObj: LogObject) => {
+                console.log(logObj);
+            }
+        })
+        
+        if (options.context) {
+            this.context = { ...options.context };
+        }
+    }
+    
+    /**
+     * Process a log entry - abstract method to be implemented by subclasses
+     */
+    protected abstract processLog(logObj: LogObject): void;
+    
+
+    trace(message: string, ...args: Record<string, any>[]): void {
+        this.consola.trace(message,
+            args,
+        )
+    }
+
+    success(message: string, ...args: Record<string, any>[]): void {
+        this.consola.success(message,
+            args,
+        )
+    }
+    
+    debug(message: string, ...args: Record<string, any>[]): void {
+        this.consola.debug(message,
+            args,
+        )
+    }
+
+    log(message: string, ...args: Record<string, any>[]): void {
+        this.consola.log(message,
+            args,
+        )
+    }
+    
+    info(message: string, ...args: Record<string, any>[]): void {
+        this.consola.info(message,
+            args,
+        );
+    }
+    
+    warn(message: string, ...args: Record<string, any>[]): void {
+        this.consola.warn(message,
+            args,
+        )
+    }
+
+    fatal(message: string, ...args: Record<string, any>[]): void {
+        this.consola.fatal(message,
+            args,
+        )
+    }
+    
+    error(message: string, ...args: Record<string, any>[]): void {
+        this.consola.error(message,
+            args,
+        )
+    }
+    
+    /**
+     * Context management methods
+     */
+    addContext(context: LogContext): void {
+        this.context = defu(this.context, context);
+    }
+    
+    setUser(userId: string): void {
+        this.context.userId = userId;
+    }
+    
+    setSession(sessionId: string): void {
+        this.context.sessionId = sessionId;
+    }
+    
+    /**
+     * Create a child span for tracing
+     */
+    startSpan(name: string, attributes?: Record<string, any>): {
+        end: () => void;
+        context: TraceContext;
+    } {
+        const parentId = this.spanId;
+        const spanId = generateSpanId();
+        
+        this.debug(`[SPAN START] ${name}`, { attributes });
+        
+        return {
+            context: {
+                traceId: this.traceId,
+                spanId,
+                parentId
+            },
+            end: () => {
+                this.debug(`[SPAN END] ${name}`, { 
+                    // duration: Date.now() - Date.now(),
+                    attributes 
+                });
+            }
+        };
+    }
+    
+    /**
+     * Log level management
+     */
+    getLevel(): number {
+        return this.level;
+    }
+    
+    setLevel(level: number): void {
+        this.level = level;
+        this.consola.level = level;
+    }
+}

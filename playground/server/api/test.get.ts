@@ -1,12 +1,13 @@
 export default defineEventHandler((event) => {
+    const frogger = createFrogger();
+    
+    frogger.warn('Hello world');
 
-    const traceId = getTraceId(event);
-    // const sessionTraceId = getSessionTraceId(event);
+    frogger.error('Hello world');
 
-    // console.log('sessionTraceId', sessionTraceId);
+    frogger.info('Hello world');
 
     return {
-        traceId,
-        // sessionTraceId,
+        message: 'Hello world'
     }
 });

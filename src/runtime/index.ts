@@ -1,15 +1,6 @@
-export {
-    getTraceId,
-    getSessionTraceId,
-} from './server/utils/trace';
+export type { FroggerLogger } from './shared/types/frogger';
+export type { FroggerOptions } from './shared/types';
 
 
-export {
-    type RequestTraceId,
-    type SessionTraceId,
-} from './shared/types/trace-ids';
-
-export {
-    requestTraceIdSchema,
-    sessionTraceIdSchema,
-} from './shared/schemas/trace-ids';
+export type { ClientLoggerOptions } from './app/types/logger';
+export type { ServerLoggerOptions } from './server/types/logger';

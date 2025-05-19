@@ -52,7 +52,8 @@ export interface Frogger {
      * @param args Additional arguments to include
      */
     trace(message: any, ...args: any[]): void;
-    
+
+
     /**
      * Add context data to be included with all logs
      * @param context The context data to add

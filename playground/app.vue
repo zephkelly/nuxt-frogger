@@ -2,12 +2,11 @@
   <div>
     Nuxt module playground!
     <button @click="test()">Test</button>
+    <button @click="test2()">Test2</button>
   </div>
 </template>
 
 <script setup>
-import { server } from 'typescript';
-
 const logger = useFrogger();
 
 const isServer = import.meta.server
@@ -17,10 +16,18 @@ logger.info('Hello from the playground!', {
     server: isServer,
     client: isClient,
 });
-// logger.debug('Debugging the playground!');
-// logger.warn('Warning from the playground!');
-// logger.error('Error in the playground!');
-// logger.success('Success in the playground!');
-// logger.fatal('Fatal error in the playground!');
-// logger.log('Custom log message from the playground!');
+
+const test = () => {
+  logger.info('Test button clicked!', {
+    server: isServer,
+    client: isClient,
+  });
+};
+
+const test2 = () => {
+  logger.warn('Test button clicked!', {
+    server: isServer,
+    client: isClient,
+  });
+};
 </script>

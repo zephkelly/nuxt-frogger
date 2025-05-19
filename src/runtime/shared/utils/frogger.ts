@@ -79,7 +79,6 @@ export abstract class BaseFrogger implements Frogger {
         this.consola.error(message, ...args);
     }
     
-    
     /**
      * Context management methods
      */

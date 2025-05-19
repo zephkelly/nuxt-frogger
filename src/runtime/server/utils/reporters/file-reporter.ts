@@ -1,4 +1,4 @@
-import { mkdir, appendFile } from 'node:fs/promises';
+import { mkdir, appendFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import type { LogObject } from 'consola';
@@ -13,7 +13,7 @@ export class FileReporter {
     private currentFileName: string = '';
     private currentFileSize: number = 0;
     private writeQueue: Promise<void> = Promise.resolve();
-
+    
     constructor(options: FileReporterOptions = {}) {
         this.options = {
             directory: options.directory || join(process.cwd(), 'logs'),
@@ -22,7 +22,7 @@ export class FileReporter {
             format: options.format || 'json',
             additionalFields: options.additionalFields || {},
         };
-
+        
         // Ensure log directory exists on startup
         this.ensureDirectoryExists().catch(err => {
             console.error('Failed to create log directory:', err);
@@ -34,7 +34,48 @@ export class FileReporter {
      */
     log(logObj: LogObject): void {
         // Queue the write operation to avoid concurrent writes
-        this.writeQueue = this.writeQueue.then(() => this.writeLogToFile(logObj));
+        this.writeQueue = this.writeQueue
+            .then(() => this.processLogEntry(logObj))
+            .catch(err => {
+                console.error('Error in file reporter write queue:', err);
+                // Recover the queue by resolving the promise
+                return Promise.resolve();
+            });
+    }
+
+    /**
+     * Process a log entry - handles both individual logs and batched logs
+     */
+    private async processLogEntry(logObj: LogObject): Promise<void> {
+        // Check if this is a batch of logs
+        if (logObj && typeof logObj === 'object' && 'logs' in logObj && Array.isArray(logObj.logs)) {
+            console.debug(`Processing batch of ${logObj.logs.length} logs`);
+            
+            // Extract common metadata
+            const { logs, ...metadata } = logObj;
+            
+            // Process each log individually
+            for (const individualLog of logs) {
+                // Merge metadata with individual log
+                const enrichedLog = {
+                    ...individualLog,
+                    app: metadata.app,  // Preserve app info
+                };
+                
+                // Write each log individually
+                await this.writeLogToFile(enrichedLog);
+            }
+        } else {
+            // This is a single log, write it directly
+            await this.writeLogToFile(logObj);
+        }
+    }
+
+    /**
+     * Force flush any pending operations
+     */
+    async flush(): Promise<void> {
+        await this.writeQueue;
     }
 
     /**
@@ -43,33 +84,36 @@ export class FileReporter {
     private async writeLogToFile(logObj: LogObject): Promise<void> {
         try {
             const fileName = this.getLogFileName();
-            
-            // If file name changed, reset size tracking
+            // If file name changed, reset size tracking and check actual file size
             if (fileName !== this.currentFileName) {
                 this.currentFileName = fileName;
-                this.currentFileSize = 0;
-                // We could check the actual file size here if needed
+                this.currentFileSize = await this.getFileSize(fileName);
+                console.debug(`Switched to log file: ${fileName}, current size: ${this.currentFileSize} bytes`);
             }
-
+            
             // Format the log entry based on configuration
             const logEntry = this.formatLogEntry(logObj);
             
             // Ensure the directory exists
             await this.ensureDirectoryExists();
             
+            // Check if rotation is needed
+            if (this.currentFileSize > this.options.maxSize) {
+                await this.rotateLogFile(fileName);
+                this.currentFileSize = 0;
+            }
+            
             // Write to the file
             const filePath = join(this.options.directory, fileName);
             await appendFile(filePath, logEntry + '\n');
             
             // Update the file size tracking
-            this.currentFileSize += logEntry.length + 1; // +1 for newline
-            
-            // TODO: If file exceeds maxSize, implement rotation logic
-            // This could include renaming the current file and starting a new one
+            this.currentFileSize += Buffer.byteLength(logEntry) + 1; // +1 for newline
         }
         catch (error) {
             // Avoid crashing the application if logging fails
             console.error('Failed to write log to file:', error);
+            throw error; // Re-throw to be caught by the queue handler
         }
     }
 
@@ -82,14 +126,20 @@ export class FileReporter {
             ...logObj,
             ...this.options.additionalFields,
         };
-
-        const timestamp = new Date(logObj.date).toISOString();
-        const level = logObj.type.toUpperCase().padEnd(5);
-        const message = logObj.args.map(arg => 
-            typeof arg === 'object' ? arg : String(arg)
-        ).join(' ');
         
-        return `[${timestamp}] ${level} ${message}`;
+        if (this.options.format === 'json') {
+            // Format as JSON
+            return JSON.stringify(enrichedLog);
+        } else {
+            // Format as text log
+            const timestamp = new Date(logObj.date || logObj.timestamp).toISOString();
+            const level = logObj.type.toUpperCase().padStart(5);
+            const message = logObj.args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+            ).join(' ');
+            
+            return `[${timestamp}] ${level} ${message}`;
+        }
     }
 
     /**
@@ -101,12 +151,42 @@ export class FileReporter {
         
         // Replace date tokens
         fileName = fileName
-        .replace('YYYY', now.getFullYear().toString())
-        .replace('MM', (now.getMonth() + 1).toString().padStart(2, '0'))
-        .replace('DD', now.getDate().toString().padStart(2, '0'))
-        .replace('HH', now.getHours().toString().padStart(2, '0'));
+            .replace('YYYY', now.getFullYear().toString())
+            .replace('MM', (now.getMonth() + 1).toString().padStart(2, '0'))
+            .replace('DD', now.getDate().toString().padStart(2, '0'))
+            .replace('HH', now.getHours().toString().padStart(2, '0'));
         
         return fileName;
+    }
+
+    /**
+     * Get the size of a file if it exists
+     */
+    private async getFileSize(fileName: string): Promise<number> {
+        const filePath = join(this.options.directory, fileName);
+        if (existsSync(filePath)) {
+            const stats = await stat(filePath);
+            return stats.size;
+        }
+        return 0;
+    }
+
+    /**
+     * Rotate the log file when it exceeds the maximum size
+     */
+    private async rotateLogFile(fileName: string): Promise<void> {
+        const filePath = join(this.options.directory, fileName);
+        if (existsSync(filePath)) {
+            const timestamp = Date.now();
+            const rotatedFileName = fileName.replace(/\.log$/, `-${timestamp}.log`);
+            const rotatedFilePath = join(this.options.directory, rotatedFileName);
+            
+            // Rename using native fs operations
+            const fs = require('node:fs');
+            fs.renameSync(filePath, rotatedFilePath);
+            
+            console.info(`Rotated log file: ${fileName} -> ${rotatedFileName}`);
+        }
     }
 
     /**
@@ -114,7 +194,13 @@ export class FileReporter {
      */
     private async ensureDirectoryExists(): Promise<void> {
         if (!existsSync(this.options.directory)) {
-            await mkdir(this.options.directory, { recursive: true });
+            try {
+                await mkdir(this.options.directory, { recursive: true });
+                console.info(`Created log directory: ${this.options.directory}`);
+            } catch (err) {
+                console.error(`Failed to create log directory ${this.options.directory}:`, err);
+                throw err;
+            }
         }
     }
 }

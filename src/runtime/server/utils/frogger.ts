@@ -25,6 +25,7 @@ export class ServerFrogger extends BaseFrogger {
                 format: fileOptions.format,
                 additionalFields: options.additionalFields
             });
+            console.info('File reporter initialised');
         }
         
         // Set up batch reporter if enabled
@@ -39,8 +40,6 @@ export class ServerFrogger extends BaseFrogger {
                 retryDelay: batchOptions.retryDelay,
                 additionalFields: options.additionalFields,
                 onFlush: async (logs) => {
-                    
-                    // Send logs to configured endpoint
                     try {
                         await $fetch(options.endpoint || '/api/_frogger/logs', {
                             method: 'POST',
@@ -49,11 +48,6 @@ export class ServerFrogger extends BaseFrogger {
                     }
                     catch (error) {
                         console.error('Failed to send logs:', error);
-                        
-                        if (this.batchReporter && batchOptions.retryOnFailure) {
-
-
-                        }
                     }
                 }
             });
@@ -75,14 +69,47 @@ export class ServerFrogger extends BaseFrogger {
             timestamp: logObj.date ?? Date.now()
         };
         
-        // Send to batch reporter if configured
-        if (this.batchReporter) {
-            this.batchReporter.log(enrichedLog);
+        if (this.fileReporter) {
+            try {
+                this.fileReporter.log(logObj);
+            }
+            catch (err) {
+                console.error('Error in file reporter:', err);
+            }
         }
         
-        // Send to file reporter if configured
+        if (this.batchReporter) {
+            try {
+                this.batchReporter.log(enrichedLog);
+            }
+            catch (err) {
+                console.error('Error in batch reporter:', err);
+            }
+        }
+    }
+
+    /**
+     * Log directly to file, bypassing the batch reporter
+     * This is useful to prevent recursion in API handlers
+     */
+    public logToFile(logObj: LogObject): void {
         if (this.fileReporter) {
-            this.fileReporter.log(enrichedLog);
+            try {
+                // Add marker to avoid double processing
+                const enrichedLog = {
+                    ...logObj,
+                    context: {
+                        ...this.context,
+                        fileOnly: true,
+                        processed: true
+                    }
+                };
+                this.fileReporter.log(enrichedLog);
+            } catch (err) {
+                console.error('Error writing directly to file:', err);
+            }
+        } else {
+            console.warn('File reporter not configured, cannot log directly to file');
         }
     }
     
@@ -94,6 +121,10 @@ export class ServerFrogger extends BaseFrogger {
         
         if (this.batchReporter) {
             promises.push(this.batchReporter.forceFlush());
+        }
+
+        if (this.fileReporter && typeof this.fileReporter.flush === 'function') {
+            promises.push(this.fileReporter.flush());
         }
         
         await Promise.all(promises);

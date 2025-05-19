@@ -1,4 +1,4 @@
-import type { Frogger } from '../../shared/types/frogger'
+import type { ClientLogger } from '../types/logger'
 import { createFrogger } from '../../app/utils/index'
 
 import { type ClientLoggerOptions } from '../types/logger'
@@ -7,7 +7,7 @@ import { type ClientLoggerOptions } from '../types/logger'
 /**
  * Composable to access the Frogger logger from any component
  */
-export function useFrogger(options: ClientLoggerOptions): Frogger {
+export function useFrogger(options: ClientLoggerOptions): ClientLogger {
     const isServer = import.meta.server
 
     const logger = createFrogger({

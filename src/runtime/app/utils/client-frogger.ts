@@ -1,15 +1,15 @@
 import type { LogObject } from 'consola/browser';
-import { BaseFrogger } from '../../shared/utils/frogger';
+import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
 
 import type { ClientLoggerOptions, QueuedLog } from '../types/logger';
-
+import { generateSpanId } from '../../shared/utils/tracing';
 
 
 /**
  * Client-side implementation of Frogger
  * Batches logs and sends them to a server endpoint
  */
-export class ClientFrogger extends BaseFrogger {
+export class ClientFrogger extends BaseFroggerLogger {
     private options: Required<ClientLoggerOptions>;
     private queue: QueuedLog[] = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
@@ -50,11 +50,16 @@ export class ClientFrogger extends BaseFrogger {
     private enqueueLog(type: string, args: any[]): void {
         const log: QueuedLog = {
             type,
-            args,
+            date: new Date(),
+            trace: {
+                traceId: this.traceId,
+                spanId: generateSpanId()
+            },
+            context: {
+                args: args,
+                ...this.context,
+            },
             timestamp: Date.now(),
-            traceId: this.traceId,
-            spanId: this.spanId,
-            context: { ...this.context }
         };
         
         this.queue.push(log);

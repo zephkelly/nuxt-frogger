@@ -1,4 +1,4 @@
-export type { Frogger } from './shared/types/frogger';
+export type { FroggerLogger } from './shared/types/frogger';
 export type { FroggerOptions } from './shared/types';
 
 

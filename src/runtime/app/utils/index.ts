@@ -1,12 +1,10 @@
-import { ClientFrogger } from "./frogger";
+import { ClientFrogger } from "./client-frogger";
 import type { ClientLoggerOptions } from "../types/logger";
 
-import type { Frogger } from "../../shared/types/frogger";
+import type { ClientLogger } from "../types/logger";
 
 
 
-export function createFrogger(options: ClientLoggerOptions = {}): Frogger {
+export function createFrogger(options: ClientLoggerOptions = {}): ClientLogger {
     return new ClientFrogger(options);
 }
-
-export const frogger: Frogger = createFrogger();

@@ -1,13 +1,13 @@
 import { type ConsolaInstance, createConsola } from "consola/core";
-import type { Frogger } from "../types/frogger";
+import type { FroggerLogger } from "../types/frogger";
 import type { LogObject } from 'consola';
 import type { FroggerOptions, LogContext, TraceContext } from "../types";
 
-import { generateTraceId, generateSpanId } from "../utils/tracing";
+import { generateTraceId, generateSpanId } from "./tracing";
+import { defu } from "defu";
 
 
-
-export abstract class BaseFrogger implements Frogger {
+export abstract class BaseFroggerLogger implements FroggerLogger {
     protected consola: ConsolaInstance;
     protected context: LogContext = {};
     protected traceId: string;
@@ -83,10 +83,7 @@ export abstract class BaseFrogger implements Frogger {
      * Context management methods
      */
     addContext(context: LogContext): void {
-        this.context = {
-            ...this.context,
-            ...context
-        };
+        this.context = defu(this.context, context);
     }
     
     setUser(userId: string): void {

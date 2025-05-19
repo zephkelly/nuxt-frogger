@@ -49,8 +49,6 @@ export class FileReporter {
     private async processLogEntry(logObj: LogObject): Promise<void> {
         // Check if this is a batch of logs
         if (logObj && typeof logObj === 'object' && 'logs' in logObj && Array.isArray(logObj.logs)) {
-            console.debug(`Processing batch of ${logObj.logs.length} logs`);
-            
             // Extract common metadata
             const { logs, ...metadata } = logObj;
             
@@ -88,7 +86,6 @@ export class FileReporter {
             if (fileName !== this.currentFileName) {
                 this.currentFileName = fileName;
                 this.currentFileSize = await this.getFileSize(fileName);
-                console.debug(`Switched to log file: ${fileName}, current size: ${this.currentFileSize} bytes`);
             }
             
             // Format the log entry based on configuration

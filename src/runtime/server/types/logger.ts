@@ -1,4 +1,5 @@
 import type { FroggerOptions } from "../../shared/types";
+import type { FroggerLogger } from "../../shared/types/frogger";
 
 
 
@@ -37,4 +38,9 @@ export interface ServerLoggerOptions extends FroggerOptions {
      * Additional fields to include with all logs
      */
     additionalFields?: Record<string, any>;
+}
+
+
+export interface ServerLogger extends FroggerLogger {
+    logToFile: (logObj: any) => void;
 }

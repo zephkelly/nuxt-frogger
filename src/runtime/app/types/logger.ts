@@ -1,5 +1,6 @@
 import type { LogContext } from "../../shared/types";
 import type { FroggerOptions } from "../../shared/types";
+import type { FroggerLogger } from "../../shared/types/frogger";
 
 
 
@@ -53,9 +54,15 @@ export interface ClientLoggerOptions extends FroggerOptions {
 
 export interface QueuedLog {
     type: string;
-    args: any[];
+    date: Date;
     timestamp: number;
-    traceId: string;
-    spanId: string;
+    trace: {
+        traceId: string;
+        spanId: string;
+    }
     context: LogContext;
+}
+
+export interface ClientLogger extends FroggerLogger {
+    
 }

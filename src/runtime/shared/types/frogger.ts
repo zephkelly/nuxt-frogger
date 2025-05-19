@@ -2,7 +2,7 @@ import type { LogContext } from '../types';
 
 
 
-export interface Frogger {
+export interface FroggerLogger {
     /**
      * Log a fatal-level message
      * @param message The primary message to log

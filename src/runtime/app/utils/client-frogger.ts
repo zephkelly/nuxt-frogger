@@ -2,7 +2,6 @@ import type { LogObject } from 'consola/browser';
 import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
 
 import type { ClientLoggerOptions } from '../types/logger';
-import { generateSpanId } from '../../shared/utils/tracing';
 import type { LoggerObject } from '../../shared/types';
 
 import { useNuxtApp } from '#app';
@@ -65,15 +64,14 @@ export class ClientFrogger extends BaseFroggerLogger {
      * Process a log entry from Consola
      */
     protected async processLog(logObj: LogObject): Promise<void> {
+        const traceContext = this.generateTraceContext();
+
         const froggerLoggerObject: LoggerObject = {
             type: logObj.type,
             date: new Date(),
             level: logObj.level,
 
-            trace: {
-                traceId: this.traceId,
-                spanId: generateSpanId()
-            },
+            trace: traceContext,
 
             context: {
                 env: (import.meta.server) ? 'ssr' : 'client',

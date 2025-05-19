@@ -17,10 +17,10 @@ export class ServerLogQueueService {
     private defaultOptions: ServerLoggerOptions = {
         batch: true,
         file: {
-        directory: 'logs',
-        fileNameFormat: 'YYYY-MM-DD.log',
-        maxSize: 10 * 1024 * 1024,
-        format: 'json'
+            directory: 'logs',
+            fileNameFormat: 'YYYY-MM-DD.log',
+            maxSize: 10 * 1024 * 1024,
+            format: 'json'
         }
     }
 
@@ -44,8 +44,7 @@ export class ServerLogQueueService {
      */
     public initialize(options: ServerLoggerOptions = this.defaultOptions): void {
         if (this.initialized) {
-        console.warn('ServerLogQueueService already initialized, ignoring new options')
-        return
+            return
         }
 
         this.initialized = true
@@ -63,55 +62,57 @@ export class ServerLogQueueService {
         
         // Set up batch reporter if enabled
         if (options.batch && options.endpoint) {
-        const batchOptions = typeof options.batch === 'object' ? options.batch : {}
-        
-        this.batchReporter = new BatchReporter({
-            maxSize: batchOptions.maxSize,
-            maxAge: batchOptions.maxAge,
-            retryOnFailure: batchOptions.retryOnFailure,
-            maxRetries: batchOptions.maxRetries,
-            retryDelay: batchOptions.retryDelay,
-            additionalFields: options.additionalFields,
-            onFlush: async (logs) => {
-            if (!logs || !logs.length) return
+            const batchOptions = typeof options.batch === 'object' ? options.batch : {}
             
-            try {
-                // First write to file if configured
-                if (this.fileReporter) {
-                for (const log of logs) {
+            this.batchReporter = new BatchReporter({
+                maxSize: batchOptions.maxSize,
+                maxAge: batchOptions.maxAge,
+                retryOnFailure: batchOptions.retryOnFailure,
+                maxRetries: batchOptions.maxRetries,
+                retryDelay: batchOptions.retryDelay,
+                additionalFields: options.additionalFields,
+                onFlush: async (logs) => {
+                    if (!logs || !logs.length) return
+                    
                     try {
-                    await this.fileReporter.log(log)
-                    } catch (err) {
-                    console.error('Error writing log to file:', err)
+                        // First write to file if configured
+                        if (this.fileReporter) {
+                            for (const log of logs) {
+                                try {
+                                    await this.fileReporter.log(log)
+                                }
+                                catch (err) {
+                                    console.error('Error writing log to file:', err)
+                                }
+                            }
+                        }
+                        
+                        // Then send to endpoint if configured
+                        if (options.endpoint) {
+                            await $fetch(options.endpoint, {
+                                method: 'POST',
+                                body: {
+                                    logs: logs,
+                                    app: {
+                                        name: 'nuxt-server',
+                                        version: process.env.npm_package_version || 'unknown'
+                                    },
+                                    context: {
+                                        processed: true
+                                    }
+                                }
+                            })
+                        }
+                    }
+                    catch (error) {
+                        console.error('Failed to send logs:', error)
+                        
+                        if (this.batchReporter && batchOptions.retryOnFailure) {
+                            console.debug('Retry on failure enabled, will retry later')
+                        }
                     }
                 }
-                }
-                
-                // Then send to endpoint if configured
-                if (options.endpoint) {
-                await $fetch(options.endpoint, {
-                    method: 'POST',
-                    body: {
-                    logs: logs,
-                    app: {
-                        name: 'nuxt-server',
-                        version: process.env.npm_package_version || 'unknown'
-                    },
-                    context: {
-                        processed: true
-                    }
-                    }
-                })
-                }
-            } catch (error) {
-                console.error('Failed to send logs:', error)
-                
-                if (this.batchReporter && batchOptions.retryOnFailure) {
-                console.debug('Retry on failure enabled, will retry later')
-                }
-            }
-            }
-        })
+            })
         }
     }
 
@@ -125,21 +126,23 @@ export class ServerLogQueueService {
 
         // Send to batch reporter if configured
         if (this.batchReporter) {
-        try {
-            this.batchReporter.log(logObj)
-        } catch (err) {
-            console.error('Error in batch reporter:', err)
-        }
+            try {
+                this.batchReporter.log(logObj)
+            }
+            catch (err) {
+                console.error('Error in batch reporter:', err)
+            }
         }
         
         // Also write directly to file reporter if configured
         // This ensures logs are always written even if batching fails
         if (this.fileReporter) {
-        try {
-            this.fileReporter.log(logObj)
-        } catch (err) {
-            console.error('Error in file reporter:', err)
-        }
+            try {
+                this.fileReporter.log(logObj)
+            }
+            catch (err) {
+                console.error('Error in file reporter:', err)
+            }
         }
     }
 
@@ -149,17 +152,19 @@ export class ServerLogQueueService {
      */
     public logToFile(logObj: LoggerObject): void {
         if (!this.initialized) {
-        this.initialize()
+            this.initialize()
         }
 
         if (this.fileReporter) {
-        try {
-            this.fileReporter.log(logObj)
-        } catch (err) {
-            console.error('Error writing directly to file:', err)
+            try {
+                this.fileReporter.log(logObj)
+            }
+            catch (err) {
+                console.error('Error writing directly to file:', err)
+            }
         }
-        } else {
-        console.warn('File reporter not configured, cannot log directly to file')
+        else {
+            console.warn('File reporter not configured, cannot log directly to file')
         }
     }
 
@@ -168,17 +173,17 @@ export class ServerLogQueueService {
      */
     public async flush(): Promise<void> {
         if (!this.initialized) {
-        return
+            return
         }
 
         const promises: Promise<void>[] = []
         
         if (this.batchReporter) {
-        promises.push(this.batchReporter.forceFlush())
+            promises.push(this.batchReporter.forceFlush())
         }
 
         if (this.fileReporter && typeof this.fileReporter.flush === 'function') {
-        promises.push(this.fileReporter.flush())
+            promises.push(this.fileReporter.flush())
         }
         
         await Promise.all(promises)

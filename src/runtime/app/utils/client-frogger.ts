@@ -12,9 +12,10 @@ import type { LogBatch } from '../types/logger';
 
 
 
-interface TraceState {
-    traceId: string;
-    lastSpanId: string | null;
+interface SSRTraceState {
+    traceId: string;              // The SSR trace ID
+    lastServerSpanId: string | null;  // The last span ID from the server
+    isClientHydrated: boolean;    // Flag to track if client hydration has occurred
 }
 
 /**
@@ -64,27 +65,37 @@ export class ClientFrogger extends BaseFroggerLogger {
 
     /**
      * Set up trace context continuity across SSR-CSR boundary
-     * Uses useState internally to persist and share the trace context
+     * ONLY the initial client hydration shares the trace ID with SSR
      */
     private setupTraceContext(): void {
-        const traceState = useState<TraceState>('frogger-trace-state', () => ({
-            traceId: this.traceId,
-            lastSpanId: null
+        const ssrTraceState = useState<SSRTraceState>('frogger-ssr-trace-state', () => ({
+            traceId: '',
+            lastServerSpanId: null,
+            isClientHydrated: false
         }));
         
         if (import.meta.server) {
-            traceState.value = {
+            // On server: store the trace ID and span ID for client hydration
+            ssrTraceState.value = {
                 traceId: this.traceId,
-                lastSpanId: null
+                lastServerSpanId: null,  // Will be updated after first log
+                isClientHydrated: false
             };
         }
         else {
-            if (traceState.value.traceId) {
+            // On client
+            if (ssrTraceState.value.traceId && !ssrTraceState.value.isClientHydrated) {
+                // This is the initial client hydration - use the SSR trace ID
                 this.setTraceContext(
-                    traceState.value.traceId,
-                    traceState.value.lastSpanId
+                    ssrTraceState.value.traceId,
+                    ssrTraceState.value.lastServerSpanId
                 );
+                
+                // Mark that hydration has occurred so future instances get new trace IDs
+                ssrTraceState.value.isClientHydrated = true;
             }
+            // For all other client instances, we keep the new randomly generated trace ID
+            // from the BaseFroggerLogger constructor (no action needed)
         }
     }
     
@@ -95,17 +106,19 @@ export class ClientFrogger extends BaseFroggerLogger {
         const traceContext = this.generateTraceContext();
 
         if (import.meta.server) {
-            const traceState = useState<TraceState>('frogger-trace-state');
-            traceState.value = {
-                traceId: this.traceId,
-                lastSpanId: this.lastSpanId
+            // On server: update the last server span ID
+            const ssrTraceState = useState<SSRTraceState>('frogger-ssr-trace-state');
+            ssrTraceState.value = {
+                ...ssrTraceState.value,
+                lastServerSpanId: this.lastSpanId
             };
         }
 
         const froggerLoggerObject: LoggerObject = {
             type: logObj.type,
-            date: new Date(),
             level: logObj.level,
+            
+            date: logObj.date,
 
             trace: traceContext,
 
@@ -115,7 +128,7 @@ export class ClientFrogger extends BaseFroggerLogger {
                 ...this.globalContext,
                 ...logObj.args?.slice(1)[0],
             },
-            timestamp: Date.now(),
+            timestamp: logObj.date.getTime(),
         }
         
         if (import.meta.client) {

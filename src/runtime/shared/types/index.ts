@@ -31,8 +31,8 @@ export interface LogContext {
 
 export interface LoggerObject {
     type: LogType;
-    level: number;
     date: Date;
+    level: number;
     trace: TraceContext;
     context: LogContext;
     timestamp: number;

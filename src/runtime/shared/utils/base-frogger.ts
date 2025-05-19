@@ -47,36 +47,52 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
     protected abstract processLog(logObj: LogObject): void;
     
 
-    trace(message: any, ...args: any[]): void {
-        this.consola.trace(message, ...args);
+    trace(message: string, ...args: Record<string, any>[]): void {
+        this.consola.trace(message,
+            args,
+        )
     }
 
-    success(message: any, ...args: any[]): void {
-        this.consola.success(message, ...args);
+    success(message: string, ...args: Record<string, any>[]): void {
+        this.consola.success(message,
+            args,
+        )
     }
     
-    debug(message: any, ...args: any[]): void {
-        this.consola.debug(message, ...args);
+    debug(message: string, ...args: Record<string, any>[]): void {
+        this.consola.debug(message,
+            args,
+        )
     }
 
-    log(message: any, ...args: any[]): void {
-        this.consola.log(message, ...args);
+    log(message: string, ...args: Record<string, any>[]): void {
+        this.consola.log(message,
+            args,
+        )
     }
     
-    info(message: any, ...args: any[]): void {
-        this.consola.info(message, ...args);
+    info(message: string, ...args: Record<string, any>[]): void {
+        this.consola.info(message,
+            args,
+        );
     }
     
-    warn(message: any, ...args: any[]): void {
-        this.consola.warn(message, ...args);
+    warn(message: string, ...args: Record<string, any>[]): void {
+        this.consola.warn(message,
+            args,
+        )
     }
 
-    fatal(message: any, ...args: any[]): void {
-        this.consola.fatal(message, ...args);
+    fatal(message: string, ...args: Record<string, any>[]): void {
+        this.consola.fatal(message,
+            args,
+        )
     }
     
-    error(message: any, ...args: any[]): void {
-        this.consola.error(message, ...args);
+    error(message: string, ...args: Record<string, any>[]): void {
+        this.consola.error(message,
+            args,
+        )
     }
     
     /**

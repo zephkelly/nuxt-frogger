@@ -19,16 +19,10 @@ export interface TraceContext {
      * 8-byte array as 16-character hex string (optional)
      */
     parentId?: string;
-    
-    /**
-     * Whether this trace is sampled for storage/processing
-     */
-    sampled?: boolean;
 }
 
 export interface LogContext {
-    userId?: string
-    sessionId?: string
+    message?: string;
     [key: string]: any
 }
 

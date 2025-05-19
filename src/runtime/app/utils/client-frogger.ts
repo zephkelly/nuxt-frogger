@@ -41,23 +41,17 @@ export class ClientFrogger extends BaseFroggerLogger {
      * Process a log entry from Consola
      */
     protected processLog(logObj: LogObject): void {
-        this.enqueueLog(logObj.type, logObj.args || []);
-    }
-    
-    /**
-     * Add a log entry to the queue
-     */
-    private enqueueLog(type: string, args: any[]): void {
         const log: QueuedLog = {
-            type,
+            type: logObj.type,
             date: new Date(),
             trace: {
                 traceId: this.traceId,
                 spanId: generateSpanId()
             },
             context: {
-                args: args,
                 ...this.context,
+                ...logObj.args?.slice(1)[0][0],
+                message: logObj.args?.[0] || logObj.message,
             },
             timestamp: Date.now(),
         };

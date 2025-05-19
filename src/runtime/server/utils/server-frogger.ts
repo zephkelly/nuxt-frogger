@@ -112,11 +112,12 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             },
             context: {
                 ...this.context,
-                args: logObj.args
+                ...logObj.args?.slice(1)[0],
+                message: logObj.args?.[0] || logObj.message,
             },
             timestamp: Date.now()
         };
-        
+
         if (this.fileReporter) {
             try {
                 if (enrichedLog && typeof enrichedLog === 'object' && 
@@ -157,10 +158,8 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
      * This is useful to prevent recursion in API handlers
      */
     public logToFile(logObj: LogObject): void {
-        console.log('Logging directly to file:', this.options);
         if (this.fileReporter) {
             try {
-                // Add marker to avoid double processing
                 const enrichedLog = {
                     ...logObj,
                     context: {
@@ -183,7 +182,6 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
                         this.fileReporter.log(logWithMetadata);
                     }
                 } else {
-                    // This is a single log
                     this.fileReporter.log(enrichedLog);
                 }
             } catch (err) {

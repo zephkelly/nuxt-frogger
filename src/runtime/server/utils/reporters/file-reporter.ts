@@ -181,8 +181,6 @@ export class FileReporter {
             // Rename using native fs operations
             const fs = require('node:fs');
             fs.renameSync(filePath, rotatedFilePath);
-            
-            console.info(`Rotated log file: ${fileName} -> ${rotatedFileName}`);
         }
     }
 

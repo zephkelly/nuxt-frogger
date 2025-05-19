@@ -46,24 +46,29 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
     protected abstract processLog(logObj: LogObject): void;
 
     protected generateTraceContext(): TraceContext {
-        // Generate a new span ID for this log
         const newSpanId = generateSpanId();
         
-        // Create the trace context
         const traceContext: TraceContext = {
             traceId: this.traceId,
             spanId: newSpanId
         };
         
-        // If we have a previous span ID, use it as the parent
         if (this.lastSpanId) {
             traceContext.parentId = this.lastSpanId;
         }
         
-        // Update the last span ID for future logs
         this.lastSpanId = newSpanId;
         
         return traceContext;
+    }
+
+    /**
+     * Set the trace ID and last span ID for this logger
+     * (Used internally for SSR-CSR continuity)
+     */
+    protected setTraceContext(traceId: string, parentSpanId: string | null = null): void {
+        this.traceId = traceId;
+        this.lastSpanId = parentSpanId;
     }
     
 

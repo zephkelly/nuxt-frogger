@@ -10,6 +10,13 @@ import { LogQueueService } from '../services/log-queue';
 
 import type { LogBatch } from '../types/logger';
 
+
+
+interface TraceState {
+    traceId: string;
+    lastSpanId: string | null;
+}
+
 /**
  * Client-side implementation of Frogger
  * Batches logs and sends them to a server endpoint
@@ -33,12 +40,12 @@ export class ClientFrogger extends BaseFroggerLogger {
             context: options.context ?? {},
         };
         
-        // Configure the shared log queue service
+        this.setupTraceContext();
+        
         if (import.meta.client) {
             const nuxtApp = useNuxtApp();
             const logQueue = nuxtApp.$logQueue as LogQueueService;
             
-            // Set the queue configuration
             logQueue.configure({
                 endpoint: this.options.endpoint,
                 maxBatchSize: this.options.maxBatchSize,
@@ -46,17 +53,38 @@ export class ClientFrogger extends BaseFroggerLogger {
                 maxQueueSize: this.options.maxQueueSize
             });
             
-            // Set the app info for this batch
             logQueue.setAppInfo(this.options.appName, this.options.version);
             
-            // Set up global error handlers
             if (this.options.captureErrors) {
                 window.addEventListener('error', this.handleGlobalError.bind(this));
                 window.addEventListener('unhandledrejection', this.handlePromiseRejection.bind(this));
             }
         }
-        else {
+    }
 
+    /**
+     * Set up trace context continuity across SSR-CSR boundary
+     * Uses useState internally to persist and share the trace context
+     */
+    private setupTraceContext(): void {
+        const traceState = useState<TraceState>('frogger-trace-state', () => ({
+            traceId: this.traceId,
+            lastSpanId: null
+        }));
+        
+        if (import.meta.server) {
+            traceState.value = {
+                traceId: this.traceId,
+                lastSpanId: null
+            };
+        }
+        else {
+            if (traceState.value.traceId) {
+                this.setTraceContext(
+                    traceState.value.traceId,
+                    traceState.value.lastSpanId
+                );
+            }
         }
     }
     
@@ -65,6 +93,14 @@ export class ClientFrogger extends BaseFroggerLogger {
      */
     protected async processLog(logObj: LogObject): Promise<void> {
         const traceContext = this.generateTraceContext();
+
+        if (import.meta.server) {
+            const traceState = useState<TraceState>('frogger-trace-state');
+            traceState.value = {
+                traceId: this.traceId,
+                lastSpanId: this.lastSpanId
+            };
+        }
 
         const froggerLoggerObject: LoggerObject = {
             type: logObj.type,
@@ -82,16 +118,12 @@ export class ClientFrogger extends BaseFroggerLogger {
             timestamp: Date.now(),
         }
         
-        // Use the centralized log queue service to enqueue the log
         if (import.meta.client) {
-            console.log('Logging to client log queue:', froggerLoggerObject);
             const nuxtApp = useNuxtApp();
             const logQueue = nuxtApp.$logQueue as LogQueueService;
             logQueue.enqueueLog(froggerLoggerObject);
         }
         else {
-
-            //fetch to the logging endpoint while on server for instant request
             const batch: LogBatch = {
                 logs: [froggerLoggerObject],
                 app: {

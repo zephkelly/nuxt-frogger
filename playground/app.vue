@@ -12,7 +12,7 @@ const isServer = import.meta.server
 const isClient = import.meta.client
 
 const startFrogger = useFrogger();
-startFrogger.info('Hello from the playground!', 'Wow', {
+startFrogger.info('Hello from the playground!', {
     server: isServer,
     client: isClient,
 });

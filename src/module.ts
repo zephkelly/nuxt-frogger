@@ -62,6 +62,8 @@ export default defineNuxtModule<ModuleOptions>({
 
         addImportsDir(resolver.resolve('./runtime/app/composables'))
 
+        addPlugin(resolver.resolve('./runtime/app/plugins/log-queue.client'))
+
         addServerHandler({
             route: '/api/_frogger/logs',
             handler: resolver.resolve('./runtime/server/api/logger.post'),

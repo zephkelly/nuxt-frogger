@@ -6,59 +6,59 @@ export interface FroggerLogger {
     /**
      * Log a fatal-level message
      * @param message The primary message to log
-     * @param args Additional arguments to include
+     * @param context Additional context to include
      */
-    log(message: any, ...args: any[]): void;
+    log(message: string, context: Object): void;
 
     /**
      * Log an info-level message
      * @param message The primary message to log
-     * @param args Additional arguments to include
+     * @param context Additional context to include
      */
-    info(message: any, ...args: any[]): void;
+    info(message: string, context: Object): void;
     
     /**
      * Log a warning-level message
      * @param message The primary message to log
-     * @param args Additional arguments to include
+     * @param context Additional context to include
     */
-    warn(message: any, ...args: any[]): void;
+    warn(message: string, context: Object): void;
    
     /**
     * Log an error-level message
     * @param message The primary message to log
-    * @param args Additional arguments to include
+    * @param context Additional context to include
     */
-    error(message: any, ...args: any[]): void;
+    error(message: string, context: Object): void;
 
     /**
      * Log a fatal-level message
      * @param message The primary message to log
-     * @param args Additional arguments to include
+     * @param context Additional context to include
      */
-    fatal(message: any, ...args: any[]): void;
+    fatal(message: string, context: Object): void;
     
     
     /**
      * Log a debug-level message
      * @param message The primary message to log
-     * @param args Additional arguments to include
+     * @param context Additional context to include
      */
-    debug(message: any, ...args: any[]): void;
+    debug(message: string, context: Object): void;
     
     /**
      * Log a trace-level message
      * @param message The primary message to log
-     * @param args Additional arguments to include
+     * @param context Additional context to include
      */
-    trace(message: any, ...args: any[]): void;
+    trace(message: string, context: Object): void;
 
 
     /**
      * Add context data to be included with all logs
      * @param context The context data to add
      */
-    addContext(context: LogContext): void;
+    addGlobalContext(context: LogContext): void;
     
     /**
      * Set the user ID for the current logger context

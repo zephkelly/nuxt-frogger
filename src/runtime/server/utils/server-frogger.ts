@@ -4,6 +4,7 @@ import { BatchReporter } from './reporters/batch-reporter';
 import { FileReporter } from './reporters/file-reporter';
 import type { ServerLoggerOptions } from '../types/logger';
 import { generateSpanId } from '../../shared/utils/tracing';
+import type { LoggerObject } from '../../shared/types';
 
 
 
@@ -34,7 +35,6 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
                 directory: fileOptions.directory,
                 fileNameFormat: fileOptions.fileNameFormat,
                 maxSize: fileOptions.maxSize,
-                format: fileOptions.format,
                 additionalFields: options.additionalFields
             });
         }
@@ -58,25 +58,18 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
                             for (const log of logs) {
                                 try {
                                     this.fileReporter.log(log);
-                                } catch (err) {
+                                }
+                                catch (err) {
                                     console.error('Error writing log to file:', err);
                                 }
                             }
                         }
-                        
-                        const enrichedLogs = logs.map(log => ({
-                            ...log,
-                            context: {
-                                ...this.context,
-                                processed: true,  // Flag that this has been processed
-                            }
-                        }));
-                        
+                        console.log('Flushing logs to endpoint:', logs);
                         // Send the processed batch to endpoint
                         await $fetch(options.endpoint || '/api/_frogger/logs', {
                             method: 'POST',
                             body: {
-                                logs: enrichedLogs,
+                                logs: logs,
                                 app: {
                                     name: 'nuxt-server',
                                     version: process.env.npm_package_version || 'unknown'
@@ -103,51 +96,46 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
      * Process a log entry from Consola
      */
     protected processLog(logObj: LogObject): void {
-        const enrichedLog = {
+        /**
+         * Expecting consola logObj.args[0] as message, and [1] as context object
+         **/
+        if (!logObj || typeof logObj !== 'object') {
+            console.warn('Invalid log object:', logObj);
+            return;
+        }
+
+        const froggerLoggerObject: LoggerObject = {
             type: logObj.type,
+            level: logObj.level,
             date: logObj.date,
             trace: {
                 traceId: this.traceId,
                 spanId: generateSpanId()
             },
             context: {
-                ...this.context,
+                ...this.globalContext,
                 ...logObj.args?.slice(1)[0],
                 message: logObj.args?.[0] || logObj.message,
             },
             timestamp: Date.now()
         };
-
+        
         if (this.fileReporter) {
             try {
-                if (enrichedLog && typeof enrichedLog === 'object' && 
-                    'logs' in enrichedLog && Array.isArray(enrichedLog.logs)) {
-                    
-                    for (const individualLog of enrichedLog.logs) {
-                        const logWithMetadata = {
-                            ...individualLog,
-                        };
-                        this.fileReporter.log(logWithMetadata);
-                    }
-                } else {
-                    // This is a single log
-
-                    //@ts-expect-error
-                    this.fileReporter.log(enrichedLog);
-                }
-            } catch (err) {
+                // Log to file reporter
+                console.log('Logging to file reporter:', froggerLoggerObject);
+                this.fileReporter.log(froggerLoggerObject);
+            }
+            catch (err) {
                 console.error('Error in file reporter:', err);
             }
         }
         
-        if (this.batchReporter && 
-            !(enrichedLog.context && 
-              typeof enrichedLog.context === 'object')) {
+        if (this.batchReporter) {
             try {
-
-                //@ts-expect-error
-                this.batchReporter.log(enrichedLog);
-            } catch (err) {
+                this.batchReporter.log(froggerLoggerObject);
+            }
+            catch (err) {
                 console.error('Error in batch reporter:', err);
             }
         }
@@ -157,34 +145,13 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
      * Log directly to file, bypassing the batch reporter
      * This is useful to prevent recursion in API handlers
      */
-    public logToFile(logObj: LogObject): void {
+    public logToFile(logObjs: any): void {
+        console.log('Logging directly to file:', logObjs);
         if (this.fileReporter) {
             try {
-                const enrichedLog = {
-                    ...logObj,
-                    context: {
-                        ...this.context,
-                        processed: true
-                    }
-                };
-                
-                if (enrichedLog && typeof enrichedLog === 'object' && 
-                    'logs' in enrichedLog && Array.isArray(enrichedLog.logs)) {
-                    
-                    for (const individualLog of enrichedLog.logs) {
-                        const logWithMetadata = {
-                            ...individualLog,
-                            context: {
-                                ...individualLog.context,
-                                processed: true
-                            }
-                        };
-                        this.fileReporter.log(logWithMetadata);
-                    }
-                } else {
-                    this.fileReporter.log(enrichedLog);
-                }
-            } catch (err) {
+                this.fileReporter.log(logObjs);
+            }
+            catch (err) {
                 console.error('Error writing directly to file:', err);
             }
         } else {

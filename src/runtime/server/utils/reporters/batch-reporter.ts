@@ -1,5 +1,5 @@
-import type { LogObject } from 'consola';
 import type { BatchReporterOptions } from '../../types/batch-reporter';
+import type { LoggerObject } from '~/src/runtime/shared/types';
 
 
 
@@ -7,7 +7,7 @@ import type { BatchReporterOptions } from '../../types/batch-reporter';
  * Reporter that batches logs before sending them to a destination
  */
 export class BatchReporter {
-    private logs: LogObject[] = [];
+    private logs: LoggerObject[] = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
     private options: Required<BatchReporterOptions>;
     private flushing: boolean = false;
@@ -31,7 +31,7 @@ export class BatchReporter {
     /**
      * Handle an incoming log and add it to the batch
      */
-    log(logObj: LogObject): void {
+    log(logObj: LoggerObject): void {
         // Apply level filtering if configured
         if (this.options.levels.length > 0) {
             // In consola, higher level means more verbose
@@ -41,7 +41,7 @@ export class BatchReporter {
         }
         
         // Deep clone the log object to avoid mutations
-        const logCopy = JSON.parse(JSON.stringify(logObj)) as LogObject;
+        const logCopy = structuredClone(logObj);
         
         // Add additional fields
         Object.assign(logCopy, this.options.additionalFields);
@@ -144,7 +144,7 @@ export class BatchReporter {
     /**
      * Handle a failed flush attempt with retry logic
      */
-    private handleFlushFailure(batchId: string, logs: LogObject[]): void {
+    private handleFlushFailure(batchId: string, logs: LoggerObject[]): void {
         // Get current retry count for this batch
         const retryCount = this.retries.get(batchId) || 0;
         

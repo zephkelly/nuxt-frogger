@@ -21,13 +21,13 @@ export interface FileReporterOptions {
      */
     maxSize?: number;
 
-    /**
-     * Format for log output
-     * - 'json': JSON format (one object per line)
-     * - 'text': Human-readable text format
-     * @default 'json'
-     */
-    format?: 'json' | 'text';
+    // /**
+    //  * Format for log output
+    //  * - 'json': JSON format (one object per line)
+    //  * - 'text': Human-readable text format
+    //  * @default 'json'
+    //  */
+    // format?: 'json';
 
     /**
      * Additional fields to include in log entries

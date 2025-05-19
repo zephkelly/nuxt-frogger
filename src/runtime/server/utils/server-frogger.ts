@@ -23,11 +23,8 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         super(options);
         this.options = options;
 
-        // Get the singleton instance
         this.logQueue = ServerLogQueueService.getInstance();
         
-        // Initialize the queue service if options are provided
-        // This will only take effect if not already initialized
         if (options && (options.batch || options.file || options.endpoint)) {
             this.logQueue.initialize(options);
         }
@@ -58,7 +55,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             timestamp: Date.now()
         };
         
-        // Use the shared log queue service
+        // Use shared log queue service
         this.logQueue.enqueueLog(froggerLoggerObject);
     }
 

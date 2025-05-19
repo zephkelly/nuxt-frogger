@@ -6,12 +6,13 @@ import type { ServerLoggerOptions } from '../types/logger';
 import { generateSpanId } from '../../shared/utils/tracing';
 import type { LoggerObject } from '../../shared/types';
 
+import { ServerLogQueueService } from '../services/server-log-queue';
+
 
 
 export class ServerFroggerLogger extends BaseFroggerLogger {
-    private batchReporter?: BatchReporter;
-    private fileReporter?: FileReporter;
     private options: ServerLoggerOptions;
+    private logQueue: ServerLogQueueService;
     
     constructor(options: ServerLoggerOptions = {
         batch: true,
@@ -22,73 +23,16 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             format: 'json'
         },
     }) {
-
         super(options);
-
         this.options = options;
 
+        // Get the singleton instance
+        this.logQueue = ServerLogQueueService.getInstance();
         
-        // Set up file reporter if enabled
-        if (options.file) {
-            const fileOptions = typeof options.file === 'object' ? options.file : {};
-            this.fileReporter = new FileReporter({
-                directory: fileOptions.directory,
-                fileNameFormat: fileOptions.fileNameFormat,
-                maxSize: fileOptions.maxSize,
-                additionalFields: options.additionalFields
-            });
-        }
-        
-        // Set up batch reporter if enabled
-        if (options.batch && options.endpoint) {
-            const batchOptions = typeof options.batch === 'object' ? options.batch : {};
-            
-            this.batchReporter = new BatchReporter({
-                maxSize: batchOptions.maxSize,
-                maxAge: batchOptions.maxAge,
-                retryOnFailure: batchOptions.retryOnFailure,
-                maxRetries: batchOptions.maxRetries,
-                retryDelay: batchOptions.retryDelay,
-                additionalFields: options.additionalFields,
-                onFlush: async (logs) => {
-                    if (!logs || !logs.length) return;
-                    
-                    try {
-                        if (this.fileReporter) {
-                            for (const log of logs) {
-                                try {
-                                    this.fileReporter.log(log);
-                                }
-                                catch (err) {
-                                    console.error('Error writing log to file:', err);
-                                }
-                            }
-                        }
-                        console.log('Flushing logs to endpoint:', logs);
-                        // Send the processed batch to endpoint
-                        await $fetch(options.endpoint || '/api/_frogger/logs', {
-                            method: 'POST',
-                            body: {
-                                logs: logs,
-                                app: {
-                                    name: 'nuxt-server',
-                                    version: process.env.npm_package_version || 'unknown'
-                                },
-                                context: {
-                                    processed: true
-                                }
-                            },
-                        });
-                    }
-                    catch (error) {
-                        console.error('Failed to send logs:', error);
-                       
-                        if (this.batchReporter && batchOptions.retryOnFailure) {
-                            console.debug('Retry on failure enabled, will retry later');
-                        }
-                    }
-                }
-            });
+        // Initialize the queue service if options are provided
+        // This will only take effect if not already initialized
+        if (options && (options.batch || options.file || options.endpoint)) {
+            this.logQueue.initialize(options);
         }
     }
     
@@ -96,9 +40,6 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
      * Process a log entry from Consola
      */
     protected processLog(logObj: LogObject): void {
-        /**
-         * Expecting consola logObj.args[0] as message, and [1] as context object
-         **/
         if (!logObj || typeof logObj !== 'object') {
             console.warn('Invalid log object:', logObj);
             return;
@@ -113,32 +54,16 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
                 spanId: generateSpanId()
             },
             context: {
+                env: 'server',
+                message: logObj.args?.[0],
                 ...this.globalContext,
                 ...logObj.args?.slice(1)[0],
-                message: logObj.args?.[0] || logObj.message,
             },
             timestamp: Date.now()
         };
         
-        if (this.fileReporter) {
-            try {
-                // Log to file reporter
-                console.log('Logging to file reporter:', froggerLoggerObject);
-                this.fileReporter.log(froggerLoggerObject);
-            }
-            catch (err) {
-                console.error('Error in file reporter:', err);
-            }
-        }
-        
-        if (this.batchReporter) {
-            try {
-                this.batchReporter.log(froggerLoggerObject);
-            }
-            catch (err) {
-                console.error('Error in batch reporter:', err);
-            }
-        }
+        // Use the shared log queue service
+        this.logQueue.enqueueLog(froggerLoggerObject);
     }
 
     /**
@@ -146,33 +71,13 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
      * This is useful to prevent recursion in API handlers
      */
     public logToFile(logObjs: any): void {
-        console.log('Logging directly to file:', logObjs);
-        if (this.fileReporter) {
-            try {
-                this.fileReporter.log(logObjs);
-            }
-            catch (err) {
-                console.error('Error writing directly to file:', err);
-            }
-        } else {
-            console.warn('File reporter not configured, cannot log directly to file');
-        }
+        this.logQueue.logToFile(logObjs);
     }
     
     /**
      * Flush any pending logs
      */
     async flush(): Promise<void> {
-        const promises: Promise<void>[] = [];
-        
-        if (this.batchReporter) {
-            promises.push(this.batchReporter.forceFlush());
-        }
-
-        if (this.fileReporter && typeof this.fileReporter.flush === 'function') {
-            promises.push(this.fileReporter.flush());
-        }
-        
-        await Promise.all(promises);
+        await this.logQueue.flush();
     }
 }

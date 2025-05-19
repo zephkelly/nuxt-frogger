@@ -7,15 +7,8 @@
 </template>
 
 <script setup>
-
-const isServer = import.meta.server
-const isClient = import.meta.client
-
 const startFrogger = useFrogger();
-startFrogger.info('Hello from the playground!', {
-    server: isServer,
-    client: isClient,
-});
+startFrogger.info('Hello from the playground!');
 
 const test = () => {
     const clickFrogger = useFrogger();
@@ -34,8 +27,6 @@ const test2 = async () => {
   }
     catch (error) {
         testFrogger.error('Error fetching /api/test', {
-            server: isServer,
-            client: isClient,
             error: error.message,
         });
     }

@@ -13,6 +13,9 @@ import {
 
 
 export interface ModuleOptions {
+    clientModule?: boolean
+    serverModule?: boolean
+
     file?: {
         directory?: string
         fileNameFormat?: string
@@ -35,6 +38,8 @@ export default defineNuxtModule<ModuleOptions>({
         configKey: 'frogger',
     },
     defaults: {
+        clientModule: true,
+        serverModule: true,
         file: {
             directory: 'logs',
             fileNameFormat: 'YYYY-MM-DD.log',
@@ -56,17 +61,23 @@ export default defineNuxtModule<ModuleOptions>({
         _nuxt.options.alias = _nuxt.options.alias || {};
         _nuxt.options.alias['#frogger'] = resolver.resolve('./runtime/frogger');
 
-        addServerImportsDir(resolver.resolve('./runtime/server/utils'))
+        if (_options.clientModule) {
+            console.log('Adding client module')
+            _nuxt.options.alias['#frogger/client'] = resolver.resolve('./runtime/app');
+            addImportsDir(resolver.resolve('./runtime/app/utils'))
+            addImportsDir(resolver.resolve('./runtime/app/composables'))
+            addPlugin(resolver.resolve('./runtime/app/plugins/log-queue.client'))
+        }
 
-        addImportsDir(resolver.resolve('./runtime/app/utils'))
-
-        addImportsDir(resolver.resolve('./runtime/app/composables'))
-
-        addPlugin(resolver.resolve('./runtime/app/plugins/log-queue.client'))
-
-        addServerHandler({
-            route: '/api/_frogger/logs',
-            handler: resolver.resolve('./runtime/server/api/logger.post'),
-        })
+        if (_options.serverModule) {
+            console.log('Adding server module')
+            _nuxt.options.alias['#frogger/server'] = resolver.resolve('./runtime/server');
+            addServerImportsDir(resolver.resolve('./runtime/server/utils'))
+            addServerPlugin(resolver.resolve('./runtime/server/plugins/log-queue.server'))
+            addServerHandler({
+                route: '/api/_frogger/logs',
+                handler: resolver.resolve('./runtime/server/api/logger.post'),
+            })
+        }
     },
 })

@@ -1,6 +1,6 @@
 import { H3Event, getRequestHeaders  } from 'h3';
 
-import { generateTraceId } from '../../shared/utils/tracing';
+import { generateSpanId, generateTraceId } from '../../shared/utils/tracing';
 import type { TraceContext } from '../../shared/types';
 
 //@ts-ignore
@@ -9,6 +9,7 @@ export default defineNitroPlugin((nitroApp) => {
     nitroApp.hooks.hook('request', (event: H3Event) => {
         const headers = getRequestHeaders(event)
         const traceparent = headers.traceparent
+        console.log('Traceparent:', traceparent)
         let traceId, parentSpanId
         
         if (traceparent) {
@@ -24,7 +25,7 @@ export default defineNitroPlugin((nitroApp) => {
 
         const newStartingTraceContext: TraceContext = {
             traceId: traceId || generateTraceId(),
-            spanId: generateTraceId(),
+            spanId: generateSpanId(),
             parentId: parentSpanId
         }
         

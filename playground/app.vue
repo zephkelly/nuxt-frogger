@@ -17,13 +17,17 @@ const test = () => {
 
 const test2 = async () => {
     const testFrogger = useFrogger();
-    testFrogger.info('Test2 button clicked!');
   try {
     testFrogger.error('Fetching /api/test');
-    const response = await fetch('/api/test');
+    const response = await $fetch('/api/test', {
+        headers: testFrogger.getHeaders(),
+    });
+    
     testFrogger.error('Response received', {
         response: response.status,
     });
+
+    testFrogger.info('Carrying on');
   }
     catch (error) {
         testFrogger.error('Error fetching /api/test', {

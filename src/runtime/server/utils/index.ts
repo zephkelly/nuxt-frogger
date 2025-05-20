@@ -33,6 +33,7 @@ export function getFrogger(
     }
     
     if (traceContext) {
+        console.log('Trace context found in event:', traceContext);
         return new ServerFroggerLogger(options, traceContext);
     }
     

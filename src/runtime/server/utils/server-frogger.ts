@@ -11,6 +11,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
     private options: ServerLoggerOptions;
     private logQueue: ServerLogQueueService;
 
+    private madeFirstLog: boolean = false;
     private traceContext: TraceContext | null = null;
     
     constructor(options: ServerLoggerOptions = {
@@ -47,11 +48,11 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
 
         // This will only be called if the trace context is null, AND/OR its
         // the first log entry for this logger instance
-        if (this.traceContext === null) {
+        if (this.madeFirstLog || this.traceContext === null) {
             currentTraceContext = this.generateTraceContext();
         }
         else {
-            currentTraceContext = this.traceContext;
+            currentTraceContext = this.generateTraceContext(this.traceContext);
         }
 
         const froggerLoggerObject: LoggerObject = {
@@ -70,8 +71,9 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         
         this.logQueue.enqueueLog(froggerLoggerObject);
 
-
-        this.traceContext = this.generateTraceContext();
+        if (!this.madeFirstLog) {
+            this.madeFirstLog = true;
+        }
     }
 
     /**

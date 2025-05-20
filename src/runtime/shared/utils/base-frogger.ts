@@ -27,13 +27,6 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
                 this.processLog(logObj);
             }
         });
-
-        // Print to console
-        // this.consola.addReporter({
-        //     log: (logObj: LogObject) => {
-        //         console.log(logObj);
-        //     }
-        // })
         
         if (options.context) {
             this.globalContext = { ...options.context };
@@ -45,7 +38,16 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
      */
     protected abstract processLog(logObj: LogObject): void;
 
-    protected generateTraceContext(): TraceContext {
+    protected generateTraceContext(suppliedTraceContext?: TraceContext): TraceContext {
+        if (suppliedTraceContext) {
+            if (suppliedTraceContext.traceId) {
+                this.traceId = suppliedTraceContext.traceId;
+            }
+            if (suppliedTraceContext.parentId) {
+                this.lastSpanId = suppliedTraceContext.parentId;
+            }
+        }
+
         const newSpanId = generateSpanId();
         
         const traceContext: TraceContext = {
@@ -60,6 +62,66 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
         this.lastSpanId = newSpanId;
         
         return traceContext;
+    }
+
+    /**
+     * Get W3C Trace Context headers for the current logger instance
+     * For use with HTTP requests. add to the request headers of $fetch or useFetch:
+     *  
+     * ```ts
+     * const logger = useFrogger();
+     * ```
+     * 
+     * With $fetch...
+     * ```ts
+     * const respose = await $fetch('/api/endpoint', {
+     *   method: 'POST',
+     *   headers: logger.getHeaders()
+     * });
+     * ```
+     * With useFetch...
+     * ```ts
+     * const { data, error } = await useFetch('/api/endpoint', {
+     *   method: 'POST',
+     *   headers: logger.getHeaders()
+     * });
+     * ```
+     * 
+     * Or, use the spread operator to add additional
+     * ```ts
+     * const { data, error } = await useFetch('/api/endpoint', {
+     *  method: 'POST',
+     *  headers: {
+     *    ...logger.getHeaders(),
+     *   'X-My-Custom-Header': 'value'
+     *   }
+     * });
+     * ```
+     */
+    public getHeaders(customVendor?: string): Record<string, string> {
+        // Create a new trace context with a fresh span ID
+        const currentSpan = this.lastSpanId
+
+        // Dont update the span, so that any subsequent logs
+        // on the client use the initial request span ID as
+        // the parent
+        const newSpanId = generateSpanId();
+        
+        // Format: 00-{traceId}-{spanId}-01 (version-traceId-spanId-flags)
+        // Where flags 01 means "sampled" (trace is being recorded)
+        const traceparent = `00-${this.traceId}-${currentSpan}-01`;
+        
+        // Vendor-specific trace information
+        const tracestate = `frogger=${customVendor || newSpanId}`;
+        
+        console.log('Trace Context:', {
+            traceparent,
+            tracestate
+        });
+        return {
+            traceparent,
+            tracestate
+        };
     }
 
     /**
@@ -123,27 +185,27 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
     /**
      * Context management methods
      */
-    addGlobalContext(context: LogContext): void {
-        this.globalContext = defu(this.globalContext, context);
-    }
+    // addGlobalContext(context: LogContext): void {
+    //     this.globalContext = defu(this.globalContext, context);
+    // }
     
-    setUser(userId: string): void {
-        this.globalContext.userId = userId;
-    }
+    // setUser(userId: string): void {
+    //     this.globalContext.userId = userId;
+    // }
     
-    setSession(sessionId: string): void {
-        this.globalContext.sessionId = sessionId;
-    }
+    // setSession(sessionId: string): void {
+    //     this.globalContext.sessionId = sessionId;
+    // }
     
     /**
      * Log level management
      */
-    getLevel(): number {
-        return this.level;
-    }
+    // getLevel(): number {
+    //     return this.level;
+    // }
     
-    setLevel(level: number): void {
-        this.level = level;
-        this.consola.level = level;
-    }
+    // setLevel(level: number): void {
+    //     this.level = level;
+    //     this.consola.level = level;
+    // }
 }

@@ -1,5 +1,6 @@
 export default defineEventHandler((event) => {
-    const frogger = useFrogger();
+    console.log(event.context.frogger);
+    const frogger = getFrogger();
     
     frogger.warn('Hello world');
 

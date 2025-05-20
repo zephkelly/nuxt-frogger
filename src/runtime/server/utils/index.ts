@@ -3,13 +3,9 @@ import type { ServerLoggerOptions } from "../types/logger";
 
 import type { ServerLogger } from "../types/logger";
 
-import { useRequestEvent, useNuxtApp } from "#app";
 
 
 
-export function useFrogger(options?: ServerLoggerOptions): ServerLogger {
-    const nuxtApp = useNuxtApp();
-    const event = useRequestEvent();
-
+export function getFrogger(options?: ServerLoggerOptions): ServerLogger {
     return new ServerFroggerLogger(options);
 }

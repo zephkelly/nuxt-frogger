@@ -3,6 +3,7 @@
     Nuxt module playground!
     <button @click="test()">Test</button>
     <button @click="test2()">Test2</button>
+    <button @click="test3()">Start High traffic</button>
   </div>
 </template>
 
@@ -33,6 +34,23 @@ const test2 = async () => {
         testFrogger.error('Error fetching /api/test', {
             error: error.message,
         });
+    }
+};
+
+
+const test3 = () => {
+    const highTrafficFrogger = useFrogger();
+    let intervalId;
+
+    if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+        highTrafficFrogger.info('High traffic simulation stopped');
+    } else {
+        intervalId = setInterval(() => {
+            highTrafficFrogger.info('High traffic simulation log');
+        }, 1000);
+        highTrafficFrogger.info('High traffic simulation started');
     }
 };
 </script>

@@ -167,8 +167,8 @@ export class ServerLogQueueService {
         }
 
         if (this.fileReporter) {
-        promises.push(this.fileReporter.forceFlush());
-    }
+            promises.push(this.fileReporter.forceFlush());
+        }
         
         await Promise.all(promises)
     }

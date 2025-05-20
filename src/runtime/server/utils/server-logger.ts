@@ -29,10 +29,6 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         this.options = options;
 
         this.logQueue = ServerLogQueueService.getInstance();
-        
-        if (options && (options.batch || options.file || options.endpoint)) {
-            this.logQueue.initialize(options);
-        }
 
         this.traceContext = traceContext;
     }

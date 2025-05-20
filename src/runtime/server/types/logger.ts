@@ -1,6 +1,5 @@
 import type { FroggerOptions } from "../../shared/types/options";
 import type { FroggerLogger } from "../../shared/types/frogger";
-import type { LogObject } from "consola";
 
 
 /**

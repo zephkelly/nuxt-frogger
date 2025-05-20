@@ -72,6 +72,7 @@ export class ServerLogQueueService {
                 retryDelay: batchOptions.retryDelay,
                 additionalFields: options.additionalFields,
                 onFlush: async (logs) => {
+                    console.log('Flushing logs:')
                     if (!logs || !logs.length) return
                     
                     try {
@@ -165,9 +166,9 @@ export class ServerLogQueueService {
             promises.push(this.batchReporter.forceFlush())
         }
 
-        if (this.fileReporter && typeof this.fileReporter.flush === 'function') {
-            promises.push(this.fileReporter.flush())
-        }
+        if (this.fileReporter) {
+        promises.push(this.fileReporter.forceFlush());
+    }
         
         await Promise.all(promises)
     }

@@ -1,6 +1,8 @@
 import { BatchReporter } from '../utils/reporters/batch-reporter'
 import { FileReporter } from '../utils/reporters/file-reporter'
-import type { LoggerObject } from '../../shared/types'
+
+import type { LoggerObject } from '../../shared/types/log'
+import type { LogBatch } from '../../shared/types/batch'
 import type { ServerLoggerOptions } from '../types/logger'
 
 
@@ -49,18 +51,16 @@ export class ServerLogQueueService {
 
         this.initialized = true
 
-        // Set up file reporter if enabled
         if (options.file) {
-        const fileOptions = typeof options.file === 'object' ? options.file : {}
-        this.fileReporter = new FileReporter({
-            directory: fileOptions.directory,
-            fileNameFormat: fileOptions.fileNameFormat,
-            maxSize: fileOptions.maxSize,
-            additionalFields: options.additionalFields
-        })
+            const fileOptions = typeof options.file === 'object' ? options.file : {}
+            this.fileReporter = new FileReporter({
+                directory: fileOptions.directory,
+                fileNameFormat: fileOptions.fileNameFormat,
+                maxSize: fileOptions.maxSize,
+                additionalFields: options.additionalFields
+            })
         }
         
-        // Set up batch reporter if enabled
         if (options.batch && options.endpoint) {
             const batchOptions = typeof options.batch === 'object' ? options.batch : {}
             
@@ -75,7 +75,7 @@ export class ServerLogQueueService {
                     if (!logs || !logs.length) return
                     
                     try {
-                        // First write to file if configured
+                        // Write to file if configured
                         if (this.fileReporter) {
                             for (const log of logs) {
                                 try {
@@ -116,15 +116,21 @@ export class ServerLogQueueService {
         }
     }
 
+    
+    public enqueueBatch(logs: LogBatch): void {
+        for (const log of logs.logs) {
+            this.enqueueLog(log)
+        }
+    }
+
     /**
      * Enqueue a log to be processed
      */
     public enqueueLog(logObj: LoggerObject): void {
         if (!this.initialized) {
-        this.initialize()
+            this.initialize()
         }
 
-        // Send to batch reporter if configured
         if (this.batchReporter) {
             try {
                 this.batchReporter.log(logObj)
@@ -134,8 +140,7 @@ export class ServerLogQueueService {
             }
         }
         
-        // Also write directly to file reporter if configured
-        // This ensures logs are always written even if batching fails
+        // Dont like this, everything should be in the batch reporter
         if (this.fileReporter) {
             try {
                 this.fileReporter.log(logObj)
@@ -143,28 +148,6 @@ export class ServerLogQueueService {
             catch (err) {
                 console.error('Error in file reporter:', err)
             }
-        }
-    }
-
-    /**
-     * Write directly to file, bypassing the batch reporter
-     * Useful for API handlers to prevent recursion
-     */
-    public logToFile(logObj: LoggerObject): void {
-        if (!this.initialized) {
-            this.initialize()
-        }
-
-        if (this.fileReporter) {
-            try {
-                this.fileReporter.log(logObj)
-            }
-            catch (err) {
-                console.error('Error writing directly to file:', err)
-            }
-        }
-        else {
-            console.warn('File reporter not configured, cannot log directly to file')
         }
     }
 

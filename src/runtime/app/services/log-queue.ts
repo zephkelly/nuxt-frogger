@@ -1,6 +1,6 @@
-import { defineNuxtPlugin } from '#app'
-import type { LoggerObject } from '../../shared/types'
-import type { LogBatch } from '../types/logger';
+import type { LoggerObject } from '../../shared/types/log';
+import type { LogBatch } from '../../shared/types/batch';
+
 
 
 /**

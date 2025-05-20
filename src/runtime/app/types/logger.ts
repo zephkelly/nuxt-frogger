@@ -1,7 +1,8 @@
-import type { LogContext } from "../../shared/types";
-import type { FroggerOptions } from "../../shared/types";
+import type { FroggerOptions } from "../../shared/types/options";
 import type { FroggerLogger } from "../../shared/types/frogger";
-import type { LoggerObject } from "../../shared/types";
+
+import type { LogContext } from "../../shared/types/log";
+
 
 
 export interface ClientLoggerOptions extends FroggerOptions {
@@ -52,14 +53,6 @@ export interface ClientLoggerOptions extends FroggerOptions {
     captureConsole?: boolean;
 }
 
-
-export interface LogBatch {
-    logs: LoggerObject[];
-    app: {
-        name: string;
-        version: string;
-    }
-}
 
 export interface QueuedLog {
     type: string;

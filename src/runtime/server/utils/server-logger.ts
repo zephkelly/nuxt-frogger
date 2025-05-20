@@ -1,11 +1,13 @@
 import type { LogObject } from 'consola/basic';
 import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
 import type { ServerLoggerOptions } from '../types/logger';
-import type { LoggerObject } from '../../shared/types';
+import type { LoggerObject } from '../../shared/types/log';
 
 import { ServerLogQueueService } from '../services/server-log-queue';
 
-import type { TraceContext } from '../../shared/types';
+import type { TraceContext } from '../../shared/types/trace';
+
+
 
 export class ServerFroggerLogger extends BaseFroggerLogger {
     private options: ServerLoggerOptions;
@@ -34,7 +36,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
 
         this.traceContext = traceContext;
     }
-    
+
     /**
      * Process a log entry from Consola
      */
@@ -46,11 +48,12 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
 
         let currentTraceContext: TraceContext | null = null;
 
-        // This will only be called if the trace context is null, AND/OR its
-        // the first log entry for this logger instance
         if (this.madeFirstLog || this.traceContext === null) {
             currentTraceContext = this.generateTraceContext();
         }
+        // This will only be called once on first initialisation so long as a
+        // trace context is provided. This is used to link traces from the client
+        // to the server.
         else {
             currentTraceContext = this.generateTraceContext(this.traceContext);
         }
@@ -76,14 +79,6 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         }
     }
 
-    /**
-     * Log directly to file, bypassing the batch reporter
-     * This is useful to prevent recursion in API handlers
-     */
-    public logToFile(logObjs: any): void {
-        this.logQueue.logToFile(logObjs);
-    }
-    
     /**
      * Flush any pending logs
      */

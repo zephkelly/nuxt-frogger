@@ -1,4 +1,4 @@
-import { ClientFrogger } from "./client-frogger";
+import { ClientFrogger } from "./client-logger";
 import type { ClientLoggerOptions } from "../types/logger";
 
 import type { ClientLogger } from "../types/logger";

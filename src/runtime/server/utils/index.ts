@@ -1,8 +1,8 @@
-import { ServerFroggerLogger } from "./server-frogger";
+import { ServerFroggerLogger } from "./server-logger";
 import type { ServerLoggerOptions } from "../types/logger";
 import type { ServerLogger } from "../types/logger";
 import type { H3Event } from "h3";
-import type { TraceContext } from "../../shared/types";
+import type { TraceContext } from "../../shared/types/trace";
 
 
 
@@ -33,7 +33,6 @@ export function getFrogger(
     }
     
     if (traceContext) {
-        console.log('Trace context found in event:', traceContext);
         return new ServerFroggerLogger(options, traceContext);
     }
     

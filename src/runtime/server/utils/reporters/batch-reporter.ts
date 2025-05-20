@@ -1,5 +1,5 @@
 import type { BatchReporterOptions } from '../../types/batch-reporter';
-import type { LoggerObject } from '~/src/runtime/shared/types';
+import type { LoggerObject } from '~/src/runtime/shared/types/log';
 
 
 

@@ -1,14 +1,12 @@
-import type { LogObject } from 'consola/browser';
-import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
-
-import type { ClientLoggerOptions } from '../types/logger';
-import type { LoggerObject } from '../../shared/types';
-
 import { useNuxtApp, useState } from '#app';
 
+import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
 import { LogQueueService } from '../services/log-queue';
 
-import type { LogBatch } from '../types/logger';
+import type { ClientLoggerOptions } from '../types/logger';
+import type { LogObject } from 'consola/browser';
+import type { LoggerObject } from '../../shared/types/log';
+import type { LogBatch } from '../../shared/types/batch';
 
 
 

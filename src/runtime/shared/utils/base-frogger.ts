@@ -1,10 +1,12 @@
 import { type ConsolaInstance, createConsola } from "consola/core";
-import type { FroggerLogger } from "../types/frogger";
-import type { LogObject } from 'consola';
-import type { FroggerOptions, LogContext, TraceContext } from "../types";
-
 import { generateTraceId, generateSpanId } from "./tracing";
-import { defu } from "defu";
+
+import type { LogObject } from 'consola';
+import type { FroggerLogger } from "../types/frogger";
+import type { FroggerOptions } from "../types/options";
+import type { LogContext } from "../types/log";
+import type { TraceContext } from "../types/trace";
+
 
 
 export abstract class BaseFroggerLogger implements FroggerLogger {
@@ -113,11 +115,7 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
         
         // Vendor-specific trace information
         const tracestate = `frogger=${customVendor || newSpanId}`;
-        
-        console.log('Trace Context:', {
-            traceparent,
-            tracestate
-        });
+
         return {
             traceparent,
             tracestate

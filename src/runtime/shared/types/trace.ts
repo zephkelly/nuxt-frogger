@@ -1,5 +1,3 @@
-import type { LogType } from "consola";
-
 /**
  * Trace context following W3C Trace Context specification
  */
@@ -21,25 +19,4 @@ export interface TraceContext {
      * 8-byte array as 16-character hex string (optional)
      */
     parentId?: string;
-}
-
-export interface LogContext {
-    message?: string;
-    env?: 'ssr' | 'client' | 'server';
-    [key: string]: any
-}
-
-export interface LoggerObject {
-    type: LogType;
-    date: Date;
-    level: number;
-    trace: TraceContext;
-    context: LogContext;
-    timestamp: number;
-}
-
-
-export interface FroggerOptions {
-    level?: number;
-    context?: LogContext;
 }

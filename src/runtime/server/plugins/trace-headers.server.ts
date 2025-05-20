@@ -1,6 +1,7 @@
 import { H3Event, getRequestHeaders  } from 'h3';
 
 import { generateTraceId } from '../../shared/utils/tracing';
+import type { TraceContext } from '../../shared/types';
 
 //@ts-ignore
 export default defineNitroPlugin((nitroApp) => {
@@ -20,11 +21,14 @@ export default defineNitroPlugin((nitroApp) => {
             }
             catch (e) { }
         }
-        
-        event.context.frogger = {
+
+        const newStartingTraceContext: TraceContext = {
             traceId: traceId || generateTraceId(),
-            parentSpanId
+            spanId: generateTraceId(),
+            parentId: parentSpanId
         }
+        
+        event.context.frogger = newStartingTraceContext
     });
 
 });

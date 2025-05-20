@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import type { FileReporterOptions } from '../../types/file-reporter';
 
-import type { LoggerObject } from '~/src/runtime/shared/types';
+import type { LoggerObject } from '~/src/runtime/shared/types/log';
 
 
 /**

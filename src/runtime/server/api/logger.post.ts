@@ -1,11 +1,14 @@
-import { type LogObject } from 'consola';
 import { eventHandler, readBody } from 'h3'
-import { createFrogger } from '../utils';
+
+import type { LogBatch } from '../../shared/types/batch';
+
+import { ServerLogQueueService } from '../services/server-log-queue';
+
 
 
 export default eventHandler(async (event) => {
-    const logObj = await readBody<LogObject>(event);
+    const logBatch = await readBody<LogBatch>(event);
     
-    const fileFrogger = createFrogger();
-    fileFrogger.logToFile(logObj);
+    const serverLogQueue = ServerLogQueueService.getInstance();
+    serverLogQueue.enqueueBatch(logBatch);
 });

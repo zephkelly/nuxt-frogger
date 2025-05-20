@@ -4,7 +4,7 @@ import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
 import type { ClientLoggerOptions } from '../types/logger';
 import type { LoggerObject } from '../../shared/types';
 
-import { useNuxtApp } from '#app';
+import { useNuxtApp, useState } from '#app';
 
 import { LogQueueService } from '../services/log-queue';
 

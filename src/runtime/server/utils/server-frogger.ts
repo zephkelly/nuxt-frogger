@@ -31,9 +31,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             this.logQueue.initialize(options);
         }
 
-        if (traceContext) {
-            this.traceContext = traceContext;
-        }
+        this.traceContext = traceContext;
     }
     
     /**
@@ -45,13 +43,22 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             return;
         }
 
-        const traceContext = this.generateTraceContext();
+        let currentTraceContext: TraceContext | null = null;
+
+        // This will only be called if the trace context is null, AND/OR its
+        // the first log entry for this logger instance
+        if (this.traceContext === null) {
+            currentTraceContext = this.generateTraceContext();
+        }
+        else {
+            currentTraceContext = this.traceContext;
+        }
 
         const froggerLoggerObject: LoggerObject = {
             type: logObj.type,
             level: logObj.level,
             date: logObj.date,
-            trace: traceContext,
+            trace: currentTraceContext,
             context: {
                 env: 'server',
                 message: logObj.args?.[0],
@@ -61,8 +68,10 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             timestamp: Date.now()
         };
         
-        // Use shared log queue service
         this.logQueue.enqueueLog(froggerLoggerObject);
+
+
+        this.traceContext = this.generateTraceContext();
     }
 
     /**

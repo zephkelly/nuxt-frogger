@@ -17,8 +17,6 @@ export class ServerLogQueueService {
     private fileReporter?: FileReporter
     private initialised: boolean = false
     private defaultOptions: ServerLoggerOptions = {
-        batch: true,
-        endpoint: '/api/ingest',
         file: {
             directory: 'logs',
             fileNameFormat: 'YYYY-MM-DD.log',

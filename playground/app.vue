@@ -19,9 +19,9 @@ const test2 = async () => {
     const testFrogger = useFrogger();
     testFrogger.info('Test2 button clicked!');
   try {
-    testFrogger.info('Fetching /api/test');
+    testFrogger.error('Fetching /api/test');
     const response = await fetch('/api/test');
-    testFrogger.info('Response received', {
+    testFrogger.error('Response received', {
         response: response.status,
     });
   }

@@ -5,11 +5,13 @@ import type { LoggerObject } from '../../shared/types';
 
 import { ServerLogQueueService } from '../services/server-log-queue';
 
-
+import type { TraceContext } from '../../shared/types';
 
 export class ServerFroggerLogger extends BaseFroggerLogger {
     private options: ServerLoggerOptions;
     private logQueue: ServerLogQueueService;
+
+    private traceContext: TraceContext | null = null;
     
     constructor(options: ServerLoggerOptions = {
         batch: true,
@@ -19,7 +21,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             maxSize: 10 * 1024 * 1024,
             format: 'json'
         },
-    }) {
+    }, traceContext: TraceContext | null = null) {
         super(options);
         this.options = options;
 
@@ -27,6 +29,10 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         
         if (options && (options.batch || options.file || options.endpoint)) {
             this.logQueue.initialize(options);
+        }
+
+        if (traceContext) {
+            this.traceContext = traceContext;
         }
     }
     

@@ -15,9 +15,8 @@ export class ServerLogQueueService {
     private static instance: ServerLogQueueService | null = null;
     private batchReporter?: BatchReporter
     private fileReporter?: FileReporter
-    private initialized: boolean = false
+    private initialised: boolean = false
     private defaultOptions: ServerLoggerOptions = {
-        batch: true,
         file: {
             directory: 'logs',
             fileNameFormat: 'YYYY-MM-DD.log',
@@ -36,20 +35,22 @@ export class ServerLogQueueService {
      */
     public static getInstance(): ServerLogQueueService {
         if (!ServerLogQueueService.instance) {
-        ServerLogQueueService.instance = new ServerLogQueueService();
+            ServerLogQueueService.instance = new ServerLogQueueService();
+
+            ServerLogQueueService.instance.initialise();
         }
         return ServerLogQueueService.instance;
     }
 
     /**
-     * Initialize the queue service with options
+     * Initialise the queue service with options
      */
-    public initialize(options: ServerLoggerOptions = this.defaultOptions): void {
-        if (this.initialized) {
+    public initialise(options: ServerLoggerOptions = this.defaultOptions): void {
+        if (this.initialised) {
             return
         }
 
-        this.initialized = true
+        this.initialised = true
 
         if (options.file) {
             const fileOptions = typeof options.file === 'object' ? options.file : {}
@@ -62,6 +63,7 @@ export class ServerLogQueueService {
         }
         
         if (options.batch && options.endpoint) {
+            console.log('Batch reporter enabled')
             const batchOptions = typeof options.batch === 'object' ? options.batch : {}
             
             this.batchReporter = new BatchReporter({
@@ -127,8 +129,8 @@ export class ServerLogQueueService {
      * Enqueue a log to be processed
      */
     public enqueueLog(logObj: LoggerObject): void {
-        if (!this.initialized) {
-            this.initialize()
+        if (!this.initialised) {
+            this.initialise()
         }
 
         if (this.batchReporter) {
@@ -155,7 +157,7 @@ export class ServerLogQueueService {
      * Force flush any pending logs
      */
     public async flush(): Promise<void> {
-        if (!this.initialized) {
+        if (!this.initialised) {
             return
         }
 
@@ -165,8 +167,8 @@ export class ServerLogQueueService {
             promises.push(this.batchReporter.forceFlush())
         }
 
-        if (this.fileReporter && typeof this.fileReporter.flush === 'function') {
-            promises.push(this.fileReporter.flush())
+        if (this.fileReporter) {
+            promises.push(this.fileReporter.forceFlush());
         }
         
         await Promise.all(promises)

@@ -179,31 +179,4 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
             context,
         )
     }
-    
-    /**
-     * Context management methods
-     */
-    // addGlobalContext(context: LogContext): void {
-    //     this.globalContext = defu(this.globalContext, context);
-    // }
-    
-    // setUser(userId: string): void {
-    //     this.globalContext.userId = userId;
-    // }
-    
-    // setSession(sessionId: string): void {
-    //     this.globalContext.sessionId = sessionId;
-    // }
-    
-    /**
-     * Log level management
-     */
-    // getLevel(): number {
-    //     return this.level;
-    // }
-    
-    // setLevel(level: number): void {
-    //     this.level = level;
-    //     this.consola.level = level;
-    // }
 }

@@ -1,5 +1,5 @@
 export type { FroggerLogger } from './shared/types/frogger';
-export type { FroggerOptions } from './shared/types';
+export type { FroggerOptions } from './shared/types/options';
 
 
 export type { ClientLoggerOptions } from './app/types/logger';

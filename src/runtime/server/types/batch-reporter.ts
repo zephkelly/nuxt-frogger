@@ -1,5 +1,4 @@
-import type { LogObject } from 'consola';
-import type { LoggerObject } from '../../shared/types';
+import type { LoggerObject } from '../../shared/types/log';
 
 
 

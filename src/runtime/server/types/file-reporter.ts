@@ -14,23 +14,34 @@ export interface FileReporterOptions {
      * @default 'YYYY-MM-DD.log'
      */
     fileNameFormat?: string;
-
-    /**
-     * Maximum log file size in bytes before rotating
-     * @default 10485760 (10MB)
-     */
-    maxSize?: number;
-
-    // /**
-    //  * Format for log output
-    //  * - 'json': JSON format (one object per line)
-    //  * - 'text': Human-readable text format
-    //  * @default 'json'
-    //  */
-    // format?: 'json';
-
+    
     /**
      * Additional fields to include in log entries
+    */
+   additionalFields?: Record<string, any>;
+
+
+    /**
+    * Maximum log file size in bytes before rotating
+    * @default 10485760 (10MB)
+    */
+    maxSize?: number;
+
+    /**
+     * Interval in milliseconds to flush the log buffer to disk
+     * @default 1000 (1 second)
      */
-    additionalFields?: Record<string, any>;
+    flushInterval?: number;
+    
+    /**
+     * Maximum size of the in-memory buffer before forced flush (in bytes)
+     * @default 1048576 (1MB)
+     */
+    bufferMaxSize?: number;
+    
+    /**
+     * Buffer size for the write stream (in bytes)
+     * @default 65536 (64KB)
+     */
+    highWaterMark?: number;
 }

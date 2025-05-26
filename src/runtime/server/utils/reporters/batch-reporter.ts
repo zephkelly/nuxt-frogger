@@ -10,6 +10,7 @@ export class BatchReporter {
     private logs: LoggerObject[] = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
     private options: Required<BatchReporterOptions>;
+    private lastFlushTime: number = 0;
     private flushing: boolean = false;
     private retries: Map<string, number> = new Map();
     private flushPromise: Promise<void> = Promise.resolve();
@@ -24,7 +25,9 @@ export class BatchReporter {
             levels: options.levels ?? [],
             retryOnFailure: options.retryOnFailure ?? true,
             maxRetries: options.maxRetries ?? 3,
-            retryDelay: options.retryDelay ?? 1000
+            retryDelay: options.retryDelay ?? 1000,
+
+            sortingWindowMs: options.sortingWindowMs ?? 2000
         };
     }
     
@@ -39,17 +42,44 @@ export class BatchReporter {
         }
         
         const logCopy = structuredClone(logObj);
-        
         Object.assign(logCopy, this.options.additionalFields);
         
-        this.logs.push(logCopy);
+        this.insertSorted(logCopy);
         
         if (this.logs.length >= this.options.maxSize) {
-            this.scheduleFlush(0);
+            const cutoffTime = Date.now() - this.options.sortingWindowMs;
+            const logsToFlush = this.logs.filter(log => log.timestamp <= cutoffTime);
+            
+            if (logsToFlush.length > 0) {
+                this.scheduleFlush(0);
+            }
+            else {
+                this.scheduleFlush(this.options.sortingWindowMs);
+            }
             return;
         }
         
         this.scheduleFlush();
+    }
+
+    /**
+     * Insert log in sorted position (by timestamp)
+     */
+    private insertSorted(log: LoggerObject): void {
+        let left = 0;
+        let right = this.logs.length;
+        
+        while (left < right) {
+            const mid = Math.floor((left + right) / 2);
+            if (this.logs[mid].timestamp <= log.timestamp) {
+                left = mid + 1;
+            }
+            else {
+                right = mid;
+            }
+        }
+        
+        this.logs.splice(left, 0, log);
     }
     
     /**
@@ -91,14 +121,24 @@ export class BatchReporter {
         this.flushing = true;
         
         try {
-            const logsToFlush = [...this.logs];
-            this.logs = [];
+            const cutoffTime = Date.now() - this.options.sortingWindowMs;
+            const logsToFlush = this.logs.filter(log => log.timestamp <= cutoffTime);
+            
+            if (logsToFlush.length === 0) {
+                if (this.logs.length > 0) {
+                    this.scheduleFlush(this.options.sortingWindowMs);
+                }
+                return;
+            }
+            
+            this.logs = this.logs.filter(log => log.timestamp > cutoffTime);
             
             const batchId = `batch-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
             
             try {
                 await this.options.onFlush(logsToFlush);
                 this.retries.delete(batchId);
+                this.lastFlushTime = Date.now();
             }
             catch (error) {
                 console.error(`Failed to flush logs (batch ${batchId}):`, error);
@@ -115,7 +155,7 @@ export class BatchReporter {
             this.flushing = false;
             
             if (this.logs.length > 0) {
-                this.scheduleFlush(1000);
+                this.scheduleFlush(Math.min(this.options.maxAge, this.options.sortingWindowMs));
             }
         }
     }

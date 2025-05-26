@@ -9,7 +9,6 @@ import type { ServerLoggerOptions } from '../types/logger'
 
 /**
  * Centralized server-side log queue service
- * Implements the Singleton pattern
  */
 export class ServerLogQueueService {
     private static instance: ServerLogQueueService | null = null;
@@ -22,7 +21,8 @@ export class ServerLogQueueService {
             fileNameFormat: 'YYYY-MM-DD.log',
             maxSize: 10 * 1024 * 1024,
             format: 'json'
-        }
+        },
+        batch: true,
     }
 
     /**
@@ -62,8 +62,7 @@ export class ServerLogQueueService {
             })
         }
         
-        if (options.batch && options.endpoint) {
-            console.log('Batch reporter enabled')
+        if (options.batch) {
             const batchOptions = typeof options.batch === 'object' ? options.batch : {}
             
             this.batchReporter = new BatchReporter({
@@ -72,24 +71,21 @@ export class ServerLogQueueService {
                 retryOnFailure: batchOptions.retryOnFailure,
                 maxRetries: batchOptions.maxRetries,
                 retryDelay: batchOptions.retryDelay,
+                sortingWindowMs: batchOptions.sortingWindowMs,
                 additionalFields: options.additionalFields,
                 onFlush: async (logs) => {
                     if (!logs || !logs.length) return
                     
                     try {
-                        // Write to file if configured
                         if (this.fileReporter) {
-                            for (const log of logs) {
-                                try {
-                                    await this.fileReporter.log(log)
-                                }
-                                catch (err) {
-                                    console.error('Error writing log to file:', err)
-                                }
+                            try {
+                                await this.fileReporter.writeBatch(logs)
+                            }
+                            catch (err) {
+                                console.error('Error writing log to file:', err)
                             }
                         }
                         
-                        // Then send to endpoint if configured
                         if (options.endpoint) {
                             await $fetch(options.endpoint, {
                                 method: 'POST',
@@ -111,6 +107,7 @@ export class ServerLogQueueService {
                         
                         if (this.batchReporter && batchOptions.retryOnFailure) {
                             console.debug('Retry on failure enabled, will retry later')
+                            throw error
                         }
                     }
                 }
@@ -139,11 +136,18 @@ export class ServerLogQueueService {
             }
             catch (err) {
                 console.error('Error in batch reporter:', err)
+                
+                if (this.fileReporter) {
+                    try {
+                        this.fileReporter.log(logObj)
+                    }
+                    catch (fileErr) {
+                        console.error('Error in fallback file reporter:', fileErr)
+                    }
+                }
             }
         }
-        
-        // Dont like this, everything should be in the batch reporter
-        if (this.fileReporter) {
+        else if (this.fileReporter) {
             try {
                 this.fileReporter.log(logObj)
             }

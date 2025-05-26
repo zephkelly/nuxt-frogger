@@ -53,4 +53,10 @@ export interface BatchReporterOptions {
      * @default 1000 (1 second)
      */
     retryDelay?: number;
+
+    /**
+     * Time window in milliseconds to sort logs before flushing
+     * @default 2000 (2 seconds)
+     */
+    sortingWindowMs?: number;
 }

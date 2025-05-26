@@ -26,6 +26,7 @@ export interface ServerLoggerOptions extends FroggerOptions {
         retryOnFailure?: boolean;
         maxRetries?: number;
         retryDelay?: number;
+        sortingWindowMs?: number;
     };
     
     /**

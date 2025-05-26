@@ -35,31 +35,87 @@ export class BatchReporter {
      * Handle an incoming log and add it to the batch
      */
     log(logObj: LoggerObject): void {
-        if (this.options.levels.length > 0) {
-            if (!this.options.levels.includes(logObj.level)) {
-                return;
-            }
+        const processedLogs = this.processLogs([logObj]);
+        if (processedLogs.length === 0) {
+            return; // Log was filtered out
         }
         
-        const logCopy = structuredClone(logObj);
-        Object.assign(logCopy, this.options.additionalFields);
+        this.addLogsToBuffer(processedLogs);
+    }
+
+    /**
+     * Handle a batch of incoming logs and add them to the batch
+     */
+    logBatch(logs: LoggerObject[]): void {
+        if (logs.length === 0) {
+            return;
+        }
         
-        this.insertSorted(logCopy);
+        const processedLogs = this.processLogs(logs);
+        if (processedLogs.length === 0) {
+            console.debug('All logs in batch were filtered out');
+            return;
+        }
+        
+        console.debug(`Processing batch of ${logs.length} logs, ${processedLogs.length} after filtering`);
+        this.addLogsToBuffer(processedLogs);
+    }
+
+    /**
+     * Process logs by filtering and adding additional fields
+     */
+    private processLogs(logs: LoggerObject[]): LoggerObject[] {
+        const processedLogs: LoggerObject[] = [];
+        
+        for (const logObj of logs) {
+            if (this.options.levels.length > 0) {
+                if (!this.options.levels.includes(logObj.level)) {
+                    continue;
+                }
+            }
+            
+            const logCopy = structuredClone(logObj);
+            Object.assign(logCopy, this.options.additionalFields);
+            processedLogs.push(logCopy);
+        }
+        
+        return processedLogs;
+    }
+
+    /**
+     * Add processed logs to the buffer and handle flushing
+     */
+    private addLogsToBuffer(logs: LoggerObject[]): void {
+        for (const log of logs) {
+            this.insertSorted(log);
+        }
         
         if (this.logs.length >= this.options.maxSize) {
-            const cutoffTime = Date.now() - this.options.sortingWindowMs;
-            const logsToFlush = this.logs.filter(log => log.timestamp <= cutoffTime);
-            
-            if (logsToFlush.length > 0) {
-                this.scheduleFlush(0);
-            }
-            else {
-                this.scheduleFlush(this.options.sortingWindowMs);
-            }
+            this.handleMaxSizeReached();
             return;
         }
         
         this.scheduleFlush();
+    }
+
+    /**
+     * Handle the case when maxSize is reached
+     */
+    private handleMaxSizeReached(): void {
+        const now = Date.now();
+        const cutoffTime = now - this.options.sortingWindowMs;
+        const logsToFlush = this.logs.filter(log => log.timestamp <= cutoffTime);
+        
+        if (logsToFlush.length > 0) {
+            console.debug('Flushing immediately. Buffer full and old logs available');
+            this.scheduleFlush(0);
+        }
+        else {
+            const oldestLog = this.logs[0];
+            const waitTime = Math.max(0, (oldestLog.timestamp + this.options.sortingWindowMs) - now);
+            console.debug(`All logs too new, waiting ${waitTime}ms for sorting window`);
+            this.scheduleFlush(waitTime);
+        }
     }
 
     /**

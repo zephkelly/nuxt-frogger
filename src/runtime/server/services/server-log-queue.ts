@@ -116,9 +116,39 @@ export class ServerLogQueueService {
     }
 
     
-    public enqueueBatch(logs: LogBatch): void {
-        for (const log of logs.logs) {
-            this.enqueueLog(log)
+    /**
+     * Enqueue a batch of logs efficiently
+     */
+    public enqueueBatch(logBatch: LogBatch): void {
+        if (!this.initialised) {
+            this.initialise()
+        }
+
+        const logs = logBatch.logs;
+        if (logs.length === 0) {
+            return;
+        }
+
+        if (this.batchReporter) {
+            try {
+                this.batchReporter.logBatch(logs);
+            }
+            catch (err) {
+                console.error('Error in batch reporter for batch:', err);
+                
+                if (this.fileReporter) {
+                    for (const log of logs) {
+                        this.fileReporter.writeBatch(logs).catch(fileErr => {
+                            console.error('Error in fallback file batch write:', fileErr);
+                        });
+                    }
+                }
+            }
+        }
+        else if (this.fileReporter) {
+            this.fileReporter.writeBatch(logs).catch(err => {
+                console.error('Error in direct file batch write:', err);
+            });
         }
     }
 

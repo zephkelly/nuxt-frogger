@@ -44,7 +44,7 @@ export class FileReporter {
     log(logObj: LoggerObject): void {
         try {
             const logEntry = this.formatLogEntry(logObj);
-            const entrySize = Buffer.byteLength(logEntry) + 1; // +1 for newline
+            const entrySize = Buffer.byteLength(logEntry) + 1;
             
             this.logBuffer.push(logEntry);
             this.bufferSize += entrySize;
@@ -56,9 +56,47 @@ export class FileReporter {
                     console.error('Error during immediate flush:', err);
                 });
             }
-        } catch (err) {
+        }
+        catch (err) {
             console.error('Error adding log to buffer:', err);
         }
+    }
+
+    /**
+     * Write a batch of logs directly to file (bypasses internal buffer)
+     * Used by BatchReporter to write pre-sorted logs
+     */
+    async writeBatch(logs: LoggerObject[]): Promise<void> {
+        if (logs.length === 0) {
+            return;
+        }
+
+        const logEntries = logs.map(log => this.formatLogEntry(log));
+        const content = logEntries.join('\n') + '\n';
+        const contentSize = Buffer.byteLength(content);
+
+        this.writePromise = this.writePromise.then(async () => {
+            try {
+                const fileName = this.getLogFileName();
+                if (fileName !== this.currentFileName || !this.writeStream) {
+                    await this.openNewStream(fileName);
+                    this.currentFileName = fileName;
+                }
+                
+                if (this.currentFileSize + contentSize > this.options.maxSize && !this.isRotating) {
+                    await this.rotateLogFile(fileName);
+                    return this.writeToFile(content, contentSize);
+                }
+                
+                return this.writeToFile(content, contentSize);
+            }
+            catch (err) {
+                console.error('Error writing batch to file:', err);
+                throw err;
+            }
+        });
+        
+        return this.writePromise;
     }
 
     /**

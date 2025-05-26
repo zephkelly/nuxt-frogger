@@ -11,6 +11,8 @@
 const startFrogger = useFrogger();
 startFrogger.info('Hello from the playground!');
 
+
+
 const test = () => {
     const clickFrogger = useFrogger();
     clickFrogger.info('Test button clicked!');
@@ -53,4 +55,6 @@ const test3 = () => {
         highTrafficFrogger.info('High traffic simulation started');
     }
 };
+
+startFrogger.info('App component mounted');
 </script>

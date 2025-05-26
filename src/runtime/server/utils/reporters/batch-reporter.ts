@@ -10,6 +10,7 @@ export class BatchReporter {
     private logs: LoggerObject[] = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
     private options: Required<BatchReporterOptions>;
+    private lastFlushTime: number = 0;
     private flushing: boolean = false;
     private retries: Map<string, number> = new Map();
     private flushPromise: Promise<void> = Promise.resolve();
@@ -24,7 +25,9 @@ export class BatchReporter {
             levels: options.levels ?? [],
             retryOnFailure: options.retryOnFailure ?? true,
             maxRetries: options.maxRetries ?? 3,
-            retryDelay: options.retryDelay ?? 1000
+            retryDelay: options.retryDelay ?? 1000,
+
+            sortingWindowMs: options.sortingWindowMs ?? 2000
         };
     }
     
@@ -32,24 +35,107 @@ export class BatchReporter {
      * Handle an incoming log and add it to the batch
      */
     log(logObj: LoggerObject): void {
-        if (this.options.levels.length > 0) {
-            if (!this.options.levels.includes(logObj.level)) {
-                return;
-            }
+        const processedLogs = this.processLogs([logObj]);
+        if (processedLogs.length === 0) {
+            return; // Log was filtered out
         }
         
-        const logCopy = structuredClone(logObj);
+        this.addLogsToBuffer(processedLogs);
+    }
+
+    /**
+     * Handle a batch of incoming logs and add them to the batch
+     */
+    logBatch(logs: LoggerObject[]): void {
+        if (logs.length === 0) {
+            return;
+        }
         
-        Object.assign(logCopy, this.options.additionalFields);
+        const processedLogs = this.processLogs(logs);
+        if (processedLogs.length === 0) {
+            console.debug('All logs in batch were filtered out');
+            return;
+        }
         
-        this.logs.push(logCopy);
+        console.debug(`Processing batch of ${logs.length} logs, ${processedLogs.length} after filtering`);
+        this.addLogsToBuffer(processedLogs);
+    }
+
+    /**
+     * Process logs by filtering and adding additional fields
+     */
+    private processLogs(logs: LoggerObject[]): LoggerObject[] {
+        const processedLogs: LoggerObject[] = [];
+        
+        for (const logObj of logs) {
+            if (this.options.levels.length > 0) {
+                if (!this.options.levels.includes(logObj.level)) {
+                    continue;
+                }
+            }
+            
+            const logCopy = structuredClone(logObj);
+            Object.assign(logCopy, this.options.additionalFields);
+            processedLogs.push(logCopy);
+        }
+        
+        return processedLogs;
+    }
+
+    /**
+     * Add processed logs to the buffer and handle flushing
+     */
+    private addLogsToBuffer(logs: LoggerObject[]): void {
+        for (const log of logs) {
+            this.insertSorted(log);
+        }
         
         if (this.logs.length >= this.options.maxSize) {
-            this.scheduleFlush(0);
+            this.handleMaxSizeReached();
             return;
         }
         
         this.scheduleFlush();
+    }
+
+    /**
+     * Handle the case when maxSize is reached
+     */
+    private handleMaxSizeReached(): void {
+        const now = Date.now();
+        const cutoffTime = now - this.options.sortingWindowMs;
+        const logsToFlush = this.logs.filter(log => log.timestamp <= cutoffTime);
+        
+        if (logsToFlush.length > 0) {
+            console.debug('Flushing immediately. Buffer full and old logs available');
+            this.scheduleFlush(0);
+        }
+        else {
+            const oldestLog = this.logs[0];
+            const waitTime = Math.max(0, (oldestLog.timestamp + this.options.sortingWindowMs) - now);
+            console.debug(`All logs too new, waiting ${waitTime}ms for sorting window`);
+            this.scheduleFlush(waitTime);
+        }
+    }
+
+    /**
+     * Insert log in sorted position (by timestamp)
+     */
+    private insertSorted(log: LoggerObject): void {
+        let left = 0;
+        let right = this.logs.length;
+        
+        while (left < right) {
+            const mid = Math.floor((left + right) / 2);
+            if (this.logs[mid].timestamp <= log.timestamp) {
+                left = mid + 1;
+            }
+            else {
+                right = mid;
+            }
+        }
+        
+        this.logs.splice(left, 0, log);
     }
     
     /**
@@ -91,14 +177,24 @@ export class BatchReporter {
         this.flushing = true;
         
         try {
-            const logsToFlush = [...this.logs];
-            this.logs = [];
+            const cutoffTime = Date.now() - this.options.sortingWindowMs;
+            const logsToFlush = this.logs.filter(log => log.timestamp <= cutoffTime);
+            
+            if (logsToFlush.length === 0) {
+                if (this.logs.length > 0) {
+                    this.scheduleFlush(this.options.sortingWindowMs);
+                }
+                return;
+            }
+            
+            this.logs = this.logs.filter(log => log.timestamp > cutoffTime);
             
             const batchId = `batch-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
             
             try {
                 await this.options.onFlush(logsToFlush);
                 this.retries.delete(batchId);
+                this.lastFlushTime = Date.now();
             }
             catch (error) {
                 console.error(`Failed to flush logs (batch ${batchId}):`, error);
@@ -115,7 +211,7 @@ export class BatchReporter {
             this.flushing = false;
             
             if (this.logs.length > 0) {
-                this.scheduleFlush(1000);
+                this.scheduleFlush(Math.min(this.options.maxAge, this.options.sortingWindowMs));
             }
         }
     }

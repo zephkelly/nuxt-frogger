@@ -46,7 +46,7 @@ export default defineNuxtModule<ModuleOptions>({
             maxSize: 10 * 1024 * 1024,
             format: 'json'
         },
-        batch: false,
+        batch: true,
         endpoint: '/api/_frogger/logs'
     },
     setup(_options, _nuxt) {
@@ -62,7 +62,10 @@ export default defineNuxtModule<ModuleOptions>({
         _nuxt.options.alias['#frogger'] = resolver.resolve('./runtime/frogger');
 
         if (_options.clientModule) {
-            console.log('Adding client module')
+            console.log(
+                '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
+                `🐸 Registering client module`
+            );
             _nuxt.options.alias['#frogger/client'] = resolver.resolve('./runtime/app');
             addImportsDir(resolver.resolve('./runtime/app/utils'))
             addImportsDir(resolver.resolve('./runtime/app/composables'))
@@ -70,7 +73,10 @@ export default defineNuxtModule<ModuleOptions>({
         }
 
         if (_options.serverModule) {
-            console.log('Adding server module')
+            console.log(
+                '%cFROGGER', 'color: black; background-color: rgb(9, 195, 81) font-weight: bold; font-size: 1.15rem;',
+                `🐸 Registering server module`
+            );
             _nuxt.options.alias['#frogger/server'] = resolver.resolve('./runtime/server');
             addServerImportsDir(resolver.resolve('./runtime/server/utils'))
             addServerPlugin(resolver.resolve('./runtime/server/plugins/log-queue.server'))

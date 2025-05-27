@@ -22,7 +22,6 @@ const test = () => {
     clickFrogger.fatal('This is an fatal message');
     clickFrogger.success('This is a success message');
     clickFrogger.log('This is a log message');
-    clickFrogger.trace('This is a trace message');
 };
 
 const test2 = async () => {

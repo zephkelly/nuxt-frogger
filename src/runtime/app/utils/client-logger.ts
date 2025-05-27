@@ -11,9 +11,9 @@ import type { LogBatch } from '../../shared/types/batch';
 
 
 interface SSRTraceState {
-    traceId: string;              // The SSR trace ID
-    lastServerSpanId: string | null;  // The last span ID from the server
-    isClientHydrated: boolean;    // Flag to track if client hydration has occurred
+    traceId: string;                    // SSR trace ID
+    lastServerSpanId: string | null;    // Last span ID from the server
+    isClientHydrated: boolean;
 }
 
 /**
@@ -33,10 +33,12 @@ export class ClientFrogger extends BaseFroggerLogger {
             maxQueueSize: options.maxQueueSize ?? 100,
             appName: options.appName ?? 'unknown',
             version: options.version ?? 'unknown',
-            captureErrors: options.captureErrors ?? true,
-            captureConsole: options.captureConsole ?? false,
             level: options.level ?? 3,
             context: options.context ?? {},
+            consoleOutput: options.consoleOutput ?? true
+
+            // captureErrors: options.captureErrors ?? true,
+            // captureConsole: options.captureConsole ?? false,
         };
         
         this.setupTraceContext();
@@ -54,10 +56,11 @@ export class ClientFrogger extends BaseFroggerLogger {
             
             logQueue.setAppInfo(this.options.appName, this.options.version);
             
-            if (this.options.captureErrors) {
-                window.addEventListener('error', this.handleGlobalError.bind(this));
-                window.addEventListener('unhandledrejection', this.handlePromiseRejection.bind(this));
-            }
+            // Not working, needs some attention
+            // if (this.options.captureErrors) {
+            //     window.addEventListener('error', this.handleGlobalError.bind(this));
+            //     window.addEventListener('unhandledrejection', this.handlePromiseRejection.bind(this));
+            // }
         }
     }
 
@@ -150,25 +153,25 @@ export class ClientFrogger extends BaseFroggerLogger {
         }
     }
     
-    /**
-     * Handle global uncaught errors
-     */
-    private handleGlobalError(event: ErrorEvent): void {
-        this.error('[UNCAUGHT ERROR]', {
-            message: event.message,
-            filename: event.filename,
-            lineno: event.lineno,
-            colno: event.colno,
-            stack: event.error?.stack
-        });
-    }
+    // /**
+    //  * Handle global uncaught errors
+    //  */
+    // private handleGlobalError(event: ErrorEvent): void {
+    //     this.error('[UNCAUGHT ERROR]', {
+    //         message: event.message,
+    //         filename: event.filename,
+    //         lineno: event.lineno,
+    //         colno: event.colno,
+    //         stack: event.error?.stack
+    //     });
+    // }
     
-    /**
-     * Handle unhandled promise rejections
-     */
-    private handlePromiseRejection(event: PromiseRejectionEvent): void {
-        this.error('[UNHANDLED REJECTION]', {
-            reason: event.reason
-        });
-    }
+    // /**
+    //  * Handle unhandled promise rejections
+    //  */
+    // private handlePromiseRejection(event: PromiseRejectionEvent): void {
+    //     this.error('[UNHANDLED REJECTION]', {
+    //         reason: event.reason
+    //     });
+    // }
 }

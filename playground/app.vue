@@ -9,13 +9,20 @@
 
 <script setup>
 const startFrogger = useFrogger();
-startFrogger.info('Hello from the playground!');
+startFrogger.error('Hello from the playground!');
 
 
 
 const test = () => {
     const clickFrogger = useFrogger();
     clickFrogger.info('Test button clicked!');
+    clickFrogger.error('This is an error message');
+    clickFrogger.warn('This is a warning message');
+    clickFrogger.debug('This is a debug message');
+    clickFrogger.fatal('This is an fatal message');
+    clickFrogger.success('This is a success message');
+    clickFrogger.log('This is a log message');
+    clickFrogger.trace('This is a trace message');
 };
 
 const test2 = async () => {
@@ -55,6 +62,4 @@ const test3 = () => {
         highTrafficFrogger.info('High traffic simulation started');
     }
 };
-
-startFrogger.info('App component mounted');
 </script>

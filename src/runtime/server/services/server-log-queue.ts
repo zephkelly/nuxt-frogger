@@ -58,7 +58,6 @@ export class ServerLogQueueService {
                 directory: fileOptions.directory,
                 fileNameFormat: fileOptions.fileNameFormat,
                 maxSize: fileOptions.maxSize,
-                additionalFields: options.additionalFields
             })
         }
         
@@ -72,7 +71,6 @@ export class ServerLogQueueService {
                 maxRetries: batchOptions.maxRetries,
                 retryDelay: batchOptions.retryDelay,
                 sortingWindowMs: batchOptions.sortingWindowMs,
-                additionalFields: options.additionalFields,
                 onFlush: async (logs) => {
                     if (!logs || !logs.length) return
                     

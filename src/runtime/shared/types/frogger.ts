@@ -1,7 +1,3 @@
-import type { LogContext } from '../types';
-
-
-
 export interface FroggerLogger {
     /**
      * Log a fatal-level message
@@ -45,42 +41,4 @@ export interface FroggerLogger {
      * @param context Additional context to include
      */
     debug(message: string, context?: Object): void;
-    
-    /**
-     * Log a trace-level message
-     * @param message The primary message to log
-     * @param context Additional context to include
-     */
-    trace(message: string, context?: Object): void;
-
-
-    // /**
-    //  * Add context data to be included with all logs
-    //  * @param context The context data to add
-    //  */
-    // addGlobalContext(context: LogContext): void;
-    
-    // /**
-    //  * Set the user ID for the current logger context
-    //  * @param userId The user identifier
-    //  */
-    // setUser(userId: string): void;
-    
-    // /**
-    //  * Set the session ID for the current logger context
-    //  * @param sessionId The session identifier
-    //  */
-    // setSession(sessionId: string): void;
-    
-    // /**
-    //  * Get the current log level
-    //  * @returns The current log level
-    //  */
-    // getLevel(): number;
-    
-    // /**
-    //  * Set the log level
-    //  * @param level The new log level
-    //  */
-    // setLevel(level: number): void;
 }

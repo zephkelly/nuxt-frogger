@@ -8,7 +8,7 @@ hero:
   tagline: "Log and trace anywhere in your apps. SSR or SPA, it just works."
   actions:
     - theme: brand
-      text: Setup Frogger
+      text: Install Frogger
       link: /installation
     - theme: alt
       text: Getting Started

@@ -22,84 +22,68 @@ $ bun add nuxt-frogger
 
 :::
 
-## Syntax Highlighting
+## Add to `nuxt.config.ts`
+After installing, add `nuxt-frogger` to your `nuxt.config.ts` file:
 
-VitePress provides Syntax Highlighting powered by [Shiki](https://github.com/shikijs/shiki), with additional features like line-highlighting:
-
-**Input**
-
-````md
-```js{4}
-export default {
-  data () {
-    return {
-      msg: 'Highlighted!'
+```ts
+export default defineNuxtConfig({
+    modules: [
+        'nuxt-frogger'
+    ],
+    frogger: {
+        // Module options
     }
-  }
-}
+})
 ```
-````
 
-**Output**
 
-```js{4}
-export default {
-  data () {
-    return {
-      msg: 'Highlighted!'
+<!-- export interface ModuleOptions {
+    clientModule?: boolean
+    serverModule?: boolean
+
+    file?: {
+        directory?: string
+        fileNameFormat?: string
+        maxSize?: number
+        format?: 'json' | 'text'
     }
-  }
-}
+    batch?: {
+        maxSize?: number
+        maxAge?: number
+        retryOnFailure?: boolean
+        maxRetries?: number
+        retryDelay?: number
+    } | boolean
+    endpoint: string
+} -->
+
+## Configuration
+You can configure Frogger by adding options to the `frogger` property in your `nuxt.config.ts`. Here are the default options:
+
+```ts
+export default defineNuxtConfig({
+    modules: [
+        'nuxt-frogger'
+    ],
+    frogger: {
+        clientModule: true, // Enable the client module
+        serverModule: true, // Enable the server module
+
+        endpoint: '/api/_frogger/logs' // Override batch log ingestion endpoint
+
+        file: {
+            directory: 'logs', // Directory to store log files
+            fileNameFormat: 'YYYY-MM-DD.log', // Format for log file names
+            maxSize: 10 * 1024 * 1024, // Maximum size of log files
+        },
+
+        batch: {
+            maxSize: 1000, // Maximum number of logs to batch
+            maxAge: 60000, // Maximum age of logs in the batch
+            retryOnFailure: true, // Retry sending logs on failure
+            maxRetries: 3, // Maximum number of retries
+            retryDelay: 5000 // Delay between retries
+        },   
+    }
+})
 ```
-
-## Custom Containers
-
-**Input**
-
-```md
-::: info
-This is an info box.
-:::
-
-::: tip
-This is a tip.
-:::
-
-::: warning
-This is a warning.
-:::
-
-::: danger
-This is a dangerous warning.
-:::
-
-::: details
-This is a details block.
-:::
-```
-
-**Output**
-
-::: info
-This is an info box.
-:::
-
-::: tip
-This is a tip.
-:::
-
-::: warning
-This is a warning.
-:::
-
-::: danger
-This is a dangerous warning.
-:::
-
-::: details
-This is a details block.
-:::
-
-## More
-
-Check out the documentation for the [full list of markdown extensions](https://vitepress.dev/guide/markdown).

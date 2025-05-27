@@ -3,7 +3,7 @@ import { groupIconMdPlugin, groupIconVitePlugin } from 'vitepress-plugin-group-i
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-  title: "nuxt-frogger",
+  title: "🐸 Frogger",
   description: "A logging and tracing library for Nuxt apps",
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
@@ -33,6 +33,7 @@ export default defineConfig({
   },
     vite: {
         plugins: [
+            //@ts-ignore
             groupIconVitePlugin()
         ],
     }

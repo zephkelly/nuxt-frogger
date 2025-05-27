@@ -6,7 +6,7 @@ import type { FroggerLogger } from "../types/frogger";
 import type { FroggerOptions } from "../types/options";
 import type { LogContext } from "../types/log";
 import type { TraceContext } from "../types/trace";
-
+import { ConsoleReporter } from "./reporters/console-reporter";
 
 
 export abstract class BaseFroggerLogger implements FroggerLogger {
@@ -15,10 +15,16 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
     protected traceId: string;
     protected lastSpanId: string | null = null;
     protected level: number;
+
+    private consoleReporter: ConsoleReporter | undefined;
     
     constructor(options: FroggerOptions = {}) {
         this.traceId = generateTraceId();
         this.level = options.level ?? 3;
+
+        if (options.consoleOutput !== false) {
+            this.consoleReporter = new ConsoleReporter();
+        }
         
         this.consola = createConsola({
             level: this.level
@@ -29,6 +35,19 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
                 this.processLog(logObj);
             }
         });
+
+        if (this.consoleReporter !== undefined) {
+            this.consola.addReporter({
+                log: (logObj: LogObject) => {
+                    try {
+                        this.consoleReporter?.log(logObj);
+                    } catch (err) {
+                        console.log(`[${logObj.type.toUpperCase()}]`, logObj.args?.[0] || '', ...logObj.args?.slice(1) || []);
+                    }
+                }
+            });
+        }
+
         
         if (options.context) {
             this.globalContext = { ...options.context };

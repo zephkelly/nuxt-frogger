@@ -1,6 +1,7 @@
-# Installation
+# Installation Guide
 
-To install the latest version of Frogger, navigate to your Nuxt project directory and run the following command:
+## Install
+To install the latest version of Frogger, navigate to your Nuxt project and run the following command:
 
 ::: code-group
 
@@ -22,68 +23,19 @@ $ bun add nuxt-frogger
 
 :::
 
-## Add to `nuxt.config.ts`
-After installing, add `nuxt-frogger` to your `nuxt.config.ts` file:
+> [!NOTE]
+> The latest version of Frogger is v0.0.2, you can view the [release here](https://github.com/zephkelly/nuxt-frogger/releases/tag/v0.0.2).
+
+## Register module
+After installation, add `'nuxt-frogger'` to your `nuxt.config.ts` file:
 
 ```ts
 export default defineNuxtConfig({
     modules: [
         'nuxt-frogger'
     ],
-    frogger: {
-        // Module options
-    }
+    frogger: { /* Module options go here */ }
 })
 ```
 
-
-<!-- export interface ModuleOptions {
-    clientModule?: boolean
-    serverModule?: boolean
-
-    file?: {
-        directory?: string
-        fileNameFormat?: string
-        maxSize?: number
-        format?: 'json' | 'text'
-    }
-    batch?: {
-        maxSize?: number
-        maxAge?: number
-        retryOnFailure?: boolean
-        maxRetries?: number
-        retryDelay?: number
-    } | boolean
-    endpoint: string
-} -->
-
-## Configuration
-You can configure Frogger by adding options to the `frogger` property in your `nuxt.config.ts`. Here are the default options:
-
-```ts
-export default defineNuxtConfig({
-    modules: [
-        'nuxt-frogger'
-    ],
-    frogger: {
-        clientModule: true, // Enable the client module
-        serverModule: true, // Enable the server module
-
-        endpoint: '/api/_frogger/logs' // Override batch log ingestion endpoint
-
-        file: {
-            directory: 'logs', // Directory to store log files
-            fileNameFormat: 'YYYY-MM-DD.log', // Format for log file names
-            maxSize: 10 * 1024 * 1024, // Maximum size of log files
-        },
-
-        batch: {
-            maxSize: 1000, // Maximum number of logs to batch
-            maxAge: 60000, // Maximum age of logs in the batch
-            retryOnFailure: true, // Retry sending logs on failure
-            maxRetries: 3, // Maximum number of retries
-            retryDelay: 5000 // Delay between retries
-        },   
-    }
-})
-```
+And that's it! Frogger is now installed and ready to use in your Nuxt applications. Take a look at the [Getting Started](./getting-started.md) guide to learn how to use Frogger effectively.

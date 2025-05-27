@@ -150,13 +150,6 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
         this.lastSpanId = parentSpanId;
     }
     
-
-    trace(message: string, context?: Object): void {
-        this.consola.trace(message,
-            context,
-        )
-    }
-
     success(message: string, context?: Object): void {
         this.consola.success(message,
             context,

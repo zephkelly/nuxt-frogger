@@ -30,14 +30,9 @@ export interface ServerLoggerOptions extends FroggerOptions {
     };
     
     /**
-     * HTTP endpoint for batch reporting
+     * (Internal use only, currently) endpoint to direct logs to
      */
     endpoint?: string;
-    
-    /**
-     * Additional fields to include with all logs
-     */
-    additionalFields?: Record<string, any>;
 }
 
 

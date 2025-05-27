@@ -40,17 +40,17 @@ export interface ClientLoggerOptions extends FroggerOptions {
      */
     version?: string;
     
-    /**
-     * Whether to automatically capture unhandled errors
-     * @default true
-     */
-    captureErrors?: boolean;
+    // /**
+    //  * Whether to automatically capture unhandled errors
+    //  * @default true
+    //  */
+    // captureErrors?: boolean;
     
-    /**
-     * Whether to automatically capture console methods
-     * @default false
-     */
-    captureConsole?: boolean;
+    // /**
+    //  * Whether to automatically capture console methods
+    //  * @default false
+    //  */
+    // captureConsole?: boolean;
 }
 
 

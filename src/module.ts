@@ -1,5 +1,3 @@
-import { join, resolve } from 'pathe'
-
 import {
     defineNuxtModule,
     addPlugin,
@@ -9,6 +7,8 @@ import {
     addServerImportsDir,
     addServerHandler,
 } from '@nuxt/kit'
+
+import { join } from 'node:path'
 
 
 
@@ -34,7 +34,7 @@ export interface ModuleOptions {
 
 export default defineNuxtModule<ModuleOptions>({
     meta: {
-        name: 'frogger',
+        name: 'nuxt-frogger',
         configKey: 'frogger',
     },
     defaults: {
@@ -79,6 +79,7 @@ export default defineNuxtModule<ModuleOptions>({
             );
             _nuxt.options.alias['#frogger/server'] = resolver.resolve('./runtime/server');
             addServerImportsDir(resolver.resolve('./runtime/server/utils'))
+
             addServerPlugin(resolver.resolve('./runtime/server/plugins/log-queue.server'))
             addServerPlugin(resolver.resolve('./runtime/server/plugins/trace-headers.server'))
 

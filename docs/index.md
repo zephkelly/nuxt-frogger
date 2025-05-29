@@ -4,8 +4,8 @@ layout: home
 
 hero:
   name: "Frogger"
-  text: "The zero setup logger for Nuxt"
-  tagline: "Log and trace anywhere in your apps. SSR or SPA, it just works."
+  text: "The zero-setup logger for Nuxt"
+  tagline: "Log and trace anywhere from anywhere in your apps. SSR, CSR, SPA, SSG, it just works."
   actions:
     - theme: brand
       text: Install Frogger
@@ -15,13 +15,15 @@ hero:
       link: /getting-started
 
 features:
+#   - title: Websocket + Dashboard
+#     details: A native websocket handler, and built-in dashboard components let you view logs in real-time, real fast!
   - title: Universal Logging
-    details: Call Frogger from your server or client code. SSR, SPA, or even static sites, it just works.
+    details: Call useFrogger() in your app code, or getFrogger() in your server routes. Log anywhere, anytime.
   - title: Tracing Utils
-    details: The W3C Trace Context standard lets you track requests across your app and external services. 
-  - title: Automatic Batching
-    details: Logs created on the server or client are batched and queued, reducing the load on your server.
-  - title: Endpoint Registration
-    details: Frogger auto-registers your endpoints. Had somewhere else in mind? Just override it.
+    details: Fogger follows the W3C Trace Context standard. Follow requests from client to server, or even to external services. 
+  - title: Batched Operations
+    details: Logs on the client are batched before posting. Logs on the server are batched before being written or posted externally.
+  - title: Auto-Registration
+    details: Let Frogger handle the setup. Endpoints, plugins, composables, and middleware. Don't want a feature? Just disable it.
 ---
 

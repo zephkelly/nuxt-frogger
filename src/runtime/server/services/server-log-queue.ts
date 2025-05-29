@@ -20,7 +20,6 @@ export class ServerLogQueueService {
             directory: 'logs',
             fileNameFormat: 'YYYY-MM-DD.log',
             maxSize: 10 * 1024 * 1024,
-            format: 'json'
         },
         batch: true,
     }

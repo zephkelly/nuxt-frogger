@@ -1,7 +1,7 @@
 <template>
   <div>
     Nuxt module playground!
-    <button @click="test()">Test</button>
+    <button @click="testing()">Test</button>
     <button @click="test2()">Test2</button>
     <button @click="test3()">Start High traffic</button>
   </div>
@@ -13,7 +13,7 @@ startFrogger.error('Hello from the playground!');
 
 
 
-const test = () => {
+const testing = () => {
     const clickFrogger = useFrogger();
     clickFrogger.info('Test button clicked!');
     clickFrogger.error('This is an error message');

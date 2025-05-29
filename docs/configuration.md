@@ -1,4 +1,4 @@
-# Configuring Frogger
+# Configuration
 There are a few ways to configure Frogger. Global configuration happens in `nuxt.config.ts`, and local configuration can be set on each logger instance.
 
 

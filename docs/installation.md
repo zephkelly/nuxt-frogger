@@ -1,4 +1,4 @@
-# Installation Guide
+# Installation
 
 ## Automatic Installation
 To install and register the latest version of Frogger, navigate to your Nuxt project and run the following command:

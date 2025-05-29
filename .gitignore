@@ -29,6 +29,10 @@ dist
 # Env
 .env
 
+# Docs
+docs/.vitepress/cache
+docs/.vitepress/dist
+
 # Testing
 reports
 coverage

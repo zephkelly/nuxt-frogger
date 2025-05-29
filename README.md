@@ -1,4 +1,5 @@
-# nuxt-frogger
-## 🐸 Frogger Logger for Nuxt apps
-Log and trace from anywhere in your Nuxt applications. Log on both client and server, Trace from ssr to csr, and back, or simply pretty-output to console! Automatically batches and sends logs to the server and writes formatted logs in json. No matter where you make a log, you
-will always have a record of it in your server logs.
+# 🐸 Frogger
+### The zero-setup logger for Nuxt
+Log and trace from anywhere in your Nuxt applications. Server to client, client to server, SSR to CSR and back again. Install Frogger and add it as a module, and it just works. Automatically batches and sends logs to the server, storing them in formatted json files. No matter where you make a log, you'll find it in the same place.
+
+### 🚧 Docs under construction 🚧

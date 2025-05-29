@@ -14,7 +14,6 @@ export interface ServerLoggerOptions extends FroggerOptions {
         directory?: string;
         fileNameFormat?: string;
         maxSize?: number;
-        format?: 'json' | 'text';
     };
     
     /**

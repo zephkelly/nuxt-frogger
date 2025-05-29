@@ -15,21 +15,22 @@ import { join } from 'node:path'
 export interface ModuleOptions {
     clientModule?: boolean
     serverModule?: boolean
+    
+    endpoint?: string
 
     file?: {
         directory?: string
         fileNameFormat?: string
         maxSize?: number
-        format?: 'json' | 'text'
     }
+
     batch?: {
         maxSize?: number
         maxAge?: number
         retryOnFailure?: boolean
         maxRetries?: number
         retryDelay?: number
-    } | boolean
-    endpoint: string
+    }
 }
 
 export default defineNuxtModule<ModuleOptions>({
@@ -40,14 +41,22 @@ export default defineNuxtModule<ModuleOptions>({
     defaults: {
         clientModule: true,
         serverModule: true,
+
+        endpoint: '/api/_frogger/logs',
+
         file: {
             directory: 'logs',
             fileNameFormat: 'YYYY-MM-DD.log',
             maxSize: 10 * 1024 * 1024,
-            format: 'json'
         },
-        batch: true,
-        endpoint: '/api/_frogger/logs'
+
+        batch: {
+            maxSize: 100,
+            maxAge: 60000,
+            retryOnFailure: true,
+            maxRetries: 3,
+            retryDelay: 5000,
+        },
     },
     setup(_options, _nuxt) {
         const resolver = createResolver(import.meta.url)

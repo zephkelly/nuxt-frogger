@@ -106,6 +106,7 @@ export class ServerLogQueueService {
 
         if (this.batchingEnabled && this.batchReporter) {
             try {
+                console.log('Enqueuing batch of logs:', logs.length);
                 this.batchReporter.logBatch(logs);
             }
             catch (err) {
@@ -141,6 +142,7 @@ export class ServerLogQueueService {
 
         if (this.batchingEnabled && this.batchReporter) {
             try {
+                console.log('Enqueuing single log:', logObj);
                 this.batchReporter.log(logObj)
             }
             catch (err) {

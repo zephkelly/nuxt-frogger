@@ -49,9 +49,7 @@ export class FileReporter {
             this.scheduleFlush();
             
             if (this.bufferSize >= this.options.bufferMaxSize) {
-                this.flush().catch(err => {
-                    console.error('Error during immediate flush:', err);
-                });
+                await this.flush();
             }
         }
         catch (err) {

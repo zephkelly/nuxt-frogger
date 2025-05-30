@@ -1,3 +1,6 @@
+import { defu } from 'defu';
+import { useRuntimeConfig } from '#imports';
+
 import type { BatchReporterOptions } from '../../types/batch-reporter';
 import type { LoggerObject } from '~/src/runtime/shared/types/log';
 
@@ -16,19 +19,11 @@ export class BatchReporter {
     private flushPromise: Promise<void> = Promise.resolve();
     
     constructor(options: BatchReporterOptions) {
-        this.options = {
-            maxSize: options.maxSize ?? 100,
-            maxAge: options.maxAge ?? 5000,
-            onFlush: options.onFlush,
-            includeTraceContext: options.includeTraceContext ?? true,
-            additionalFields: options.additionalFields ?? {},
-            levels: options.levels ?? [],
-            retryOnFailure: options.retryOnFailure ?? true,
-            maxRetries: options.maxRetries ?? 3,
-            retryDelay: options.retryDelay ?? 1000,
+        const config = useRuntimeConfig()
+            
+        this.options = defu(options, config.public.frogger.batch) as Required<BatchReporterOptions>;
 
-            sortingWindowMs: options.sortingWindowMs ?? 2000
-        };
+        console.log('BatchReporter initialized with options:', this.options);
     }
     
     /**
@@ -50,14 +45,13 @@ export class BatchReporter {
         if (logs.length === 0) {
             return;
         }
-        
+
         const processedLogs = this.processLogs(logs);
         if (processedLogs.length === 0) {
             console.debug('All logs in batch were filtered out');
             return;
         }
         
-        console.debug(`Processing batch of ${logs.length} logs, ${processedLogs.length} after filtering`);
         this.addLogsToBuffer(processedLogs);
     }
 
@@ -68,17 +62,18 @@ export class BatchReporter {
         const processedLogs: LoggerObject[] = [];
         
         for (const logObj of logs) {
-            if (this.options.levels.length > 0) {
+            if (this.options.levels && this.options.levels.length > 0) {
+
                 if (!this.options.levels.includes(logObj.level)) {
                     continue;
                 }
             }
-            
+
             const logCopy = structuredClone(logObj);
             Object.assign(logCopy, this.options.additionalFields);
             processedLogs.push(logCopy);
         }
-        
+
         return processedLogs;
     }
 

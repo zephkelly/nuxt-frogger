@@ -16,14 +16,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
     private madeFirstLog: boolean = false;
     private traceContext: TraceContext | null = null;
     
-    constructor(options: ServerLoggerOptions = {
-        batch: true,
-        file: {
-            directory: 'logs',
-            fileNameFormat: 'YYYY-MM-DD.log',
-            maxSize: 10 * 1024 * 1024,
-        },
-    }, traceContext: TraceContext | null = null) {
+    constructor(options: ServerLoggerOptions, traceContext: TraceContext | null = null) {
         super(options);
         this.options = options;
 

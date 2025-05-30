@@ -3,8 +3,10 @@ import { FileReporter } from '../utils/reporters/file-reporter'
 
 import type { LoggerObject } from '../../shared/types/log'
 import type { LogBatch } from '../../shared/types/batch'
-import type { ServerLoggerOptions } from '../types/logger'
+import type { ModuleOptions } from '~/src/module'
 
+import { useRuntimeConfig } from '#imports'
+import { defu } from 'defu'
 
 
 /**
@@ -15,15 +17,7 @@ export class ServerLogQueueService {
     private batchReporter?: BatchReporter
     private fileReporter?: FileReporter
     private initialised: boolean = false
-    private defaultOptions: ServerLoggerOptions = {
-        file: {
-            directory: 'logs',
-            fileNameFormat: 'YYYY-MM-DD.log',
-            maxSize: 10 * 1024 * 1024,
-            format: 'json'
-        },
-        batch: true,
-    }
+
 
     /**
      * Private constructor to prevent direct instantiation
@@ -45,32 +39,36 @@ export class ServerLogQueueService {
     /**
      * Initialise the queue service with options
      */
-    public initialise(options: ServerLoggerOptions = this.defaultOptions): void {
+    public initialise(): void {
         if (this.initialised) {
             return
         }
 
         this.initialised = true
 
-        if (options.file) {
-            const fileOptions = typeof options.file === 'object' ? options.file : {}
-            this.fileReporter = new FileReporter({
-                directory: fileOptions.directory,
-                fileNameFormat: fileOptions.fileNameFormat,
-                maxSize: fileOptions.maxSize,
-            })
+        const config = useRuntimeConfig()
+    
+        const froggerModuleOptions = {
+            file: config.frogger.file,
+            batch: config.public.frogger.batch,
+            endpoint: config.public.frogger.endpoint
         }
         
-        if (options.batch) {
-            const batchOptions = typeof options.batch === 'object' ? options.batch : {}
-            
+        if (froggerModuleOptions.file) {
+            const fileOptions = typeof froggerModuleOptions.file === 'object' ? froggerModuleOptions.file : {}
+            this.fileReporter = new FileReporter()
+        }
+        
+        if (froggerModuleOptions.batch) {
+            const batchOptions = typeof froggerModuleOptions.batch === 'object' ? froggerModuleOptions.batch : {}
+
             this.batchReporter = new BatchReporter({
-                maxSize: batchOptions.maxSize,
-                maxAge: batchOptions.maxAge,
-                retryOnFailure: batchOptions.retryOnFailure,
-                maxRetries: batchOptions.maxRetries,
-                retryDelay: batchOptions.retryDelay,
-                sortingWindowMs: batchOptions.sortingWindowMs,
+                maxSize: froggerModuleOptions.batch.maxSize,
+                maxAge: froggerModuleOptions.batch.maxAge,
+                retryOnFailure: froggerModuleOptions.batch.retryOnFailure,
+                maxRetries: froggerModuleOptions.batch.maxRetries,
+                retryDelay: froggerModuleOptions.batch.retryDelay,
+                sortingWindowMs: froggerModuleOptions.batch.sortingWindowMs,
                 onFlush: async (logs) => {
                     if (!logs || !logs.length) return
                     
@@ -83,27 +81,14 @@ export class ServerLogQueueService {
                                 console.error('Error writing log to file:', err)
                             }
                         }
-                        
-                        if (options.endpoint) {
-                            await $fetch(options.endpoint, {
-                                method: 'POST',
-                                body: {
-                                    logs: logs,
-                                    app: {
-                                        name: 'nuxt-server',
-                                        version: process.env.npm_package_version || 'unknown'
-                                    },
-                                    context: {
-                                        processed: true
-                                    }
-                                }
-                            })
-                        }
+
+                        // Add pluggable reporters here and an external endpoint from options config
+
                     }
                     catch (error) {
                         console.error('Failed to send logs:', error)
                         
-                        if (this.batchReporter && batchOptions.retryOnFailure) {
+                        if (this.batchReporter && froggerModuleOptions.batch.retryOnFailure) {
                             console.debug('Retry on failure enabled, will retry later')
                             throw error
                         }

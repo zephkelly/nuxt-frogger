@@ -11,8 +11,8 @@ import type { LogBatch } from '../../shared/types/batch';
 
 
 interface SSRTraceState {
-    traceId: string;                    // SSR trace ID
-    lastServerSpanId: string | null;    // Last span ID from the server
+    traceId: string;
+    lastServerSpanId: string | null;
     isClientHydrated: boolean;
 }
 
@@ -36,9 +36,6 @@ export class ClientFrogger extends BaseFroggerLogger {
             level: options.level ?? 3,
             context: options.context ?? {},
             consoleOutput: options.consoleOutput ?? true
-
-            // captureErrors: options.captureErrors ?? true,
-            // captureConsole: options.captureConsole ?? false,
         };
         
         this.setupTraceContext();
@@ -55,12 +52,6 @@ export class ClientFrogger extends BaseFroggerLogger {
             });
             
             logQueue.setAppInfo(this.options.appName, this.options.version);
-            
-            // Not working, needs some attention
-            // if (this.options.captureErrors) {
-            //     window.addEventListener('error', this.handleGlobalError.bind(this));
-            //     window.addEventListener('unhandledrejection', this.handlePromiseRejection.bind(this));
-            // }
         }
     }
 
@@ -84,9 +75,8 @@ export class ClientFrogger extends BaseFroggerLogger {
             };
         }
         else {
-            // On client
+            // This is the initial client hydration - use the SSR trace ID
             if (ssrTraceState.value.traceId && !ssrTraceState.value.isClientHydrated) {
-                // This is the initial client hydration - use the SSR trace ID
                 this.setTraceContext(
                     ssrTraceState.value.traceId,
                     ssrTraceState.value.lastServerSpanId
@@ -95,6 +85,7 @@ export class ClientFrogger extends BaseFroggerLogger {
                 // Mark that hydration has occurred so future instances get new trace IDs
                 ssrTraceState.value.isClientHydrated = true;
             }
+
             // For all other client instances, we keep the new randomly generated trace ID
             // from the BaseFroggerLogger constructor (no action needed)
         }
@@ -146,32 +137,12 @@ export class ClientFrogger extends BaseFroggerLogger {
                 }
             };
 
+            // Immediately send the log batch to the server while we are on the server
+            // to prevent any loss of logs
             await $fetch(this.options.endpoint, {
                 method: 'POST',
                 body: batch
             });
         }
     }
-    
-    // /**
-    //  * Handle global uncaught errors
-    //  */
-    // private handleGlobalError(event: ErrorEvent): void {
-    //     this.error('[UNCAUGHT ERROR]', {
-    //         message: event.message,
-    //         filename: event.filename,
-    //         lineno: event.lineno,
-    //         colno: event.colno,
-    //         stack: event.error?.stack
-    //     });
-    // }
-    
-    // /**
-    //  * Handle unhandled promise rejections
-    //  */
-    // private handlePromiseRejection(event: PromiseRejectionEvent): void {
-    //     this.error('[UNHANDLED REJECTION]', {
-    //         reason: event.reason
-    //     });
-    // }
 }

@@ -1,10 +1,12 @@
-import { mkdir, appendFile, stat } from 'node:fs/promises';
+import { useRuntimeConfig } from '#imports';
+import { mkdir, stat } from 'node:fs/promises';
 import { existsSync, createWriteStream, WriteStream } from 'node:fs';
 import { join } from 'node:path';
 
 import type { FileReporterOptions } from '../../types/file-reporter';
 
 import type { LoggerObject } from '~/src/runtime/shared/types/log';
+
 
 
 /**
@@ -21,17 +23,12 @@ export class FileReporter {
     private isRotating: boolean = false;
     private bufferSize: number = 0;
     
-    constructor(options: FileReporterOptions = {}) {
-        this.options = {
-            directory: options.directory || join(process.cwd(), 'logs'),
-            fileNameFormat: options.fileNameFormat || 'YYYY-MM-DD.log',
-            maxSize: options.maxSize || 10 * 1024 * 1024, // 10MB
-            additionalFields: options.additionalFields || {},
+    constructor() {
+        const config = useRuntimeConfig()
 
-            flushInterval: options.flushInterval || 1000,
-            bufferMaxSize: options.bufferMaxSize || 1 * 1024 * 1024, // 1MB buffer
-            highWaterMark: options.highWaterMark || 64 * 1024, // 64kb WriteStream buffer
-        };
+        this.options = config.frogger.file
+
+        console.log('FileReporter initialised with options:', this.options);
         
         this.ensureDirectoryExists().catch(err => {
             console.error('Failed to create log directory:', err);
@@ -238,7 +235,6 @@ export class FileReporter {
     private formatLogEntry(logObj: LoggerObject): string {
         const enrichedLog = {
             ...logObj,
-            ...this.options.additionalFields,
         };
         
 

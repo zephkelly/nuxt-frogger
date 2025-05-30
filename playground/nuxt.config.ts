@@ -8,9 +8,7 @@ export default defineNuxtConfig({
     frogger: {
         batch: {
             client: false,
-            server: {
-                maxAge: 60000, // 1 minute
-            }
+            server: false
         }
     }
 })

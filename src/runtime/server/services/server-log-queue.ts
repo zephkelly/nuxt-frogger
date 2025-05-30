@@ -3,10 +3,9 @@ import { FileReporter } from '../utils/reporters/file-reporter'
 
 import type { LoggerObject } from '../../shared/types/log'
 import type { LogBatch } from '../../shared/types/batch'
-import type { ModuleOptions } from '~/src/module'
 
 import { useRuntimeConfig } from '#imports'
-import { defu } from 'defu'
+
 
 
 /**
@@ -17,6 +16,7 @@ export class ServerLogQueueService {
     private batchReporter?: BatchReporter
     private fileReporter?: FileReporter
     private initialised: boolean = false
+    private batchingEnabled: boolean = false;
 
 
     /**
@@ -54,21 +54,13 @@ export class ServerLogQueueService {
             endpoint: config.public.frogger.endpoint
         }
         
-        if (froggerModuleOptions.file) {
-            const fileOptions = typeof froggerModuleOptions.file === 'object' ? froggerModuleOptions.file : {}
-            this.fileReporter = new FileReporter()
-        }
-        
-        if (froggerModuleOptions.batch) {
-            const batchOptions = typeof froggerModuleOptions.batch === 'object' ? froggerModuleOptions.batch : {}
+        //@ts-expect-error
+        this.batchingEnabled = froggerModuleOptions.batch !== false;
 
+        this.fileReporter = new FileReporter();
+        
+        if (this.batchingEnabled) {
             this.batchReporter = new BatchReporter({
-                maxSize: froggerModuleOptions.batch.maxSize,
-                maxAge: froggerModuleOptions.batch.maxAge,
-                retryOnFailure: froggerModuleOptions.batch.retryOnFailure,
-                maxRetries: froggerModuleOptions.batch.maxRetries,
-                retryDelay: froggerModuleOptions.batch.retryDelay,
-                sortingWindowMs: froggerModuleOptions.batch.sortingWindowMs,
                 onFlush: async (logs) => {
                     if (!logs || !logs.length) return
                     
@@ -112,7 +104,7 @@ export class ServerLogQueueService {
             return;
         }
 
-        if (this.batchReporter) {
+        if (this.batchingEnabled && this.batchReporter) {
             try {
                 this.batchReporter.logBatch(logs);
             }
@@ -120,18 +112,22 @@ export class ServerLogQueueService {
                 console.error('Error in batch reporter for batch:', err);
                 
                 if (this.fileReporter) {
-                    for (const log of logs) {
-                        this.fileReporter.writeBatch(logs).catch(fileErr => {
-                            console.error('Error in fallback file batch write:', fileErr);
-                        });
+                    try {
+                        this.fileReporter.writeBatch(logs)
+                    }
+                    catch (fileErr) {
+                        console.error('Error in fallback file reporter for batch:', fileErr);
                     }
                 }
             }
         }
         else if (this.fileReporter) {
-            this.fileReporter.writeBatch(logs).catch(err => {
-                console.error('Error in direct file batch write:', err);
-            });
+            try {
+                this.fileReporter.writeBatch(logs);
+            }
+            catch (err) {
+                console.error('Error in file reporter for batch:', err);
+            }
         }
     }
 
@@ -143,7 +139,7 @@ export class ServerLogQueueService {
             this.initialise()
         }
 
-        if (this.batchReporter) {
+        if (this.batchingEnabled && this.batchReporter) {
             try {
                 this.batchReporter.log(logObj)
             }
@@ -180,7 +176,7 @@ export class ServerLogQueueService {
 
         const promises: Promise<void>[] = []
         
-        if (this.batchReporter) {
+        if (this.batchingEnabled && this.batchReporter) {
             promises.push(this.batchReporter.forceFlush())
         }
 

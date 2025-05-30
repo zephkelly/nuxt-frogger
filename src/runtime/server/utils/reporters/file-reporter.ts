@@ -38,7 +38,7 @@ export class FileReporter {
     /**
      * Handle a log object and add it to the buffer
      */
-    log(logObj: LoggerObject): void {
+    async log(logObj: LoggerObject): Promise<void> {
         try {
             const logEntry = this.formatLogEntry(logObj);
             const entrySize = Buffer.byteLength(logEntry) + 1;

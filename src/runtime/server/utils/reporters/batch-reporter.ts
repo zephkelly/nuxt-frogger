@@ -20,8 +20,10 @@ export class BatchReporter {
     
     constructor(options: BatchReporterOptions) {
         const config = useRuntimeConfig()
-            
+
+        
         this.options = defu(options, config.public.frogger.batch) as Required<BatchReporterOptions>;
+        console.log('BatchReporter initialized with options:', this.options);
     }
     
     /**

@@ -24,6 +24,7 @@ interface SSRTraceState {
 export class ClientFrogger extends BaseFroggerLogger {
     private options: Required<ClientLoggerOptions>;
     protected hasMounted: Ref<boolean>;
+    private batchingEnabled = true;
 
     private ssrTraceState = useState<SSRTraceState>('frogger-ssr-trace-state');
     
@@ -43,6 +44,9 @@ export class ClientFrogger extends BaseFroggerLogger {
             consoleOutput: true,
             ...options
         }
+
+        //@ts-expect-error
+        this.batchingEnabled = config.public.frogger.batch !== false;
         
         this.setupTraceContext();
         
@@ -88,6 +92,30 @@ export class ClientFrogger extends BaseFroggerLogger {
             // from the BaseFroggerLogger constructor (no action needed)
         }
     }
+
+    /**
+     * Send a single log immediately to the server
+     */
+    private async sendLogImmediately(logObj: LoggerObject): Promise<void> {
+        if (!this.options.endpoint) return;
+
+        const batch: LogBatch = {
+            logs: [logObj],
+            app: {
+                name: 'unknown',
+                version: 'unknown'
+            }
+        };
+
+        try {
+            await $fetch(this.options.endpoint, {
+                method: 'POST',
+                body: batch
+            });
+        } catch (error) {
+            console.error('Failed to send log immediately:', error);
+        }
+    }
     
     /**
      * Process a log entry from Consola
@@ -124,9 +152,13 @@ export class ClientFrogger extends BaseFroggerLogger {
         }
         
         if (import.meta.client) {
-            const nuxtApp = useNuxtApp();
-            const logQueue = nuxtApp.$logQueue as LogQueueService;
-            logQueue.enqueueLog(froggerLoggerObject);
+            if (this.batchingEnabled) {
+                const nuxtApp = useNuxtApp();
+                const logQueue = nuxtApp.$logQueue as LogQueueService;
+                logQueue.enqueueLog(froggerLoggerObject);
+            } else {
+                await this.sendLogImmediately(froggerLoggerObject);
+            }
         }
         else {
             const batch: LogBatch = {

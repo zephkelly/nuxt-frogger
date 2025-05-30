@@ -50,7 +50,7 @@ export class ServerLogQueueService {
     
         const froggerModuleOptions = {
             file: config.frogger.file,
-            batch: config.public.frogger.batch,
+            batch: config.frogger.batch,
             endpoint: config.public.frogger.endpoint
         }
         

@@ -8,6 +8,7 @@ import type { LogObject } from 'consola/browser';
 import type { LoggerObject } from '../../shared/types/log';
 import type { LogBatch } from '../../shared/types/batch';
 
+import { useRuntimeConfig } from '#app';
 
 
 interface SSRTraceState {
@@ -25,18 +26,31 @@ export class ClientFrogger extends BaseFroggerLogger {
     
     constructor(options: ClientLoggerOptions = {}) {
         super(options);
-        
+
+        const config = useRuntimeConfig();
+
         this.options = {
-            endpoint: options.endpoint ?? '/api/_frogger/logs',
-            maxBatchSize: options.maxBatchSize ?? 10,
-            maxBatchAge: options.maxBatchAge ?? 3000,
-            maxQueueSize: options.maxQueueSize ?? 100,
-            appName: options.appName ?? 'unknown',
-            version: options.version ?? 'unknown',
-            level: options.level ?? 3,
-            context: options.context ?? {},
-            consoleOutput: options.consoleOutput ?? true
-        };
+            endpoint: config.public.frogger.endpoint,
+
+            level: 3,
+            context: {},
+            consoleOutput: true,
+            ...options
+        }
+
+        // this.options = defu(options, config.public.frogger.batch) as Required<ClientLoggerOptions>;
+        
+        // const  = {
+        //     endpoint: options.endpoint ?? '/api/_frogger/logs',
+        //     maxBatchSize: options.maxBatchSize ?? 10,
+        //     maxBatchAge: options.maxBatchAge ?? 3000,
+        //     maxQueueSize: options.maxQueueSize ?? 100,
+        //     appName: options.appName ?? 'unknown',
+        //     version: options.version ?? 'unknown',
+        //     level: options.level ?? 3,
+        //     context: options.context ?? {},
+        //     consoleOutput: options.consoleOutput ?? true
+        // };
         
         this.setupTraceContext();
         
@@ -44,14 +58,14 @@ export class ClientFrogger extends BaseFroggerLogger {
             const nuxtApp = useNuxtApp();
             const logQueue = nuxtApp.$logQueue as LogQueueService;
             
-            logQueue.configure({
-                endpoint: this.options.endpoint,
-                maxBatchSize: this.options.maxBatchSize,
-                maxBatchAge: this.options.maxBatchAge,
-                maxQueueSize: this.options.maxQueueSize
-            });
+            // logQueue.configure({
+            //     endpoint: this.options.endpoint,
+            //     maxBatchSize: this.options.maxBatchSize,
+            //     maxBatchAge: this.options.maxBatchAge,
+            //     maxQueueSize: this.options.maxQueueSize
+            // });
             
-            logQueue.setAppInfo(this.options.appName, this.options.version);
+            logQueue.setAppInfo('unknown', 'unknown');
         }
     }
 
@@ -132,13 +146,15 @@ export class ClientFrogger extends BaseFroggerLogger {
             const batch: LogBatch = {
                 logs: [froggerLoggerObject],
                 app: {
-                    name: this.options.appName,
-                    version: this.options.version
+                    name: 'unknown',
+                    version: 'unknown'
                 }
             };
 
             // Immediately send the log batch to the server while we are on the server
             // to prevent any loss of logs
+            if (!this.options.endpoint) return;
+
             await $fetch(this.options.endpoint, {
                 method: 'POST',
                 body: batch

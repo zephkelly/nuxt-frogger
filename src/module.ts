@@ -29,12 +29,23 @@ export interface ModuleOptions {
     }
 
     batch?: {
-        maxSize?: number
-        maxAge?: number
-        retryOnFailure?: boolean
-        maxRetries?: number
-        retryDelay?: number
-        sortingWindowMs?: number
+        server?: {
+            maxSize?: number
+            maxAge?: number
+            retryOnFailure?: boolean
+            maxRetries?: number
+            retryDelay?: number
+            sortingWindowMs?: number
+        }
+
+        client?: {
+            maxSize?: number
+            maxAge?: number
+            retryOnFailure?: boolean
+            maxRetries?: number
+            retryDelay?: number
+            sortingWindowMs?: number
+        }
     }
 }
 
@@ -59,13 +70,24 @@ export default defineNuxtModule<ModuleOptions>({
         },
 
         batch: {
-            maxSize: 100,
-            maxAge: 10000,
-            retryOnFailure: true,
-            maxRetries: 3,
-            retryDelay: 5000,
-            sortingWindowMs: 2000,
-        },
+            server: {
+                maxSize: 200,
+                maxAge: 15000,
+                retryOnFailure: true,
+                maxRetries: 5,
+                retryDelay: 10000,
+                sortingWindowMs: 3000,
+            },
+            
+            client: {
+                maxSize: 50,
+                maxAge: 5000,
+                retryOnFailure: true,
+                maxRetries: 3,
+                retryDelay: 3000,
+                sortingWindowMs: 1000,
+            }
+        }
     },
     setup(_options, _nuxt) {
         const resolver = createResolver(import.meta.url)
@@ -85,14 +107,7 @@ export default defineNuxtModule<ModuleOptions>({
             public: {
                 frogger: {
                     endpoint: _options.endpoint,
-                    batch: {
-                        maxSize: _options.batch?.maxSize,
-                        maxAge: _options.batch?.maxAge,
-                        retryOnFailure: _options.batch?.retryOnFailure,
-                        maxRetries: _options.batch?.maxRetries,
-                        retryDelay: _options.batch?.retryDelay,
-                        sortingWindowMs: _options.batch?.sortingWindowMs,
-                    }
+                    batch: _options.batch?.client
                 }
             },
             frogger: {
@@ -103,7 +118,9 @@ export default defineNuxtModule<ModuleOptions>({
                     flushInterval: _options.file?.flushInterval,
                     bufferMaxSize: _options.file?.bufferMaxSize,
                     highWaterMark: _options.file?.highWaterMark,
-                }
+                },
+                
+                batch: _options.batch?.server
             }
         }
 

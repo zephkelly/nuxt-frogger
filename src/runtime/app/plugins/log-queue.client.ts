@@ -3,9 +3,9 @@ import { LogQueueService } from "../services/log-queue";
 
 
 
-const logQueueService = new LogQueueService();
 
 export default defineNuxtPlugin(() => {
+    const logQueueService = new LogQueueService();
     return {
         provide: {
             logQueue: logQueueService

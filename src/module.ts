@@ -10,6 +10,7 @@ import {
 } from '@nuxt/kit'
 
 import { join } from 'node:path'
+import type { M } from 'vitest/dist/chunks/environment.d.Dmw5ulng.js'
 
 
 
@@ -36,7 +37,7 @@ export interface ModuleOptions {
             maxRetries?: number
             retryDelay?: number
             sortingWindowMs?: number
-        }
+        } | false
 
         client?: {
             maxSize?: number
@@ -45,7 +46,7 @@ export interface ModuleOptions {
             maxRetries?: number
             retryDelay?: number
             sortingWindowMs?: number
-        }
+        } | false
     }
 }
 
@@ -122,7 +123,7 @@ export default defineNuxtModule<ModuleOptions>({
                 
                 batch: _options.batch?.server
             }
-        }
+        };
 
         updateRuntimeConfig(moduleRuntimeConfig)
 
@@ -138,16 +139,18 @@ export default defineNuxtModule<ModuleOptions>({
             }
 
             if (_options.serverModule) {
+                const serverBatchStatus = _options.batch?.server === false ? '(immediate)' : '(batched)';
                 console.log(
                     '%cFROGGER', 'color: black; background-color: rgb(9, 195, 81) font-weight: bold; font-size: 1.15rem;',
-                    `🐸 Registering server module`
+                    `🐸 Registering server module ${serverBatchStatus}`
                 );
             }
 
             if (_options.clientModule) {
+                const clientBatchStatus = _options.batch?.client === false ? '(immediate)' : '(batched)';
                 console.log(
                     '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
-                    `🐸 Registering client module`
+                    `🐸 Registering client module ${clientBatchStatus}`
                 );
             }
         })

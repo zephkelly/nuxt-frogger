@@ -11,11 +11,12 @@ export class LogQueueService {
     private queue: LoggerObject[] = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
     private sending: boolean = false;
+    private batchingEnabled: boolean = true;
 
     private endpoint: string;
-    private maxBatchSize: number;
-    private maxBatchAge: number;
-    private maxQueueSize: number;
+    private maxBatchSize: number | undefined;
+    private maxBatchAge: number | undefined;
+    private maxQueueSize: number | undefined;
     
     private appInfo: { name: string; version: string } = { 
         name: 'unknown', 
@@ -24,8 +25,14 @@ export class LogQueueService {
 
     constructor() {
         const config = useRuntimeConfig();
-
+        
         this.endpoint = config.public.frogger.endpoint;
+
+        //@ts-expect-error
+        this.batchingEnabled = config.public.frogger.batch !== false;
+
+        if (!this.batchingEnabled) return;
+
         this.maxBatchSize = config.public.frogger.batch?.maxSize;
         this.maxBatchAge = config.public.frogger.batch?.maxAge;
         this.maxQueueSize = config.public.frogger.batch?.maxSize;
@@ -38,29 +45,19 @@ export class LogQueueService {
         this.appInfo = { name, version };
     }
 
-    // /**
-    //  * Set queue configuration
-    //  */
-    // configure(options: {
-    //     endpoint?: string;
-    //     maxBatchSize?: number;
-    //     maxBatchAge?: number;
-    //     maxQueueSize?: number;
-    // }): void {
-    //     if (options.endpoint) this.endpoint = options.endpoint;
-    //     if (options.maxBatchSize) this.maxBatchSize = options.maxBatchSize;
-    //     if (options.maxBatchAge) this.maxBatchAge = options.maxBatchAge;
-    //     if (options.maxQueueSize) this.maxQueueSize = options.maxQueueSize;
-    // }
-
     /**
      * Add a log to the centralized queue
      */
     enqueueLog(log: LoggerObject): void {
+        if (!this.batchingEnabled) {
+            this.sendLogImmediately(log);
+            return;
+        }
+
         this.queue.push(log);
         
         // Trim the queue if it exceeds the maximum size
-        if (this.queue.length > this.maxQueueSize) {
+        if (this.maxQueueSize && this.queue.length > this.maxQueueSize) {
             this.queue = this.queue.slice(-this.maxQueueSize);
         }
         
@@ -71,8 +68,10 @@ export class LogQueueService {
      * Schedule sending logs to the server
      */
     private scheduleSend(): void {
-        if (this.queue.length >= this.maxBatchSize) {
-        this.sendLogs();
+        if (!this.batchingEnabled) return;
+
+        if (this.maxBatchSize && this.queue.length >= this.maxBatchSize) {
+            this.sendLogs();
             return;
         }
         
@@ -90,8 +89,8 @@ export class LogQueueService {
      * Send logs to the server endpoint
      */
     private async sendLogs(): Promise<void> {
-        if (this.queue.length === 0 || this.sending) {
-        return;
+        if (!this.batchingEnabled || this.queue.length === 0 || this.sending) {
+            return;
         }
         
         if (this.timer !== null) {
@@ -122,6 +121,8 @@ export class LogQueueService {
         }
         catch (error) {
             console.error('Failed to send logs:', error);
+            if (!this.batchingEnabled || !this.maxQueueSize) return;
+
             // Put the logs back in the queue
             this.queue = [...logs, ...this.queue].slice(-this.maxQueueSize);
         }
@@ -131,6 +132,41 @@ export class LogQueueService {
             if (this.queue.length > 0) {
                 this.scheduleSend();
             }
+        }
+    }
+
+    /**
+     * Send a single log immediately (used when batching is disabled)
+     */
+    private async sendLogImmediately(log: LoggerObject): Promise<void> {
+        if (!this.endpoint) return;
+
+        const batch: LogBatch = {
+            logs: [log],
+            app: this.appInfo
+        };
+
+        try {
+            await $fetch(this.endpoint, {
+                method: 'POST',
+                body: batch
+            });
+        }
+        catch (error) {
+            console.error('Failed to send log immediately:', error);
+        }
+    }
+
+    /**
+     * Force flush any pending logs (only applicable when batching is enabled)
+     */
+    async flush(): Promise<void> {
+        if (!this.batchingEnabled) {
+            return;
+        }
+
+        if (this.queue.length > 0) {
+            await this.sendLogs();
         }
     }
 }

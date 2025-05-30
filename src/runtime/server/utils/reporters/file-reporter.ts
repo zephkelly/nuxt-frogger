@@ -28,6 +28,8 @@ export class FileReporter {
 
         this.options = config.frogger.file
 
+        console.log('FileReporter initialized with options:', this.options);
+
         this.ensureDirectoryExists().catch(err => {
             console.error('Failed to create log directory:', err);
         });
@@ -36,7 +38,7 @@ export class FileReporter {
     /**
      * Handle a log object and add it to the buffer
      */
-    log(logObj: LoggerObject): void {
+    async log(logObj: LoggerObject): Promise<void> {
         try {
             const logEntry = this.formatLogEntry(logObj);
             const entrySize = Buffer.byteLength(logEntry) + 1;
@@ -47,9 +49,7 @@ export class FileReporter {
             this.scheduleFlush();
             
             if (this.bufferSize >= this.options.bufferMaxSize) {
-                this.flush().catch(err => {
-                    console.error('Error during immediate flush:', err);
-                });
+                await this.flush();
             }
         }
         catch (err) {

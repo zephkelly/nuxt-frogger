@@ -1,10 +1,13 @@
-import { mkdir, appendFile, stat } from 'node:fs/promises';
+import { defu } from 'defu';
+import { useRuntimeConfig } from '#imports';
+import { mkdir, stat } from 'node:fs/promises';
 import { existsSync, createWriteStream, WriteStream } from 'node:fs';
 import { join } from 'node:path';
 
 import type { FileReporterOptions } from '../../types/file-reporter';
 
 import type { LoggerObject } from '~/src/runtime/shared/types/log';
+
 
 
 /**
@@ -22,16 +25,9 @@ export class FileReporter {
     private bufferSize: number = 0;
     
     constructor(options: FileReporterOptions = {}) {
-        this.options = {
-            directory: options.directory || join(process.cwd(), 'logs'),
-            fileNameFormat: options.fileNameFormat || 'YYYY-MM-DD.log',
-            maxSize: options.maxSize || 10 * 1024 * 1024, // 10MB
-            additionalFields: options.additionalFields || {},
-
-            flushInterval: options.flushInterval || 1000,
-            bufferMaxSize: options.bufferMaxSize || 1 * 1024 * 1024, // 1MB buffer
-            highWaterMark: options.highWaterMark || 64 * 1024, // 64kb WriteStream buffer
-        };
+        const config = useRuntimeConfig()
+    
+        this.options = defu(options, config.frogger.file) as Required<FileReporterOptions>;
         
         this.ensureDirectoryExists().catch(err => {
             console.error('Failed to create log directory:', err);

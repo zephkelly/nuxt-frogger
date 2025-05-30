@@ -23,6 +23,9 @@ export interface ModuleOptions {
         directory?: string
         fileNameFormat?: string
         maxSize?: number
+        flushInterval?: number
+        bufferMaxSize?: number
+        highWaterMark?: number
     }
 
     batch?: {
@@ -50,11 +53,14 @@ export default defineNuxtModule<ModuleOptions>({
             directory: 'logs',
             fileNameFormat: 'YYYY-MM-DD.log',
             maxSize: 10 * 1024 * 1024,
+            flushInterval: 1000,
+            bufferMaxSize: 1 * 1024 * 1024,
+            highWaterMark: 64 * 1024,
         },
 
         batch: {
             maxSize: 100,
-            maxAge: 60000,
+            maxAge: 10000,
             retryOnFailure: true,
             maxRetries: 3,
             retryDelay: 5000,

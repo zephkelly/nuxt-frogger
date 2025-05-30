@@ -47,28 +47,15 @@ export class ServerLogQueueService {
         this.initialised = true
 
         const config = useRuntimeConfig()
-        const froggerConfig = config.frogger || {}
-        const publicConfig = config.public?.frogger || {}
-
-        const mergedOptions = {
-            file: options?.file ?? froggerConfig.file ?? {
-                directory: 'logs',
-                fileNameFormat: 'YYYY-MM-DD.log',
-                maxSize: 10 * 1024 * 1024,
-            },
-            batch: options?.batch ?? {
-                maxSize: publicConfig.batch?.maxSize ?? 100,
-                maxAge: publicConfig.batch?.maxAge ?? 5000,
-                retryOnFailure: publicConfig.batch?.retryOnFailure ?? true,
-                maxRetries: publicConfig.batch?.maxRetries ?? 3,
-                retryDelay: publicConfig.batch?.retryDelay ?? 1000,
-                sortingWindowMs: options?.batch?.sortingWindowMs ?? 2000
-            },
-            endpoint: options?.endpoint ?? publicConfig.endpoint ?? '/api/_frogger/logs'
+    
+        const froggerModuleOptions = options || {
+            file: config.frogger.file,
+            batch: config.public.frogger.batch,
+            endpoint: config.public.frogger.endpoint
         }
 
-        if (mergedOptions.file) {
-            const fileOptions = typeof mergedOptions.file === 'object' ? mergedOptions.file : {}
+        if (froggerModuleOptions.file) {
+            const fileOptions = typeof froggerModuleOptions.file === 'object' ? froggerModuleOptions.file : {}
             this.fileReporter = new FileReporter({
                 directory: fileOptions.directory,
                 fileNameFormat: fileOptions.fileNameFormat,
@@ -76,8 +63,8 @@ export class ServerLogQueueService {
             })
         }
         
-        if (mergedOptions.batch) {
-            const batchOptions = typeof mergedOptions.batch === 'object' ? mergedOptions.batch : {}
+        if (froggerModuleOptions.batch) {
+            const batchOptions = typeof froggerModuleOptions.batch === 'object' ? froggerModuleOptions.batch : {}
 
             this.batchReporter = new BatchReporter({
                 maxSize: batchOptions.maxSize,
@@ -99,21 +86,8 @@ export class ServerLogQueueService {
                             }
                         }
 
-                        if (mergedOptions.endpoint) {
-                            await $fetch(mergedOptions.endpoint, {
-                                method: 'POST',
-                                body: {
-                                    logs: logs,
-                                    app: {
-                                        name: 'nuxt-server',
-                                        version: process.env.npm_package_version || 'unknown'
-                                    },
-                                    context: {
-                                        processed: true
-                                    }
-                                }
-                            })
-                        }
+                        // Add pluggable reporters here and an external endpoint from options config
+
                     }
                     catch (error) {
                         console.error('Failed to send logs:', error)

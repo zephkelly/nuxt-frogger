@@ -7,8 +7,4 @@ import { defineNitroPlugin } from '#imports';
 //@ts-ignore
 export default defineNitroPlugin((nitroApp) => {
     ServerLogQueueService.getInstance()
-
-    nitroApp.hooks.hook('close', () => {
-        // console.log('LogQueueService closed');
-    });
 });

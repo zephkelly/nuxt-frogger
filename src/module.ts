@@ -97,9 +97,12 @@ export default defineNuxtModule<ModuleOptions>({
             },
             frogger: {
                 file: {
-                    directory: _options.file?.directory || logDir,
+                    directory: logDir,
                     fileNameFormat: _options.file?.fileNameFormat,
                     maxSize: _options.file?.maxSize,
+                    flushInterval: _options.file?.flushInterval,
+                    bufferMaxSize: _options.file?.bufferMaxSize,
+                    highWaterMark: _options.file?.highWaterMark,
                 }
             }
         }

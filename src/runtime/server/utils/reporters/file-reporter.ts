@@ -1,4 +1,3 @@
-import { defu } from 'defu';
 import { useRuntimeConfig } from '#imports';
 import { mkdir, stat } from 'node:fs/promises';
 import { existsSync, createWriteStream, WriteStream } from 'node:fs';
@@ -24,10 +23,12 @@ export class FileReporter {
     private isRotating: boolean = false;
     private bufferSize: number = 0;
     
-    constructor(options: FileReporterOptions = {}) {
+    constructor() {
         const config = useRuntimeConfig()
-    
-        this.options = defu(options, config.frogger.file) as Required<FileReporterOptions>;
+
+        this.options = config.frogger.file
+
+        console.log('FileReporter initialised with options:', this.options);
         
         this.ensureDirectoryExists().catch(err => {
             console.error('Failed to create log directory:', err);
@@ -234,7 +235,6 @@ export class FileReporter {
     private formatLogEntry(logObj: LoggerObject): string {
         const enrichedLog = {
             ...logObj,
-            ...this.options.additionalFields,
         };
         
 

@@ -3,10 +3,10 @@ import { FileReporter } from '../utils/reporters/file-reporter'
 
 import type { LoggerObject } from '../../shared/types/log'
 import type { LogBatch } from '../../shared/types/batch'
-import type { ServerLoggerOptions } from '../types/logger'
+import type { ModuleOptions } from '~/src/module'
 
 import { useRuntimeConfig } from '#imports'
-
+import { defu } from 'defu'
 
 
 /**
@@ -39,7 +39,7 @@ export class ServerLogQueueService {
     /**
      * Initialise the queue service with options
      */
-    public initialise(options?: ServerLoggerOptions): void {
+    public initialise(): void {
         if (this.initialised) {
             return
         }
@@ -48,31 +48,27 @@ export class ServerLogQueueService {
 
         const config = useRuntimeConfig()
     
-        const froggerModuleOptions = options || {
+        const froggerModuleOptions = {
             file: config.frogger.file,
             batch: config.public.frogger.batch,
             endpoint: config.public.frogger.endpoint
         }
-
+        
         if (froggerModuleOptions.file) {
             const fileOptions = typeof froggerModuleOptions.file === 'object' ? froggerModuleOptions.file : {}
-            this.fileReporter = new FileReporter({
-                directory: fileOptions.directory,
-                fileNameFormat: fileOptions.fileNameFormat,
-                maxSize: fileOptions.maxSize,
-            })
+            this.fileReporter = new FileReporter()
         }
         
         if (froggerModuleOptions.batch) {
             const batchOptions = typeof froggerModuleOptions.batch === 'object' ? froggerModuleOptions.batch : {}
 
             this.batchReporter = new BatchReporter({
-                maxSize: batchOptions.maxSize,
-                maxAge: batchOptions.maxAge,
-                retryOnFailure: batchOptions.retryOnFailure,
-                maxRetries: batchOptions.maxRetries,
-                retryDelay: batchOptions.retryDelay,
-                sortingWindowMs: batchOptions.sortingWindowMs,
+                maxSize: froggerModuleOptions.batch.maxSize,
+                maxAge: froggerModuleOptions.batch.maxAge,
+                retryOnFailure: froggerModuleOptions.batch.retryOnFailure,
+                maxRetries: froggerModuleOptions.batch.maxRetries,
+                retryDelay: froggerModuleOptions.batch.retryDelay,
+                sortingWindowMs: froggerModuleOptions.batch.sortingWindowMs,
                 onFlush: async (logs) => {
                     if (!logs || !logs.length) return
                     
@@ -92,7 +88,7 @@ export class ServerLogQueueService {
                     catch (error) {
                         console.error('Failed to send logs:', error)
                         
-                        if (this.batchReporter && batchOptions.retryOnFailure) {
+                        if (this.batchReporter && froggerModuleOptions.batch.retryOnFailure) {
                             console.debug('Retry on failure enabled, will retry later')
                             throw error
                         }

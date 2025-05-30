@@ -16,12 +16,6 @@ export interface FileReporterOptions {
     fileNameFormat?: string;
     
     /**
-     * Additional fields to include in log entries
-    */
-   additionalFields?: Record<string, any>;
-
-
-    /**
     * Maximum log file size in bytes before rotating
     * @default 10485760 (10MB)
     */

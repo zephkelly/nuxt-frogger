@@ -1,9 +1,8 @@
 # Configuration
-There are a few ways to configure Frogger. Global configuration happens in `nuxt.config.ts`, and local configuration can be set on each logger instance.
-
+There are many ways to configure Frogger. Global configuration happens in `nuxt.config.ts`, local configurations can be set on each logger instance, and you can also use runtime configuration variables (`NUXT_FROGGER_`) to override options at runtime and in different environments.
 
 ## Module Options
-To configure Frogger globally, you can use the `frogger` configuration key in your `nuxt.config.ts` file: 
+The most common way to configure Frogger will be through it's module options. Use the `frogger` configuration key in your `nuxt.config.ts` file like so: 
 
 ```ts
 export default defineNuxtConfig({
@@ -14,7 +13,8 @@ export default defineNuxtConfig({
 ```
 Use this to set things like the location of your log files, the configuration of the log ingestion endpoint, batching options for client or server, and more.
 
-## Frogger's Module Interface
+
+### Frogger's Module Interface
 This is the full interface for Frogger's module options. Everything is optional, so what you don't configure will fallback to default values:
 ```ts
 export interface ModuleOptions {
@@ -61,6 +61,29 @@ export default defineNuxtModule<ModuleOptions>({
             maxRetries: 3,
             retryDelay: 5000,
         },
+    }
+})
+```
+:::
+
+
+::: warning
+Frogger's module options ***will be overridden*** at runtime by configuration variables. This is useful for setting different configurations in development and production environments but may lead to unexpected behavior for those unaware.
+
+For example, if you set `NUXT_FROGGER_ENDPOINT` in your .env file:
+
+```
+# .env
+NUXT_FROGGER_ENDPOINT=https://my-custom-endpoint.com
+```
+
+It will behave the same as overriding the `endpoint` option in the module configuration:
+
+```ts
+export default defineNuxtConfig({
+    frogger: {
+        endpoint: '/api/_frogger/logs', // [!code focus] [!code --]
+        endpoint: 'https://my-custom-endpoint.com' // [!code focus] [!code ++]
     }
 })
 ```

@@ -28,8 +28,6 @@ export class FileReporter {
 
         this.options = config.frogger.file
 
-        console.log('FileReporter initialised with options:', this.options);
-        
         this.ensureDirectoryExists().catch(err => {
             console.error('Failed to create log directory:', err);
         });

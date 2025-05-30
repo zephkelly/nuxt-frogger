@@ -19,7 +19,7 @@ export interface ServerLoggerOptions extends FroggerOptions {
     /**
      * Enable batch reporting to external services
      */
-    batch?: boolean | {
+    batch?: {
         maxSize?: number;
         maxAge?: number;
         retryOnFailure?: boolean;

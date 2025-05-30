@@ -5,6 +5,8 @@ import type { LoggerObject } from '../../shared/types/log'
 import type { LogBatch } from '../../shared/types/batch'
 import type { ServerLoggerOptions } from '../types/logger'
 
+import { useRuntimeConfig } from '#imports'
+
 
 
 /**
@@ -15,14 +17,7 @@ export class ServerLogQueueService {
     private batchReporter?: BatchReporter
     private fileReporter?: FileReporter
     private initialised: boolean = false
-    private defaultOptions: ServerLoggerOptions = {
-        file: {
-            directory: 'logs',
-            fileNameFormat: 'YYYY-MM-DD.log',
-            maxSize: 10 * 1024 * 1024,
-        },
-        batch: true,
-    }
+
 
     /**
      * Private constructor to prevent direct instantiation
@@ -44,15 +39,36 @@ export class ServerLogQueueService {
     /**
      * Initialise the queue service with options
      */
-    public initialise(options: ServerLoggerOptions = this.defaultOptions): void {
+    public initialise(options?: ServerLoggerOptions): void {
         if (this.initialised) {
             return
         }
 
         this.initialised = true
 
-        if (options.file) {
-            const fileOptions = typeof options.file === 'object' ? options.file : {}
+        const config = useRuntimeConfig()
+        const froggerConfig = config.frogger || {}
+        const publicConfig = config.public?.frogger || {}
+
+        const mergedOptions = {
+            file: options?.file ?? froggerConfig.file ?? {
+                directory: 'logs',
+                fileNameFormat: 'YYYY-MM-DD.log',
+                maxSize: 10 * 1024 * 1024,
+            },
+            batch: options?.batch ?? {
+                maxSize: publicConfig.batch?.maxSize ?? 100,
+                maxAge: publicConfig.batch?.maxAge ?? 5000,
+                retryOnFailure: publicConfig.batch?.retryOnFailure ?? true,
+                maxRetries: publicConfig.batch?.maxRetries ?? 3,
+                retryDelay: publicConfig.batch?.retryDelay ?? 1000,
+                sortingWindowMs: options?.batch?.sortingWindowMs ?? 2000
+            },
+            endpoint: options?.endpoint ?? publicConfig.endpoint ?? '/api/_frogger/logs'
+        }
+
+        if (mergedOptions.file) {
+            const fileOptions = typeof mergedOptions.file === 'object' ? mergedOptions.file : {}
             this.fileReporter = new FileReporter({
                 directory: fileOptions.directory,
                 fileNameFormat: fileOptions.fileNameFormat,
@@ -60,9 +76,9 @@ export class ServerLogQueueService {
             })
         }
         
-        if (options.batch) {
-            const batchOptions = typeof options.batch === 'object' ? options.batch : {}
-            
+        if (mergedOptions.batch) {
+            const batchOptions = typeof mergedOptions.batch === 'object' ? mergedOptions.batch : {}
+
             this.batchReporter = new BatchReporter({
                 maxSize: batchOptions.maxSize,
                 maxAge: batchOptions.maxAge,
@@ -82,9 +98,9 @@ export class ServerLogQueueService {
                                 console.error('Error writing log to file:', err)
                             }
                         }
-                        
-                        if (options.endpoint) {
-                            await $fetch(options.endpoint, {
+
+                        if (mergedOptions.endpoint) {
+                            await $fetch(mergedOptions.endpoint, {
                                 method: 'POST',
                                 body: {
                                     logs: logs,

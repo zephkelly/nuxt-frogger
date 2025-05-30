@@ -31,6 +31,7 @@ export interface ModuleOptions {
         retryOnFailure?: boolean
         maxRetries?: number
         retryDelay?: number
+        sortingWindowMs?: number
     }
 }
 
@@ -57,6 +58,7 @@ export default defineNuxtModule<ModuleOptions>({
             retryOnFailure: true,
             maxRetries: 3,
             retryDelay: 5000,
+            sortingWindowMs: 2000,
         },
     },
     setup(_options, _nuxt) {
@@ -83,6 +85,7 @@ export default defineNuxtModule<ModuleOptions>({
                         retryOnFailure: _options.batch?.retryOnFailure,
                         maxRetries: _options.batch?.maxRetries,
                         retryDelay: _options.batch?.retryDelay,
+                        sortingWindowMs: _options.batch?.sortingWindowMs,
                     }
                 }
             },

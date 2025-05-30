@@ -1,4 +1,5 @@
-import { useNuxtApp, useState } from '#app';
+import { type Ref } from 'vue';
+import { useNuxtApp, useState, useRuntimeConfig } from '#app';
 
 import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
 import { LogQueueService } from '../services/log-queue';
@@ -8,7 +9,6 @@ import type { LogObject } from 'consola/browser';
 import type { LoggerObject } from '../../shared/types/log';
 import type { LogBatch } from '../../shared/types/batch';
 
-import { useRuntimeConfig } from '#app';
 
 
 interface SSRTraceState {
@@ -23,9 +23,15 @@ interface SSRTraceState {
  */
 export class ClientFrogger extends BaseFroggerLogger {
     private options: Required<ClientLoggerOptions>;
+    protected hasMounted: Ref<boolean>;
+
+    private ssrTraceState = useState<SSRTraceState>('frogger-ssr-trace-state');
     
-    constructor(options: ClientLoggerOptions = {}) {
+    constructor(hasMounted: Ref<boolean>, options: ClientLoggerOptions = {}) {
         super(options);
+
+        this.hasMounted = hasMounted;
+
 
         const config = useRuntimeConfig();
 
@@ -37,33 +43,12 @@ export class ClientFrogger extends BaseFroggerLogger {
             consoleOutput: true,
             ...options
         }
-
-        // this.options = defu(options, config.public.frogger.batch) as Required<ClientLoggerOptions>;
-        
-        // const  = {
-        //     endpoint: options.endpoint ?? '/api/_frogger/logs',
-        //     maxBatchSize: options.maxBatchSize ?? 10,
-        //     maxBatchAge: options.maxBatchAge ?? 3000,
-        //     maxQueueSize: options.maxQueueSize ?? 100,
-        //     appName: options.appName ?? 'unknown',
-        //     version: options.version ?? 'unknown',
-        //     level: options.level ?? 3,
-        //     context: options.context ?? {},
-        //     consoleOutput: options.consoleOutput ?? true
-        // };
         
         this.setupTraceContext();
         
         if (import.meta.client) {
             const nuxtApp = useNuxtApp();
             const logQueue = nuxtApp.$logQueue as LogQueueService;
-            
-            // logQueue.configure({
-            //     endpoint: this.options.endpoint,
-            //     maxBatchSize: this.options.maxBatchSize,
-            //     maxBatchAge: this.options.maxBatchAge,
-            //     maxQueueSize: this.options.maxQueueSize
-            // });
             
             logQueue.setAppInfo('unknown', 'unknown');
         }
@@ -74,15 +59,15 @@ export class ClientFrogger extends BaseFroggerLogger {
      * ONLY the initial client hydration shares the trace ID with SSR
      */
     private setupTraceContext(): void {
-        const ssrTraceState = useState<SSRTraceState>('frogger-ssr-trace-state', () => ({
+        this.ssrTraceState.value = this.ssrTraceState.value || {
             traceId: '',
             lastServerSpanId: null,
             isClientHydrated: false
-        }));
+        };
         
         if (import.meta.server) {
             // On server: store the trace ID and span ID for client hydration
-            ssrTraceState.value = {
+            this.ssrTraceState.value = {
                 traceId: this.traceId,
                 lastServerSpanId: null,  // Will be updated after first log
                 isClientHydrated: false
@@ -90,14 +75,13 @@ export class ClientFrogger extends BaseFroggerLogger {
         }
         else {
             // This is the initial client hydration - use the SSR trace ID
-            if (ssrTraceState.value.traceId && !ssrTraceState.value.isClientHydrated) {
+            if (this.ssrTraceState.value.traceId && !this.ssrTraceState.value.isClientHydrated) {
                 this.setTraceContext(
-                    ssrTraceState.value.traceId,
-                    ssrTraceState.value.lastServerSpanId
+                    this.ssrTraceState.value.traceId,
+                    this.ssrTraceState.value.lastServerSpanId
                 );
                 
-                // Mark that hydration has occurred so future instances get new trace IDs
-                ssrTraceState.value.isClientHydrated = true;
+                this.ssrTraceState.value.isClientHydrated = true;
             }
 
             // For all other client instances, we keep the new randomly generated trace ID
@@ -113,12 +97,14 @@ export class ClientFrogger extends BaseFroggerLogger {
 
         if (import.meta.server) {
             // On server: update the last server span ID
-            const ssrTraceState = useState<SSRTraceState>('frogger-ssr-trace-state');
-            ssrTraceState.value = {
-                ...ssrTraceState.value,
+            this.ssrTraceState.value = {
+                ...this.ssrTraceState.value,
                 lastServerSpanId: this.lastSpanId
             };
         }
+
+        const env = (import.meta.server) ? 'ssr' :
+            (import.meta.client && this.hasMounted.value) ? 'client' : 'csr';
 
         const froggerLoggerObject: LoggerObject = {
             type: logObj.type,
@@ -129,7 +115,7 @@ export class ClientFrogger extends BaseFroggerLogger {
             trace: traceContext,
 
             context: {
-                env: (import.meta.server) ? 'ssr' : 'client',
+                env: env,
                 message: logObj.args?.[0],
                 ...this.globalContext,
                 ...logObj.args?.slice(1)[0],

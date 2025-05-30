@@ -81,7 +81,7 @@ export default defineNuxtModule<ModuleOptions>({
             
             client: {
                 maxSize: 50,
-                maxAge: 5000,
+                maxAge: 3000,
                 retryOnFailure: true,
                 maxRetries: 3,
                 retryDelay: 3000,

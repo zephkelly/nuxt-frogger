@@ -10,6 +10,7 @@
 <script setup>
 const startFrogger = useFrogger();
 startFrogger.error('Hello from the playground!');
+startFrogger.info('Testing to see if we move from to csr');
 
 
 

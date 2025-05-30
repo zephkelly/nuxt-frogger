@@ -4,11 +4,6 @@ export default defineNuxtConfig({
     ssr: true,
     
     frogger: {
-        file: {
-            flushInterval: 1000,
-        },
-        batch: {
-            maxAge: 1000,
-        }
+   
     }
 })

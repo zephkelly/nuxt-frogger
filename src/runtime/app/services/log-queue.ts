@@ -1,6 +1,7 @@
 import type { LoggerObject } from '../../shared/types/log';
 import type { LogBatch } from '../../shared/types/batch';
 
+import { useRuntimeConfig } from '#app';
 
 
 /**
@@ -10,17 +11,24 @@ export class LogQueueService {
     private queue: LoggerObject[] = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
     private sending: boolean = false;
-    private endpoint: string = '/api/_frogger/logs';
-    private maxBatchSize: number = 10;
-    private maxBatchAge: number = 3000;
-    private maxQueueSize: number = 100;
+
+    private endpoint: string;
+    private maxBatchSize: number;
+    private maxBatchAge: number;
+    private maxQueueSize: number;
+    
     private appInfo: { name: string; version: string } = { 
         name: 'unknown', 
         version: 'unknown' 
     };
 
     constructor() {
-        // Constructor is empty as we'll set options when enqueueing logs
+        const config = useRuntimeConfig();
+
+        this.endpoint = config.public.frogger.endpoint;
+        this.maxBatchSize = config.public.frogger.batch?.maxSize;
+        this.maxBatchAge = config.public.frogger.batch?.maxAge;
+        this.maxQueueSize = config.public.frogger.batch?.maxSize;
     }
 
     /**
@@ -30,20 +38,20 @@ export class LogQueueService {
         this.appInfo = { name, version };
     }
 
-    /**
-     * Set queue configuration
-     */
-    configure(options: {
-        endpoint?: string;
-        maxBatchSize?: number;
-        maxBatchAge?: number;
-        maxQueueSize?: number;
-    }): void {
-        if (options.endpoint) this.endpoint = options.endpoint;
-        if (options.maxBatchSize) this.maxBatchSize = options.maxBatchSize;
-        if (options.maxBatchAge) this.maxBatchAge = options.maxBatchAge;
-        if (options.maxQueueSize) this.maxQueueSize = options.maxQueueSize;
-    }
+    // /**
+    //  * Set queue configuration
+    //  */
+    // configure(options: {
+    //     endpoint?: string;
+    //     maxBatchSize?: number;
+    //     maxBatchAge?: number;
+    //     maxQueueSize?: number;
+    // }): void {
+    //     if (options.endpoint) this.endpoint = options.endpoint;
+    //     if (options.maxBatchSize) this.maxBatchSize = options.maxBatchSize;
+    //     if (options.maxBatchAge) this.maxBatchAge = options.maxBatchAge;
+    //     if (options.maxQueueSize) this.maxQueueSize = options.maxQueueSize;
+    // }
 
     /**
      * Add a log to the centralized queue

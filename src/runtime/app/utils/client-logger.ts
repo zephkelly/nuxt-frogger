@@ -7,7 +7,7 @@ import { LogQueueService } from '../services/log-queue';
 import type { ClientLoggerOptions } from '../types/logger';
 import type { LogObject } from 'consola/browser';
 import type { LoggerObject } from '../../shared/types/log';
-import type { LogBatch } from '../../shared/types/batch';
+import type { LoggerObjectBatch } from '../../shared/types/batch';
 
 
 
@@ -99,7 +99,7 @@ export class ClientFrogger extends BaseFroggerLogger {
     private async sendLogImmediately(logObj: LoggerObject): Promise<void> {
         if (!this.options.endpoint) return;
 
-        const batch: LogBatch = {
+        const batch: LoggerObjectBatch = {
             logs: [logObj],
             app: {
                 name: 'unknown',
@@ -161,7 +161,7 @@ export class ClientFrogger extends BaseFroggerLogger {
             }
         }
         else {
-            const batch: LogBatch = {
+            const batch: LoggerObjectBatch = {
                 logs: [froggerLoggerObject],
                 app: {
                     name: 'unknown',

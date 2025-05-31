@@ -1,5 +1,5 @@
 import type { LoggerObject } from '../../shared/types/log';
-import type { LogBatch } from '../../shared/types/batch';
+import type { LoggerObjectBatch } from '../../shared/types/batch';
 
 import { useRuntimeConfig } from '#app';
 
@@ -29,7 +29,7 @@ export class LogQueueService {
         this.endpoint = config.public.frogger.endpoint;
 
         //@ts-expect-error
-        this.batchingEnabled = config.public.frogger.batch !== false;
+        this.batchingEnabled = config.public?.frogger?.batch !== false;
 
         if (!this.batchingEnabled) return;
 
@@ -109,7 +109,7 @@ export class LogQueueService {
                 return;
             }
             
-            const batch: LogBatch = {
+            const batch: LoggerObjectBatch = {
                 logs,
                 app: this.appInfo
             };
@@ -141,7 +141,7 @@ export class LogQueueService {
     private async sendLogImmediately(log: LoggerObject): Promise<void> {
         if (!this.endpoint) return;
 
-        const batch: LogBatch = {
+        const batch: LoggerObjectBatch = {
             logs: [log],
             app: this.appInfo
         };

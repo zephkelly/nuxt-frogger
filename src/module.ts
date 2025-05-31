@@ -10,45 +10,10 @@ import {
 } from '@nuxt/kit'
 
 import { join } from 'node:path'
-import type { M } from 'vitest/dist/chunks/environment.d.Dmw5ulng.js'
+
+import type { ModuleOptions } from './runtime/shared/types/module-options'
 
 
-
-export interface ModuleOptions {
-    clientModule?: boolean
-    serverModule?: boolean
-    
-    endpoint?: string
-
-    file?: {
-        directory?: string
-        fileNameFormat?: string
-        maxSize?: number
-        flushInterval?: number
-        bufferMaxSize?: number
-        highWaterMark?: number
-    }
-
-    batch?: {
-        server?: {
-            maxSize?: number
-            maxAge?: number
-            retryOnFailure?: boolean
-            maxRetries?: number
-            retryDelay?: number
-            sortingWindowMs?: number
-        } | false
-
-        client?: {
-            maxSize?: number
-            maxAge?: number
-            retryOnFailure?: boolean
-            maxRetries?: number
-            retryDelay?: number
-            sortingWindowMs?: number
-        } | false
-    }
-}
 
 export default defineNuxtModule<ModuleOptions>({
     meta: {
@@ -59,8 +24,7 @@ export default defineNuxtModule<ModuleOptions>({
         clientModule: true,
         serverModule: true,
 
-        endpoint: '/api/_frogger/logs',
-
+        
         file: {
             directory: 'logs',
             fileNameFormat: 'YYYY-MM-DD.log',
@@ -69,18 +33,21 @@ export default defineNuxtModule<ModuleOptions>({
             bufferMaxSize: 1 * 1024 * 1024,
             highWaterMark: 64 * 1024,
         },
-
+        
         batch: {
-            server: {
-                maxSize: 200,
-                maxAge: 15000,
-                retryOnFailure: true,
-                maxRetries: 5,
-                retryDelay: 10000,
-                sortingWindowMs: 3000,
-            },
-            
-            client: {
+            maxSize: 200,
+            maxAge: 15000,
+            retryOnFailure: true,
+            maxRetries: 5,
+            retryDelay: 10000,
+            sortingWindowMs: 3000,
+        },
+        
+        // Set in the 'frogger' property of the public runtime config,
+        // override at runtime using 'NUXT_PUBLIC_FROGGER_'
+        public: {
+            endpoint: '/api/_frogger/logs',
+            batch: {
                 maxSize: 50,
                 maxAge: 3000,
                 retryOnFailure: true,
@@ -107,8 +74,8 @@ export default defineNuxtModule<ModuleOptions>({
         const moduleRuntimeConfig = {
             public: {
                 frogger: {
-                    endpoint: _options.endpoint,
-                    batch: _options.batch?.client
+                    endpoint: _options.public?.endpoint,
+                    batch: _options.public?.batch
                 }
             },
             frogger: {
@@ -121,7 +88,7 @@ export default defineNuxtModule<ModuleOptions>({
                     highWaterMark: _options.file?.highWaterMark,
                 },
                 
-                batch: _options.batch?.server
+                batch: _options.batch
             }
         };
 
@@ -139,7 +106,7 @@ export default defineNuxtModule<ModuleOptions>({
             }
 
             if (_options.serverModule) {
-                const serverBatchStatus = _options.batch?.server === false ? '(immediate)' : '(batched)';
+                const serverBatchStatus = _options.batch === false ? '(immediate)' : '(batched)';
                 console.log(
                     '%cFROGGER', 'color: black; background-color: rgb(9, 195, 81) font-weight: bold; font-size: 1.15rem;',
                     `🐸 Registering server module ${serverBatchStatus}`
@@ -147,7 +114,7 @@ export default defineNuxtModule<ModuleOptions>({
             }
 
             if (_options.clientModule) {
-                const clientBatchStatus = _options.batch?.client === false ? '(immediate)' : '(batched)';
+                const clientBatchStatus = _options.public?.batch === false ? '(immediate)' : '(batched)';
                 console.log(
                     '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
                     `🐸 Registering client module ${clientBatchStatus}`

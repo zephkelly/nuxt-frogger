@@ -38,8 +38,10 @@ export interface ModuleOptions {
             retryDelay?: number
             sortingWindowMs?: number
         } | false
+    }
 
-        client?: {
+    public?: {
+        batch?: {
             maxSize?: number
             maxAge?: number
             retryOnFailure?: boolean
@@ -79,8 +81,12 @@ export default defineNuxtModule<ModuleOptions>({
                 retryDelay: 10000,
                 sortingWindowMs: 3000,
             },
-            
-            client: {
+        },
+
+        // Set in the 'frogger' property of the public runtime config,
+        // override at runtime using 'NUXT_PUBLIC_FROGGER_'
+        public: {
+            batch: {
                 maxSize: 50,
                 maxAge: 3000,
                 retryOnFailure: true,
@@ -108,7 +114,7 @@ export default defineNuxtModule<ModuleOptions>({
             public: {
                 frogger: {
                     endpoint: _options.endpoint,
-                    batch: _options.batch?.client
+                    batch: _options.public?.batch
                 }
             },
             frogger: {
@@ -147,7 +153,7 @@ export default defineNuxtModule<ModuleOptions>({
             }
 
             if (_options.clientModule) {
-                const clientBatchStatus = _options.batch?.client === false ? '(immediate)' : '(batched)';
+                const clientBatchStatus = _options.public?.batch === false ? '(immediate)' : '(batched)';
                 console.log(
                     '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
                     `🐸 Registering client module ${clientBatchStatus}`

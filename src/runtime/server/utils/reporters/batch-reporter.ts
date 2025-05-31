@@ -23,6 +23,7 @@ export class BatchReporter {
 
         
         this.options = defu(options, config.public.frogger.batch) as Required<BatchReporterOptions>;
+
         console.log('BatchReporter initialized with options:', this.options);
     }
     

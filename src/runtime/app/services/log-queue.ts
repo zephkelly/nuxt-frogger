@@ -29,7 +29,7 @@ export class LogQueueService {
         this.endpoint = config.public.frogger.endpoint;
 
         //@ts-expect-error
-        this.batchingEnabled = config.public.frogger.batch !== false;
+        this.batchingEnabled = config.public?.frogger?.batch !== false;
 
         if (!this.batchingEnabled) return;
 

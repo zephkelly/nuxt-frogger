@@ -10,7 +10,6 @@ import {
 } from '@nuxt/kit'
 
 import { join } from 'node:path'
-import type { M } from 'vitest/dist/chunks/environment.d.Dmw5ulng.js'
 
 
 
@@ -18,8 +17,7 @@ export interface ModuleOptions {
     clientModule?: boolean
     serverModule?: boolean
     
-    endpoint?: string
-
+    
     file?: {
         directory?: string
         fileNameFormat?: string
@@ -28,19 +26,18 @@ export interface ModuleOptions {
         bufferMaxSize?: number
         highWaterMark?: number
     }
-
-    batch?: {
-        server?: {
-            maxSize?: number
-            maxAge?: number
-            retryOnFailure?: boolean
-            maxRetries?: number
-            retryDelay?: number
-            sortingWindowMs?: number
-        } | false
-    }
-
+    
+    batch?:{
+        maxSize?: number
+        maxAge?: number
+        retryOnFailure?: boolean
+        maxRetries?: number
+        retryDelay?: number
+        sortingWindowMs?: number
+    }   | false
+    
     public?: {
+        endpoint?: string
         batch?: {
             maxSize?: number
             maxAge?: number
@@ -61,8 +58,7 @@ export default defineNuxtModule<ModuleOptions>({
         clientModule: true,
         serverModule: true,
 
-        endpoint: '/api/_frogger/logs',
-
+        
         file: {
             directory: 'logs',
             fileNameFormat: 'YYYY-MM-DD.log',
@@ -71,21 +67,20 @@ export default defineNuxtModule<ModuleOptions>({
             bufferMaxSize: 1 * 1024 * 1024,
             highWaterMark: 64 * 1024,
         },
-
+        
         batch: {
-            server: {
-                maxSize: 200,
-                maxAge: 15000,
-                retryOnFailure: true,
-                maxRetries: 5,
-                retryDelay: 10000,
-                sortingWindowMs: 3000,
-            },
+            maxSize: 200,
+            maxAge: 15000,
+            retryOnFailure: true,
+            maxRetries: 5,
+            retryDelay: 10000,
+            sortingWindowMs: 3000,
         },
-
+        
         // Set in the 'frogger' property of the public runtime config,
         // override at runtime using 'NUXT_PUBLIC_FROGGER_'
         public: {
+            endpoint: '/api/_frogger/logs',
             batch: {
                 maxSize: 50,
                 maxAge: 3000,
@@ -113,7 +108,7 @@ export default defineNuxtModule<ModuleOptions>({
         const moduleRuntimeConfig = {
             public: {
                 frogger: {
-                    endpoint: _options.endpoint,
+                    endpoint: _options.public?.endpoint,
                     batch: _options.public?.batch
                 }
             },
@@ -127,7 +122,7 @@ export default defineNuxtModule<ModuleOptions>({
                     highWaterMark: _options.file?.highWaterMark,
                 },
                 
-                batch: _options.batch?.server
+                batch: _options.batch
             }
         };
 
@@ -145,7 +140,7 @@ export default defineNuxtModule<ModuleOptions>({
             }
 
             if (_options.serverModule) {
-                const serverBatchStatus = _options.batch?.server === false ? '(immediate)' : '(batched)';
+                const serverBatchStatus = _options.batch === false ? '(immediate)' : '(batched)';
                 console.log(
                     '%cFROGGER', 'color: black; background-color: rgb(9, 195, 81) font-weight: bold; font-size: 1.15rem;',
                     `🐸 Registering server module ${serverBatchStatus}`

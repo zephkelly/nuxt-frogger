@@ -11,43 +11,9 @@ import {
 
 import { join } from 'node:path'
 
+import type { ModuleOptions } from './runtime/shared/types/module-options'
 
 
-export interface ModuleOptions {
-    clientModule?: boolean
-    serverModule?: boolean
-    
-    
-    file?: {
-        directory?: string
-        fileNameFormat?: string
-        maxSize?: number
-        flushInterval?: number
-        bufferMaxSize?: number
-        highWaterMark?: number
-    }
-    
-    batch?:{
-        maxSize?: number
-        maxAge?: number
-        retryOnFailure?: boolean
-        maxRetries?: number
-        retryDelay?: number
-        sortingWindowMs?: number
-    }   | false
-    
-    public?: {
-        endpoint?: string
-        batch?: {
-            maxSize?: number
-            maxAge?: number
-            retryOnFailure?: boolean
-            maxRetries?: number
-            retryDelay?: number
-            sortingWindowMs?: number
-        } | false
-    }
-}
 
 export default defineNuxtModule<ModuleOptions>({
     meta: {

@@ -2,7 +2,7 @@ import { BatchReporter } from '../utils/reporters/batch-reporter'
 import { FileReporter } from '../utils/reporters/file-reporter'
 
 import type { LoggerObject } from '../../shared/types/log'
-import type { LogBatch } from '../../shared/types/batch'
+import type { LoggerObjectBatch } from '../../shared/types/batch'
 
 import { useRuntimeConfig } from '#imports'
 
@@ -74,8 +74,6 @@ export class ServerLogQueueService {
                             }
                         }
 
-                        // Add pluggable reporters here and an external endpoint from options config
-
                     }
                     catch (error) {
                         console.error('Failed to send logs:', error)
@@ -94,12 +92,12 @@ export class ServerLogQueueService {
     /**
      * Enqueue a batch of logs efficiently
      */
-    public enqueueBatch(logBatch: LogBatch): void {
+    public enqueueBatch(LoggerObjectBatch: LoggerObjectBatch): void {
         if (!this.initialised) {
             this.initialise()
         }
 
-        const logs = logBatch.logs;
+        const logs = LoggerObjectBatch.logs;
         if (logs.length === 0) {
             return;
         }

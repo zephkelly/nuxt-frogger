@@ -21,10 +21,7 @@ export class BatchReporter {
     constructor(options: BatchReporterOptions) {
         const config = useRuntimeConfig()
 
-        
         this.options = defu(options, config.public.frogger.batch) as Required<BatchReporterOptions>;
-
-        console.log('BatchReporter initialized with options:', this.options);
     }
     
     /**
@@ -33,7 +30,7 @@ export class BatchReporter {
     log(logObj: LoggerObject): void {
         const processedLogs = this.processLogs([logObj]);
         if (processedLogs.length === 0) {
-            return; // Log was filtered out
+            return;
         }
         
         this.addLogsToBuffer(processedLogs);
@@ -62,17 +59,15 @@ export class BatchReporter {
     private processLogs(logs: LoggerObject[]): LoggerObject[] {
         const processedLogs: LoggerObject[] = [];
         
-        for (const logObj of logs) {
+        for (const log of logs) {
             if (this.options.levels && this.options.levels.length > 0) {
 
-                if (!this.options.levels.includes(logObj.level)) {
+                if (!this.options.levels.includes(log.level)) {
                     continue;
                 }
             }
 
-            const logCopy = structuredClone(logObj);
-            Object.assign(logCopy, this.options.additionalFields);
-            processedLogs.push(logCopy);
+            processedLogs.push(log);
         }
 
         return processedLogs;
@@ -254,44 +249,4 @@ export class BatchReporter {
         await this.flushPromise;
         return this.flush();
     }
-}
-
-/**
- * Create a batch reporter for sending logs to a REST API endpoint
- */
-export function createHttpBatchReporter(
-    url: string, 
-    options: Omit<BatchReporterOptions, 'onFlush'> & {
-        headers?: Record<string, string>;
-        method?: string;
-        timeout?: number;
-    } = {}
-): BatchReporter {
-    return new BatchReporter({
-        ...options,
-        async onFlush(logs) {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => {
-                controller.abort();
-            }, options.timeout || 10000);
-            
-            try {
-                const response = await $fetch(url, {
-                    method: 'POST',
-                    body: { logs },
-                    signal: controller.signal
-                });
-            }
-            catch (error: any) {
-                if (error.name === 'AbortError') {
-                    console.error('Request timed out');
-                } else {
-                    console.error('Failed to send logs:', error);
-                }
-            }
-            finally {
-                clearTimeout(timeoutId);
-            }
-        }
-    });
 }

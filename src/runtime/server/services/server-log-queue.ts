@@ -155,7 +155,6 @@ export class ServerLogQueueService {
         const destroyPromises: Promise<void>[] = [];
 
         if (this.batchReporter) {
-            console.debug(`Destroying batch reporter`);
             if (this.batchReporter.destroy) {
                 destroyPromises.push(this.batchReporter.destroy().catch(err => {
                     console.error(`Error destroying batch reporter:`, err);
@@ -164,7 +163,6 @@ export class ServerLogQueueService {
         }
         
         if (this.directReporters.length > 0) {
-            console.debug(`Destroying ${this.directReporters.length} direct reporters`);
             for (const reporter of this.directReporters) {
                 if (reporter.destroy) {
                     destroyPromises.push(reporter.destroy().catch(err => {

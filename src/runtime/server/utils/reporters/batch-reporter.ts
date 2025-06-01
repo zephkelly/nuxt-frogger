@@ -123,13 +123,11 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         const logsToFlush = this.logs.filter(log => log.timestamp <= cutoffTime);
         
         if (logsToFlush.length > 0) {
-            console.debug('Flushing immediately. Buffer full and old logs available');
             this.scheduleFlush(0);
         }
         else {
             const oldestLog = this.logs[0];
             const waitTime = Math.max(0, (oldestLog.timestamp + this.options.sortingWindowMs) - now);
-            console.debug(`All logs too new, waiting ${waitTime}ms for sorting window`);
             this.scheduleFlush(waitTime);
         }
     }

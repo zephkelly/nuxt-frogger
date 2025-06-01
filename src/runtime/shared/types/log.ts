@@ -11,7 +11,6 @@ export interface LogContext {
 
 export interface LoggerObject {
     type: LogType;
-    date: Date;
     level: number;
     trace: TraceContext;
     context: LogContext;

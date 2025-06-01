@@ -15,7 +15,6 @@ export interface ClientLoggerOptions extends FroggerOptions {
 
 export interface QueuedLog {
     type: string;
-    date: Date;
     timestamp: number;
     trace: {
         traceId: string;

@@ -45,7 +45,6 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         return {
             type: logObj.type,
             level: logObj.level,
-            date: logObj.date,
             trace: currentTraceContext,
             context: {
                 env: 'server',

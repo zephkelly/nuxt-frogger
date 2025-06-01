@@ -1,5 +1,4 @@
 import type { FroggerOptions } from "../../shared/types/options";
-import type { IFroggerLogger } from "../../shared/types/frogger";
 
 
 /**

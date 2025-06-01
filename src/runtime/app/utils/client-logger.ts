@@ -113,7 +113,6 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         return {
             type: logObj.type,
             level: logObj.level,
-            date: logObj.date,
             trace: traceContext,
             context: {
                 env: env,

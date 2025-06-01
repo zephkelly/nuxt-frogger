@@ -4,7 +4,7 @@ import { useRuntimeConfig } from '#imports';
 import { BaseReporter } from './base-reporter';
 import type { BatchReporterOptions } from '../../types/batch-reporter';
 import type { LoggerObject } from '~/src/runtime/shared/types/log';
-
+import type { IReporter } from '~/src/runtime/shared/types/reporter';
 
 
 /**
@@ -20,13 +20,34 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
     private flushing: boolean = false;
     private retries: Map<string, number> = new Map();
     private flushPromise: Promise<void> = Promise.resolve();
-    
+
     constructor(options: BatchReporterOptions) {
         super();
         const config = useRuntimeConfig()
 
+        const defaultOptions: BatchReporterOptions = {
+            downstreamReporters: [],
+            onFlush: async (logs) => {
+                if (this.options.downstreamReporters.length === 0) {
+                    console.warn('BatchReporter has no downstream reporters and no custom onFlush handler');
+                    return;
+                }
+                
+                const promises = this.options.downstreamReporters.map(async (reporter) => {
+                    try {
+                        await reporter.logBatch(logs);
+                    }
+                    catch (err) {
+                        console.error(`Error in downstream reporter ${reporter.name}:`, err);
+                        throw err;
+                    }
+                });
+                
+                await Promise.all(promises);
+            }
+        };
         
-        this.options = defu(options, config.public.frogger.batch) as Required<BatchReporterOptions>;
+        this.options = defu(options, defaultOptions, config.public.frogger.batch) as Required<BatchReporterOptions>;
     }
     
     /**
@@ -133,11 +154,24 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         
         this.logs.splice(left, 0, log);
     }
-    
-    
+
+
+
+    // Downstream reporters ------------------------------------------------
+    public addDownstreamReporter(reporter: IReporter): void {
+        this.options.downstreamReporters.push(reporter);
+    }
+
+    public removeDownstreamReporter(reporter: IReporter): void {
+        this.options.downstreamReporters = this.options.downstreamReporters.filter(r => r !== reporter);
+    }
+
+    public getDownstreamReporters(): IReporter[] {
+        return this.options.downstreamReporters;
+    }
 
     // Flush handling ------------------------------------------------------
-    
+
     /**
      * Handle a failed flush attempt with retry logic
      */

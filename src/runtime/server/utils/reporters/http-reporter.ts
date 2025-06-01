@@ -1,5 +1,7 @@
 import { H3Error } from "h3";
 
+import { generateW3CTraceHeaders } from "./../../../shared/utils/trace-headers";
+
 import type { IReporter } from "~/src/runtime/shared/types/internal-reporter";
 import type { HttpReporterOptions } from "../../types/http-reporter";
 import type { LoggerObject } from "~/src/runtime/shared/types/log";
@@ -8,6 +10,7 @@ import type { LoggerObjectBatch } from "~/src/runtime/shared/types/batch";
 
 export const defaultHttpReporterOptions: HttpReporterOptions = {
     endpoint: '',
+    vendor: 'frogger',
     headers: {},
     timeout: 30000,
     retryOnFailure: true,
@@ -16,7 +19,7 @@ export const defaultHttpReporterOptions: HttpReporterOptions = {
     appInfo: {
         name: 'unknown',
         version: 'unknown'
-    }
+    },
 };
 
 
@@ -26,13 +29,17 @@ export const defaultHttpReporterOptions: HttpReporterOptions = {
  */
 export class HttpReporter implements IReporter {
     public readonly name = 'FroggerHttpReporter';
+    private reporterId: string;
     
     private options: Required<HttpReporterOptions>;
     private retries: Map<string, number> = new Map();
 
     constructor(options: HttpReporterOptions) {
+        this.reporterId = `frogger-http-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
         this.options = {
             endpoint: options.endpoint,
+            vendor: options.vendor || 'frogger',
             appInfo: {
                 name: 'unknown',
                 version: 'unknown',
@@ -61,6 +68,18 @@ export class HttpReporter implements IReporter {
         await this.sendBatch(batch);
     }
 
+    private addBatchMetadata(logBatch: LoggerObjectBatch): LoggerObjectBatch {
+        return {
+            ...logBatch,
+            meta: {
+                processed: true,
+                processChain: [this.reporterId],
+                source: this.options.appInfo.name,
+                time: Date.now()
+            }
+        };
+    }
+
     async logBatch(logs: LoggerObject[]): Promise<void> {
         if (logs.length === 0) {
             return;
@@ -71,17 +90,16 @@ export class HttpReporter implements IReporter {
             app: this.options.appInfo
         };
 
-        await this.sendBatch(batch);
+        const metadataBatch = this.addBatchMetadata(batch);
+        await this.sendBatch(metadataBatch);
     }
 
     private async sendBatch(batch: LoggerObjectBatch): Promise<void> {
         const batchId = `batch-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
         
         try {
-            await this.performHttpRequest(batch);
-            
-            this.retries.delete(batchId);
-            
+            await this.performHttpRequest(batch); 
+            this.retries.delete(batchId); 
         }
         catch (error) {
             console.error(`HttpReporter failed to send batch ${batchId}:`, error);
@@ -95,6 +113,30 @@ export class HttpReporter implements IReporter {
             }
         }
     }
+    
+
+    private createRequestHeaders(batch: LoggerObjectBatch): Record<string, string> {
+        const firstLog = batch.logs[0];
+        const traceContext = firstLog?.trace;
+
+        const w3cHeaders = generateW3CTraceHeaders({
+            traceId: traceContext?.traceId,
+            parentSpanId: traceContext?.spanId,
+            vendorData: { frogger: this.reporterId }
+        });
+        
+        return {
+            'Content-Type': 'application/json',
+            // Loop prevention headers
+            'X-Frogger-Reporter': 'true',
+            'X-Frogger-Reporter-Id': this.reporterId,
+            'X-Frogger-Processed': 'true',
+            'X-Frogger-Source': this.options.appInfo.name,
+            // W3C Trace headers
+            traceparent: w3cHeaders.traceparent,
+            ...(w3cHeaders.tracestate && { tracestate: w3cHeaders.tracestate }),
+        };
+    }
 
     private async performHttpRequest(batch: LoggerObjectBatch): Promise<void> {
         const controller = new AbortController();
@@ -105,9 +147,12 @@ export class HttpReporter implements IReporter {
                 '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
                 `🐸 Sending logs to ${this.options.endpoint} with ${batch.logs.length} logs`
             );
+
+            const headers = this.createRequestHeaders(batch);
+
             await $fetch(this.options.endpoint, {
                 method: 'POST',
-                headers: this.options.headers,
+                headers: headers,
                 body: batch,
                 signal: controller.signal
             });

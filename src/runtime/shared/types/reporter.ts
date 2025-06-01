@@ -8,4 +8,5 @@ export interface IReporter {
     logBatch(logs: LoggerObject[]): Promise<void> | void
     flush?(): Promise<void> | void
     forceFlush?(): Promise<void> | void
+    destroy?(): Promise<void> | void
 }

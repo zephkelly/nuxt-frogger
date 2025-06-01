@@ -26,4 +26,6 @@ export abstract class BaseReporter<TOptions extends Record<string, any> = Record
             await this.flush()
         }
     }
+
+    async destroy(): Promise<void> { }
 }

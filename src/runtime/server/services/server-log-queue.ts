@@ -1,6 +1,7 @@
 import { BatchReporter } from '../utils/reporters/batch-reporter'
 import { FileReporter } from '../utils/reporters/file-reporter'
 
+import type { IReporter } from '../../shared/types/reporter'
 import type { LoggerObject } from '../../shared/types/log'
 import type { LoggerObjectBatch } from '../../shared/types/batch'
 
@@ -9,24 +10,21 @@ import { useRuntimeConfig } from '#imports'
 
 
 /**
- * Centralized server-side log queue service
+ * Centralised server-side log queue service
  */
 export class ServerLogQueueService {
     private static instance: ServerLogQueueService | null = null;
-    private batchReporter?: BatchReporter
-    private fileReporter?: FileReporter
+    private primaryReporter?: IReporter;
+    private allReporters: IReporter[] = [];
     private initialised: boolean = false
     private batchingEnabled: boolean = false;
 
 
     /**
-     * Private constructor to prevent direct instantiation
+     * Private to prevent direct instantiation
      */
     private constructor() { }
 
-    /**
-     * Get the singleton instance
-     */
     public static getInstance(): ServerLogQueueService {
         if (!ServerLogQueueService.instance) {
             ServerLogQueueService.instance = new ServerLogQueueService();
@@ -37,7 +35,7 @@ export class ServerLogQueueService {
     }
 
     /**
-     * Initialise the queue service with options
+     * Initialise queue service with options
      */
     public initialise(): void {
         if (this.initialised) {
@@ -57,133 +55,130 @@ export class ServerLogQueueService {
         //@ts-expect-error
         this.batchingEnabled = froggerModuleOptions.batch !== false;
 
-        this.fileReporter = new FileReporter();
+        const fileReporter = new FileReporter();
+        this.allReporters.push(fileReporter);
         
         if (this.batchingEnabled) {
-            this.batchReporter = new BatchReporter({
+            const batchReporter = new BatchReporter({
                 onFlush: async (logs) => {
-                    if (!logs || !logs.length) return
+                    if (!logs || !logs.length) return;
                     
                     try {
-                        if (this.fileReporter) {
-                            try {
-                                await this.fileReporter.logBatch(logs)
-                            }
-                            catch (err) {
-                                console.error('Error writing log to file:', err)
-                            }
-                        }
-
+                        await fileReporter.logBatch(logs);
                     }
-                    catch (error) {
-                        console.error('Failed to send logs:', error)
-                        
-                        if (this.batchReporter && froggerModuleOptions.batch.retryOnFailure) {
-                            console.debug('Retry on failure enabled, will retry later')
-                            throw error
-                        }
+                    catch (err) {
+                        console.error('Error writing batch to file:', err);
+                        throw err;
                     }
                 }
-            })
+            });
+            
+            this.allReporters.push(batchReporter);
+            this.primaryReporter = batchReporter;
+        }
+        else {
+            this.primaryReporter = fileReporter;
+            
+            console.debug('Batching disabled: FileReporter (direct)');
         }
     }
 
     
     /**
-     * Enqueue a batch of logs efficiently
+     * Enqueue a batch of logs
      */
-    public enqueueBatch(LoggerObjectBatch: LoggerObjectBatch): void {
+    public enqueueBatch(loggerObjectBatch: LoggerObjectBatch): void {
         if (!this.initialised) {
-            this.initialise()
+            this.initialise();
         }
 
-        const logs = LoggerObjectBatch.logs;
+        const logs = loggerObjectBatch.logs;
         if (logs.length === 0) {
             return;
         }
 
-        if (this.batchingEnabled && this.batchReporter) {
-            try {
-                console.log('Enqueuing batch of logs:', logs.length);
-                this.batchReporter.logBatch(logs);
-            }
-            catch (err) {
-                console.error('Error in batch reporter for batch:', err);
-                
-                if (this.fileReporter) {
-                    try {
-                        this.fileReporter.logBatch(logs)
-                    }
-                    catch (fileErr) {
-                        console.error('Error in fallback file reporter for batch:', fileErr);
-                    }
-                }
-            }
+        if (!this.primaryReporter) {
+            console.error('No primary reporter configured');
+            return;
         }
-        else if (this.fileReporter) {
-            try {
-                this.fileReporter.logBatch(logs);
-            }
-            catch (err) {
-                console.error('Error in file reporter for batch:', err);
-            }
+
+        try {
+            console.debug(`Enqueuing batch of ${logs.length} logs via ${this.primaryReporter.name}`);
+            this.primaryReporter.logBatch(logs);
+        }
+        catch (err) {
+            console.error(`Error in primary reporter (${this.primaryReporter.name}) for batch:`, err);
         }
     }
 
     /**
-     * Enqueue a log to be processed
+     * Enqueue a log
      */
     public enqueueLog(logObj: LoggerObject): void {
         if (!this.initialised) {
-            this.initialise()
+            this.initialise();
         }
 
-        if (this.batchingEnabled && this.batchReporter) {
-            try {
-                console.log('Enqueuing single log:', logObj);
-                this.batchReporter.log(logObj)
-            }
-            catch (err) {
-                console.error('Error in batch reporter:', err)
-                
-                if (this.fileReporter) {
-                    try {
-                        this.fileReporter.log(logObj)
-                    }
-                    catch (fileErr) {
-                        console.error('Error in fallback file reporter:', fileErr)
-                    }
-                }
-            }
+        if (!this.primaryReporter) {
+            console.error('No primary reporter configured');
+            return;
         }
-        else if (this.fileReporter) {
-            try {
-                this.fileReporter.log(logObj)
-            }
-            catch (err) {
-                console.error('Error in file reporter:', err)
-            }
+
+        try {
+            console.debug(`Enqueuing single log via ${this.primaryReporter.name}`);
+            this.primaryReporter.log(logObj);
+        }
+        catch (err) {
+            console.error(`Error in primary reporter (${this.primaryReporter.name}):`, err);
         }
     }
 
-    /**
-     * Force flush any pending logs
-     */
     public async flush(): Promise<void> {
         if (!this.initialised) {
-            return
+            return;
         }
 
-        const promises: Promise<void>[] = []
+        const promises = this.allReporters.map(async (reporter) => {
+            try {
+                if (reporter.forceFlush) {
+                    await reporter.forceFlush();
+                }
+            }
+            catch (err) {
+                console.error(`Error flushing ${reporter.name}:`, err);
+            }
+        });
         
-        if (this.batchingEnabled && this.batchReporter) {
-            promises.push(this.batchReporter.forceFlush())
+        await Promise.allSettled(promises);
+    }
+
+    public async destroy(): Promise<void> {
+        if (!this.initialised) {
+            return;
         }
 
-        if (this.fileReporter) {
-            promises.push(this.fileReporter.forceFlush());
-        }
+        const promises = this.allReporters.map(async (reporter) => {
+            try {
+                if (reporter.destroy) {
+                    await reporter.destroy();
+                }
+            }
+            catch (err) {
+                console.error(`Error destroying ${reporter.name}:`, err);
+            }
+        });
         
-        await Promise.all(promises)
+        await Promise.allSettled(promises);
+        
+        this.allReporters = [];
+        this.primaryReporter = undefined;
+        this.initialised = false;
+    }
+
+    public getReporterInfo(): Record<string, any> {
+        return {
+            primary: this.primaryReporter ? this.primaryReporter.name : 'None',
+            reporters: this.allReporters.map(r => r.name)
+        };
     }
 }

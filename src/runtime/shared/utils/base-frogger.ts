@@ -1,12 +1,12 @@
 import { type ConsolaInstance, createConsola } from "consola/core";
-import { generateTraceId, generateSpanId } from "./tracing";
+import { generateTraceId, generateSpanId, generateW3CTraceHeaders } from "./trace-headers";
 
 import type { LogObject } from 'consola';
 import type { LoggerObject } from "../types/log";
 import type { IFroggerLogger } from "../types/frogger";
 import type { FroggerOptions } from "../types/options";
 import type { LogContext } from "../types/log";
-import type { TraceContext } from "../types/trace";
+import type { TraceContext } from "../types/trace-headers";
 import { ConsoleReporter } from "./reporters/console-reporter";
 
 import type { IFroggerReporter } from "../types/frogger-reporter";
@@ -197,27 +197,47 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
      * });
      * ```
      */
-    public getHeaders(customVendor?: string): Record<string, string> {
-        // Create a new trace context with a fresh span ID
-        const currentSpan = this.lastSpanId
-
-        // Dont update the span, so that any subsequent logs
-        // on the client use the initial request span ID as
-        // the parent
-        const newSpanId = generateSpanId();
+    public getHeaders(
+        customVendor?: string
+    ): Record<string, string> {
+        const vendorData = customVendor 
+            ? { frogger: customVendor }
+            : { frogger: generateSpanId() };
         
-        // Format: 00-{traceId}-{spanId}-01 (version-traceId-spanId-flags)
-        // Where flags 01 means "sampled" (trace is being recorded)
-        const traceparent = `00-${this.traceId}-${currentSpan}-01`;
+        const headers = generateW3CTraceHeaders({
+            traceId: this.traceId,
+            parentSpanId: this.lastSpanId || undefined,
+            vendorData
+        });
         
-        // Vendor-specific trace information
-        const tracestate = `frogger=${customVendor || newSpanId}`;
-
         return {
-            traceparent,
-            tracestate
+            traceparent: headers.traceparent,
+            ...(headers.tracestate && { tracestate: headers.tracestate })
         };
     }
+
+
+    // public getHeaders(customVendor?: string): Record<string, string> {
+    //     // Create a new trace context with a fresh span ID
+    //     const currentSpan = this.lastSpanId
+
+    //     // Dont update the span, so that any subsequent logs
+    //     // on the client use the initial request span ID as
+    //     // the parent
+    //     const newSpanId = generateSpanId();
+        
+    //     // Format: 00-{traceId}-{spanId}-01 (version-traceId-spanId-flags)
+    //     // Where flags 01 means "sampled" (trace is being recorded)
+    //     const traceparent = `00-${this.traceId}-${currentSpan}-01`;
+        
+    //     // Vendor-specific trace information
+    //     const tracestate = `frogger=${customVendor || newSpanId}`;
+
+    //     return {
+    //         traceparent,
+    //         tracestate
+    //     };
+    // }
 
     // 0 ----------------------------------------------------
     public fatal(message: string, context?: Object): void {

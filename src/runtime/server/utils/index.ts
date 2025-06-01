@@ -10,7 +10,7 @@ import type { HttpReporterOptions } from "../types/http-reporter";
 
 import type { IFroggerLogger } from "../../shared/types/frogger";
 import type { IReporter } from '../../shared/types/internal-reporter';
-import type { TraceContext } from "../../shared/types/trace";
+import type { TraceContext } from "../../shared/types/trace-headers";
 import type { ServerLoggerOptions } from "../types/logger";
 
 

@@ -1,5 +1,5 @@
 import type { FroggerOptions } from "../../shared/types/options";
-import type { FroggerLogger } from "../../shared/types/frogger";
+import type { IFroggerLogger } from "../../shared/types/frogger";
 
 
 /**
@@ -8,8 +8,4 @@ import type { FroggerLogger } from "../../shared/types/frogger";
  */
 export interface ServerLoggerOptions extends FroggerOptions {
     
-}
-
-
-export interface ServerLogger extends FroggerLogger {
 }

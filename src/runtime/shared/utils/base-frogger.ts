@@ -3,7 +3,7 @@ import { generateTraceId, generateSpanId } from "./tracing";
 
 import type { LogObject } from 'consola';
 import type { LoggerObject } from "../types/log";
-import type { FroggerLogger } from "../types/frogger";
+import type { IFroggerLogger } from "../types/frogger";
 import type { FroggerOptions } from "../types/options";
 import type { LogContext } from "../types/log";
 import type { TraceContext } from "../types/trace";
@@ -11,7 +11,7 @@ import { ConsoleReporter } from "./reporters/console-reporter";
 
 import type { IFroggerReporter } from "../types/frogger-reporter";
 
-export abstract class BaseFroggerLogger implements FroggerLogger {
+export abstract class BaseFroggerLogger implements IFroggerLogger {
     protected consola: ConsolaInstance;
     protected globalContext: LogContext = {};
     protected traceId: string;
@@ -63,14 +63,14 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
     /**
      * Add a custom reporter that receives processed LoggerObject instances
      */
-    addReporter(reporter: IFroggerReporter): void {
+    public addReporter(reporter: IFroggerReporter): void {
         this.customReporters.push(reporter);
     }
 
     /**
      * Remove a custom reporter
      */
-    removeReporter(reporter: IFroggerReporter): void {
+    public removeReporter(reporter: IFroggerReporter): void {
         const index = this.customReporters.indexOf(reporter);
         if (index > -1) {
             this.customReporters.splice(index, 1);
@@ -80,14 +80,14 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
     /**
      * Clear all custom reporters
      */
-    clearReporters(): void {
+    public clearReporters(): void {
         this.customReporters = [];
     }
 
     /**
      * Get the current list of custom reporters
      */
-    getReporters(): readonly IFroggerReporter[] {
+    public getReporters(): readonly IFroggerReporter[] {
         return [...this.customReporters];
     }
     

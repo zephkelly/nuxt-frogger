@@ -9,8 +9,12 @@
 
 <script setup>
 const startFrogger = useFrogger();
+startFrogger.addReporter({
+    log: async(loggerObject) => {
+        console.log('Custom reporter log:', loggerObject);
+    },
+})
 startFrogger.error('Hello from the playground!');
-startFrogger.info('Testing to see if we move from to csr');
 
 
 

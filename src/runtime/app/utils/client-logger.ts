@@ -4,6 +4,7 @@ import { useNuxtApp, useState, useRuntimeConfig } from '#app';
 import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
 import { LogQueueService } from '../services/log-queue';
 
+import type { IFroggerLogger } from '../../shared/types/frogger';
 import type { ClientLoggerOptions } from '../types/logger';
 import type { LogObject } from 'consola/browser';
 import type { LoggerObject } from '../../shared/types/log';
@@ -21,7 +22,7 @@ interface SSRTraceState {
  * Client-side implementation of Frogger
  * Batches logs and sends them to a server endpoint
  */
-export class ClientFrogger extends BaseFroggerLogger {
+export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
     private options: Required<ClientLoggerOptions>;
     protected hasMounted: Ref<boolean>;
     private batchingEnabled = true;

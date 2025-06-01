@@ -43,8 +43,8 @@ export default defineNuxtModule<ModuleOptions>({
             sortingWindowMs: 3000,
         },
         
-        // Set in the 'frogger' property of the public runtime config,
-        // override at runtime using 'NUXT_PUBLIC_FROGGER_'
+        // Set in the public runtime config, can be overridden
+        // at runtime using 'NUXT_PUBLIC_FROGGER_' environment variables
         public: {
             endpoint: '/api/_frogger/logs',
             batch: {

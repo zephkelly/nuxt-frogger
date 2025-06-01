@@ -4,16 +4,17 @@ import { existsSync, createWriteStream, WriteStream } from 'node:fs';
 import { join } from 'node:path';
 
 import type { FileReporterOptions } from '../../types/file-reporter';
-
 import type { LoggerObject } from '~/src/runtime/shared/types/log';
-
+import { BaseReporter } from './base-reporter';
 
 
 /**
  * Reporter that writes logs to local files
  */
-export class FileReporter {
-    private options: Required<FileReporterOptions>;
+export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
+    public readonly name = 'FroggerFileReporter';
+
+    protected options: Required<FileReporterOptions>;
     private currentFileName: string = '';
     private currentFileSize: number = 0;
     private logBuffer: string[] = [];
@@ -24,6 +25,7 @@ export class FileReporter {
     private bufferSize: number = 0;
     
     constructor() {
+        super();
         const config = useRuntimeConfig()
 
         this.options = config.frogger.file
@@ -59,7 +61,7 @@ export class FileReporter {
      * Write a batch of logs directly to file (bypasses internal buffer)
      * Used by BatchReporter to write pre-sorted logs
      */
-    async writeBatch(logs: LoggerObject[]): Promise<void> {
+    override async logBatch(logs: LoggerObject[]): Promise<void> {
         if (logs.length === 0) {
             return;
         }
@@ -93,62 +95,6 @@ export class FileReporter {
     }
 
     /**
-     * Schedule a buffer flush
-     */
-    private scheduleFlush(): void {
-        if (this.flushTimer === null) {
-            this.flushTimer = setTimeout(() => {
-                this.flushTimer = null;
-                this.flush().catch(err => {
-                    console.error('Error during scheduled flush:', err);
-                });
-            }, this.options.flushInterval);
-        }
-    }
-
-    /**
-     * Flush the log buffer to disk
-     */
-    async flush(): Promise<void> {
-        if (this.logBuffer.length === 0) {
-            return;
-        }
-
-        const logsToWrite = [...this.logBuffer];
-        const bufferContent = logsToWrite.join('\n') + '\n';
-        const bufferLength = this.bufferSize;
-        
-        this.logBuffer = [];
-        this.bufferSize = 0;
-        
-        this.writePromise = this.writePromise.then(async () => {
-            try {
-                const fileName = this.getLogFileName();
-                if (fileName !== this.currentFileName || !this.writeStream) {
-                    await this.openNewStream(fileName);
-                    this.currentFileName = fileName;
-                }
-                
-                if (this.currentFileSize + bufferLength > this.options.maxSize && !this.isRotating) {
-                    await this.rotateLogFile(fileName);
-                    return this.writeToFile(bufferContent, bufferLength);
-                }
-                
-                return this.writeToFile(bufferContent, bufferLength);
-            }
-            catch (err) {
-                console.error('Error writing logs to file:', err);
-                this.logBuffer = [...logsToWrite, ...this.logBuffer];
-                this.bufferSize += bufferLength;
-                this.scheduleFlush();
-                throw err;
-            }
-        });
-        
-        return this.writePromise;
-    }
-
-    /**
      * Write content to the current write stream
      */
     private async writeToFile(content: string, contentSize: number): Promise<void> {
@@ -156,7 +102,6 @@ export class FileReporter {
             if (!this.writeStream) {
                 return reject(new Error('No write stream available'));
             }
-            
             const canContinue = this.writeStream.write(content, err => {
                 if (err) {
                     return reject(err);
@@ -281,9 +226,65 @@ export class FileReporter {
     }
 
     /**
+     * Schedule a buffer flush
+     */
+    private scheduleFlush(): void {
+        if (this.flushTimer === null) {
+            this.flushTimer = setTimeout(() => {
+                this.flushTimer = null;
+                this.flush().catch(err => {
+                    console.error('Error during scheduled flush:', err);
+                });
+            }, this.options.flushInterval);
+        }
+    }
+
+    /**
+     * Flush the log buffer to disk
+     */
+    override async flush(): Promise<void> {
+        if (this.logBuffer.length === 0) {
+            return;
+        }
+
+        const logsToWrite = [...this.logBuffer];
+        const bufferContent = logsToWrite.join('\n') + '\n';
+        const bufferLength = this.bufferSize;
+        
+        this.logBuffer = [];
+        this.bufferSize = 0;
+        
+        this.writePromise = this.writePromise.then(async () => {
+            try {
+                const fileName = this.getLogFileName();
+                if (fileName !== this.currentFileName || !this.writeStream) {
+                    await this.openNewStream(fileName);
+                    this.currentFileName = fileName;
+                }
+                
+                if (this.currentFileSize + bufferLength > this.options.maxSize && !this.isRotating) {
+                    await this.rotateLogFile(fileName);
+                    return this.writeToFile(bufferContent, bufferLength);
+                }
+                
+                return this.writeToFile(bufferContent, bufferLength);
+            }
+            catch (err) {
+                console.error('Error writing logs to file:', err);
+                this.logBuffer = [...logsToWrite, ...this.logBuffer];
+                this.bufferSize += bufferLength;
+                this.scheduleFlush();
+                throw err;
+            }
+        });
+        
+        return this.writePromise;
+    }
+
+    /**
      * Force flush any pending operations and close streams
      */
-    async forceFlush(): Promise<void> {
+    override async forceFlush(): Promise<void> {
         if (this.flushTimer) {
             clearTimeout(this.flushTimer);
             this.flushTimer = null;

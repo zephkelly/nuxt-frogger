@@ -1,27 +1,52 @@
 import { defu } from 'defu';
 import { useRuntimeConfig } from '#imports';
 
+import { BaseReporter } from './base-reporter';
 import type { BatchReporterOptions } from '../../types/batch-reporter';
 import type { LoggerObject } from '~/src/runtime/shared/types/log';
-
+import type { IReporter } from '~/src/runtime/shared/types/internal-reporter';
 
 
 /**
  * Reporter that batches logs before sending them to a destination
  */
-export class BatchReporter {
+export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> {
+    public readonly name = 'FroggerBatchReporter';
+
     private logs: LoggerObject[] = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
-    private options: Required<BatchReporterOptions>;
+    protected options: Required<BatchReporterOptions>;
     private lastFlushTime: number = 0;
     private flushing: boolean = false;
     private retries: Map<string, number> = new Map();
     private flushPromise: Promise<void> = Promise.resolve();
-    
+
     constructor(options: BatchReporterOptions) {
+        super();
         const config = useRuntimeConfig()
 
-        this.options = defu(options, config.public.frogger.batch) as Required<BatchReporterOptions>;
+        const defaultOptions: BatchReporterOptions = {
+            downstreamReporters: [],
+            onFlush: async (logs) => {
+                if (this.options.downstreamReporters.length === 0) {
+                    return;
+                }
+                
+                const promises = this.options.downstreamReporters.map(async (reporter) => {
+                    try {
+                        await reporter.logBatch(logs);
+                    }
+                    catch (err) {
+                        console.error(`Error in downstream reporter ${reporter.name}:`, err);
+                        throw err;
+                    }
+                });
+                
+                await Promise.all(promises);
+            }
+        };
+        
+        this.options = defu(options, defaultOptions, config.public.frogger.batch) as Required<BatchReporterOptions>;
     }
     
     /**
@@ -30,7 +55,7 @@ export class BatchReporter {
     log(logObj: LoggerObject): void {
         const processedLogs = this.processLogs([logObj]);
         if (processedLogs.length === 0) {
-            return;
+            return; // Log was filtered out
         }
         
         this.addLogsToBuffer(processedLogs);
@@ -39,7 +64,7 @@ export class BatchReporter {
     /**
      * Handle a batch of incoming logs and add them to the batch
      */
-    logBatch(logs: LoggerObject[]): void {
+    override logBatch(logs: LoggerObject[]): void {
         if (logs.length === 0) {
             return;
         }
@@ -128,7 +153,59 @@ export class BatchReporter {
         
         this.logs.splice(left, 0, log);
     }
-    
+
+
+
+    // Downstream reporters ------------------------------------------------
+    public addDownstreamReporter(reporter: IReporter): void {
+        this.options.downstreamReporters.push(reporter);
+    }
+
+    public removeDownstreamReporter(reporter: IReporter): void {
+        this.options.downstreamReporters = this.options.downstreamReporters.filter(r => r !== reporter);
+    }
+
+    public getDownstreamReporters(): IReporter[] {
+        return this.options.downstreamReporters;
+    }
+
+    // Flush handling ------------------------------------------------------
+
+    /**
+     * Handle a failed flush attempt with retry logic
+     */
+    private handleFlushFailure(batchId: string, logs: LoggerObject[]): void {
+        const retryCount = this.retries.get(batchId) || 0;
+        
+        if (retryCount >= this.options.maxRetries) {
+            console.error(`Maximum retry attempts (${this.options.maxRetries}) reached for batch ${batchId}. Dropping ${logs.length} logs.`);
+            this.retries.delete(batchId);
+            return;
+        }
+        
+        this.retries.set(batchId, retryCount + 1);
+        
+        const backoffDelay = this.options.retryDelay * Math.pow(2, retryCount);
+        
+        console.warn(`Scheduling retry #${retryCount + 1} for batch ${batchId} in ${backoffDelay}ms`);
+        
+        setTimeout(async () => {
+        if (!this.retries.has(batchId)) {
+            return;
+        }
+        
+        try {
+            await this.options.onFlush(logs);
+            console.log(`Retry #${retryCount + 1} for batch ${batchId} succeeded`);
+            this.retries.delete(batchId);
+        }
+        catch (error) {
+            console.error(`Retry #${retryCount + 1} for batch ${batchId} failed:`, error);
+            this.handleFlushFailure(batchId, logs);
+        }
+        }, backoffDelay);
+    }
+
     /**
      * Schedule a flush operation
      */
@@ -151,7 +228,7 @@ export class BatchReporter {
     /**
      * Manually flush logs
      */
-    async flush(): Promise<void> {
+    override async flush(): Promise<void> {
         if (this.flushing) {
             return;
         }
@@ -206,47 +283,22 @@ export class BatchReporter {
             }
         }
     }
-    
-    /**
-     * Handle a failed flush attempt with retry logic
-     */
-    private handleFlushFailure(batchId: string, logs: LoggerObject[]): void {
-        const retryCount = this.retries.get(batchId) || 0;
-        
-        if (retryCount >= this.options.maxRetries) {
-            console.error(`Maximum retry attempts (${this.options.maxRetries}) reached for batch ${batchId}. Dropping ${logs.length} logs.`);
-            this.retries.delete(batchId);
-            return;
-        }
-        
-        this.retries.set(batchId, retryCount + 1);
-        
-        const backoffDelay = this.options.retryDelay * Math.pow(2, retryCount);
-        
-        console.warn(`Scheduling retry #${retryCount + 1} for batch ${batchId} in ${backoffDelay}ms`);
-        
-        setTimeout(async () => {
-        if (!this.retries.has(batchId)) {
-            return;
-        }
-        
-        try {
-            await this.options.onFlush(logs);
-            console.log(`Retry #${retryCount + 1} for batch ${batchId} succeeded`);
-            this.retries.delete(batchId);
-        }
-        catch (error) {
-            console.error(`Retry #${retryCount + 1} for batch ${batchId} failed:`, error);
-            this.handleFlushFailure(batchId, logs);
-        }
-        }, backoffDelay);
-    }
   
     /**
      * Force immediate flush and wait for completion
      */
-    async forceFlush(): Promise<void> {
+    override async forceFlush(): Promise<void> {
         await this.flushPromise;
         return this.flush();
     }
+}
+
+export function createBatchReporter(
+    downstreamReporters: IReporter[], 
+    options: Omit<BatchReporterOptions, 'onFlush' | 'downstreamReporters'> = {}
+): BatchReporter {
+    return new BatchReporter({
+        ...options,
+        downstreamReporters
+    });
 }

@@ -35,6 +35,7 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
                 
                 const promises = this.options.downstreamReporters.map(async (reporter) => {
                     try {
+                        console.log(`Flushing ${logs.length} logs to downstream reporter: ${reporter.name}`);
                         await reporter.logBatch(logs);
                     }
                     catch (err) {
@@ -292,4 +293,14 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         await this.flushPromise;
         return this.flush();
     }
+}
+
+export function createBatchReporter(
+    downstreamReporters: IReporter[], 
+    options: Omit<BatchReporterOptions, 'onFlush' | 'downstreamReporters'> = {}
+): BatchReporter {
+    return new BatchReporter({
+        ...options,
+        downstreamReporters
+    });
 }

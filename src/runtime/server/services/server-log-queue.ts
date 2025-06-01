@@ -1,4 +1,4 @@
-import { BatchReporter } from '../utils/reporters/batch-reporter'
+import { createBatchReporter } from '../utils/reporters/batch-reporter'
 import { FileReporter } from '../utils/reporters/file-reporter'
 
 import type { IReporter } from '../../shared/types/reporter'
@@ -55,31 +55,20 @@ export class ServerLogQueueService {
         //@ts-expect-error
         this.batchingEnabled = froggerModuleOptions.batch !== false;
 
+        const downstreamReporters: IReporter[] = [];
+        
         const fileReporter = new FileReporter();
+        downstreamReporters.push(fileReporter);
         this.allReporters.push(fileReporter);
+
         
         if (this.batchingEnabled) {
-            const batchReporter = new BatchReporter({
-                onFlush: async (logs) => {
-                    if (!logs || !logs.length) return;
-                    
-                    try {
-                        await fileReporter.logBatch(logs);
-                    }
-                    catch (err) {
-                        console.error('Error writing batch to file:', err);
-                        throw err;
-                    }
-                }
-            });
-            
+            const batchReporter = createBatchReporter(downstreamReporters);
             this.allReporters.push(batchReporter);
             this.primaryReporter = batchReporter;
         }
         else {
             this.primaryReporter = fileReporter;
-            
-            console.debug('Batching disabled: FileReporter (direct)');
         }
     }
 
@@ -103,7 +92,6 @@ export class ServerLogQueueService {
         }
 
         try {
-            console.debug(`Enqueuing batch of ${logs.length} logs via ${this.primaryReporter.name}`);
             this.primaryReporter.logBatch(logs);
         }
         catch (err) {
@@ -125,7 +113,6 @@ export class ServerLogQueueService {
         }
 
         try {
-            console.debug(`Enqueuing single log via ${this.primaryReporter.name}`);
             this.primaryReporter.log(logObj);
         }
         catch (err) {

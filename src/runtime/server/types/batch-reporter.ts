@@ -10,7 +10,7 @@ export interface BatchReporterOptions extends BatchOptions {
     /**
      * Function to call when flushing logs
      */
-    onFlush: (logs: LoggerObject[]) => Promise<void>;
+    onFlush?: (logs: LoggerObject[]) => Promise<void>;
 
     /**
      * Log levels to include (undefined means all levels)

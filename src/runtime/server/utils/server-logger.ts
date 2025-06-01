@@ -43,17 +43,16 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         }
 
         return {
-            type: logObj.type,
-            level: logObj.level,
-            date: logObj.date,
-            trace: currentTraceContext,
-            context: {
+            time: logObj.date.getTime(),
+            lvl: logObj.level,
+            msg: logObj.args?.[0],
+            ctx: {
                 env: 'server',
-                message: logObj.args?.[0],
+                type: logObj.type,
                 ...this.globalContext,
                 ...logObj.args?.slice(1)[0],
             },
-            timestamp: Date.now()
+            trace: currentTraceContext,
         };
     }
 

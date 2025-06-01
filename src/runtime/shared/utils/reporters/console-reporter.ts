@@ -1,41 +1,33 @@
 import type { LogObject } from 'consola';
-import type { LoggerObject } from "../../types/log";
+// import type { IFroggerReporter } from '../../types/frogger-reporter';
 
 
 
-/**
- * Custom console formatter that works in both Node.js and browser environments
- */
-export class ConsoleReporter {
+export class ConsoleReporter /*implements IFroggerReporter*/ {
     private isServer: boolean;
     
     constructor() {
         this.isServer = typeof window === 'undefined';
     }
     
-    /**
-     * Format and output a log to the appropriate console
-     */
     log(logObj: LogObject): void {
         const message = logObj.args?.[0] || '';
         const context = logObj.args?.slice(1);
-        const timestamp = new Date().toISOString();
-        
+        const timestamp = logObj.date.toISOString();
+
         if (this.isServer) {
             this.logToNodeConsole(logObj.type, message, context, timestamp);
-        } else {
+        }
+        else {
             this.logToBrowserConsole(logObj.type, message, context, timestamp);
         }
     }
 
-    
+
     private hasContext(context: any[]): boolean {
         return context && context.length > 0 && context[0] !== undefined;
     }
     
-    /**
-     * Log to Node.js console with colors and formatting
-     */
     private logToNodeConsole(type: string, message: string, context: any[], timestamp: string): void {
         const colors = {
             reset: '\x1b[0m',
@@ -97,10 +89,6 @@ export class ConsoleReporter {
         }
     }
 
-    
-    /**
-     * Log to browser console with colors and formatting
-     */
     private logToBrowserConsole(type: string, message: string, context: any[], timestamp: string): void {
         const typeStyles = {
             error: 'color: #ff6b6b; font-weight: bold;',

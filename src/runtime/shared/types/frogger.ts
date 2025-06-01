@@ -3,27 +3,7 @@ import type { IFroggerReporter } from "./frogger-reporter";
 
 
 export interface IFroggerLogger {
-    /**
-     * Log a fatal-level message
-     * @param message The primary message to log
-     * @param context Additional context to include
-     */
-    log(message: string, context?: Object): void;
-
-    /**
-     * Log an info-level message
-     * @param message The primary message to log
-     * @param context Additional context to include
-     */
-    info(message: string, context?: Object): void;
-    
-    /**
-     * Log a warning-level message
-     * @param message The primary message to log
-     * @param context Additional context to include
-    */
-    warn(message: string, context?: Object): void;
-   
+    // 0 ------------------------------------------
     /**
     * Log an error-level message
     * @param message The primary message to log
@@ -37,8 +17,63 @@ export interface IFroggerLogger {
      * @param context Additional context to include
      */
     fatal(message: string, context?: Object): void;
+
+
+    // 1 ------------------------------------------
+    /**
+     * Log a warning-level message
+     * @param message The primary message to log
+     * @param context Additional context to include
+    */
+    warn(message: string, context?: Object): void;
+
+
+    // 2 ------------------------------------------
+    /**
+     * Log a fatal-level message
+     * @param message The primary message to log
+     * @param context Additional context to include
+     */
+    log(message: string, context?: Object): void;
+
+
+    // 3 ------------------------------------------
+    /**
+     * Log an info-level message
+     * @param message The primary message to log
+     * @param context Additional context to include
+     */
+    info(message: string, context?: Object): void;
+
+    /**
+     * Log a success-level message
+     * @param message The primary message to log
+     * @param context Additional context to include
+     */
+    success(message: string, context?: Object): void;
+
+    /**
+     * Log a fail-level message
+     * @param message The primary message to log
+     * @param context Additional context to include
+     */
+    fail(message: string, context?: Object): void;
+
+    /**
+     * Log a ready-level message
+     * @param message The primary message to log
+     * @param context Additional context to include
+     */
+    ready(message: string, context?: Object): void;
+
+    /**
+     * Log a start-level message
+     * @param message The primary message to log
+     * @param context Additional context to include
+     */
+    start(message: string, context?: Object): void;
     
-    
+
     /**
      * Log a debug-level message
      * @param message The primary message to log
@@ -47,11 +82,11 @@ export interface IFroggerLogger {
     debug(message: string, context?: Object): void;
 
     /**
-     * Log a success-level message
+     * Log a trace-level message
      * @param message The primary message to log
      * @param context Additional context to include
      */
-    success(message: string, context?: Object): void;
+    trace(message: string, context?: Object): void;
 
     /**
      * Add a custom reporter to handle log messages

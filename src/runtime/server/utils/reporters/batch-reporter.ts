@@ -87,7 +87,7 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         for (const log of logs) {
             if (this.options.levels && this.options.levels.length > 0) {
 
-                if (!this.options.levels.includes(log.level)) {
+                if (!this.options.levels.includes(log.lvl)) {
                     continue;
                 }
             }
@@ -120,14 +120,14 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
     private handleMaxSizeReached(): void {
         const now = Date.now();
         const cutoffTime = now - this.options.sortingWindowMs;
-        const logsToFlush = this.logs.filter(log => log.timestamp <= cutoffTime);
+        const logsToFlush = this.logs.filter(log => log.time <= cutoffTime);
         
         if (logsToFlush.length > 0) {
             this.scheduleFlush(0);
         }
         else {
             const oldestLog = this.logs[0];
-            const waitTime = Math.max(0, (oldestLog.timestamp + this.options.sortingWindowMs) - now);
+            const waitTime = Math.max(0, (oldestLog.time + this.options.sortingWindowMs) - now);
             this.scheduleFlush(waitTime);
         }
     }
@@ -141,7 +141,7 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         
         while (left < right) {
             const mid = Math.floor((left + right) / 2);
-            if (this.logs[mid].timestamp <= log.timestamp) {
+            if (this.logs[mid].time <= log.time) {
                 left = mid + 1;
             }
             else {
@@ -244,7 +244,7 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         
         try {
             const cutoffTime = Date.now() - this.options.sortingWindowMs;
-            const logsToFlush = this.logs.filter(log => log.timestamp <= cutoffTime);
+            const logsToFlush = this.logs.filter(log => log.time <= cutoffTime);
             
             if (logsToFlush.length === 0) {
                 if (this.logs.length > 0) {
@@ -253,7 +253,7 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
                 return;
             }
             
-            this.logs = this.logs.filter(log => log.timestamp > cutoffTime);
+            this.logs = this.logs.filter(log => log.time > cutoffTime);
             
             const batchId = `batch-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
             

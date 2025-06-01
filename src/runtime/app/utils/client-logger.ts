@@ -111,16 +111,16 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             (import.meta.client && this.hasMounted.value) ? 'client' : 'csr';
 
         return {
-            type: logObj.type,
-            level: logObj.level,
-            trace: traceContext,
-            context: {
+            time: logObj.date.getTime(),
+            lvl: logObj.level,
+            msg: logObj.args?.[0],
+            ctx: {
                 env: env,
-                message: logObj.args?.[0],
+                type: logObj.type,
                 ...this.globalContext,
                 ...logObj.args?.slice(1)[0],
             },
-            timestamp: logObj.date.getTime(),
+            trace: traceContext,
         };
     }
 

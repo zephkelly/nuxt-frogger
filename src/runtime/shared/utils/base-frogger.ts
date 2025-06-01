@@ -219,9 +219,63 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         };
     }
 
+    // 0 ----------------------------------------------------
+    public fatal(message: string, context?: Object): void {
+        this.consola.fatal(message,
+            context,
+        )
+    }
     
+    public error(message: string, context?: Object): void {
+        this.consola.error(message,
+            context,
+        )
+    }
+    
+    
+    // 1 ----------------------------------------------------
+    public warn(message: string, context?: Object): void {
+        this.consola.warn(message,
+            context,
+        )
+    }
+    
+
+    // 2 ----------------------------------------------------
+    public log(message: string, context?: Object): void {
+        this.consola.log(message,
+            context,
+        )
+    }
+
+    
+    // 3 ----------------------------------------------------
+    public info(message: string, context?: Object): void {
+        this.consola.info(message,
+            context,
+        );
+    }
+
     public success(message: string, context?: Object): void {
         this.consola.success(message,
+            context,
+        )
+    }
+
+    public fail(message: string, context?: Object): void {
+        this.consola.fail(message,
+            context,
+        )
+    }
+
+    public ready(message: string, context?: Object): void {
+        this.consola.ready(message,
+            context,
+        )
+    }
+
+    public start(message: string, context?: Object): void {
+        this.consola.start(message,
             context,
         )
     }
@@ -232,32 +286,8 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         )
     }
 
-    public log(message: string, context?: Object): void {
-        this.consola.log(message,
-            context,
-        )
-    }
-    
-    public info(message: string, context?: Object): void {
-        this.consola.info(message,
-            context,
-        );
-    }
-    
-    public warn(message: string, context?: Object): void {
-        this.consola.warn(message,
-            context,
-        )
-    }
-
-    public fatal(message: string, context?: Object): void {
-        this.consola.fatal(message,
-            context,
-        )
-    }
-    
-    public error(message: string, context?: Object): void {
-        this.consola.error(message,
+    public trace(message: string, context?: Object): void {
+        this.consola.trace(message,
             context,
         )
     }

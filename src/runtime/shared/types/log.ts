@@ -4,15 +4,15 @@ import type { TraceContext } from "./trace";
 
 
 export interface LogContext {
-    message?: string;
+    type?: LogType;
     env?: 'ssr' | 'client' | 'server';
     [key: string]: any
 }
 
 export interface LoggerObject {
-    type: LogType;
-    level: number;
+    time: number;
+    lvl: number;
+    msg?: string;
+    ctx: LogContext;
     trace: TraceContext;
-    context: LogContext;
-    timestamp: number;
 }

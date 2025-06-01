@@ -16,37 +16,33 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
     private madeFirstLog: boolean = false;
     private traceContext: TraceContext | null = null;
     
+    
     constructor(options: ServerLoggerOptions, traceContext: TraceContext | null = null) {
         super(options);
-        this.options = options;
 
+        this.options = options;
         this.logQueue = ServerLogQueueService.getInstance();
 
         this.traceContext = traceContext;
     }
 
-    /**
-     * Process a log entry from Consola
-     */
-    protected processLog(logObj: LogObject): void {
+    protected createLoggerObject(logObj: LogObject): LoggerObject {
         if (!logObj || typeof logObj !== 'object') {
             console.warn('Invalid log object:', logObj);
-            return;
+            throw new Error('Invalid log object provided');
         }
 
         let currentTraceContext: TraceContext | null = null;
-
         if (this.madeFirstLog || this.traceContext === null) {
             currentTraceContext = this.generateTraceContext();
-        }
-        // This will only be called once on first initialisation so long as a
-        // trace context is provided. This is used to link traces from the client
-        // to the server.
-        else {
+        } else {
+            // This will only be called once on first initialisation so long as a
+            // trace context is provided. This is used to link traces from the client
+            // to the server.
             currentTraceContext = this.generateTraceContext(this.traceContext);
         }
 
-        const froggerLoggerObject: LoggerObject = {
+        return {
             type: logObj.type,
             level: logObj.level,
             date: logObj.date,
@@ -59,17 +55,16 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             },
             timestamp: Date.now()
         };
-        
-        this.logQueue.enqueueLog(froggerLoggerObject);
+    }
 
+    protected processLoggerObject(loggerObject: LoggerObject): void {
+        this.logQueue.enqueueLog(loggerObject);
+        
         if (!this.madeFirstLog) {
             this.madeFirstLog = true;
         }
     }
 
-    /**
-     * Flush any pending logs
-     */
     async flush(): Promise<void> {
         await this.logQueue.flush();
     }

@@ -1,7 +1,7 @@
 import { createBatchReporter } from '../utils/reporters/batch-reporter'
 import { FileReporter } from '../utils/reporters/file-reporter'
 
-import type { IReporter } from '../../shared/types/reporter'
+import type { IReporter } from '../../shared/types/internal-reporter'
 import type { LoggerObject } from '../../shared/types/log'
 import type { LoggerObjectBatch } from '../../shared/types/batch'
 

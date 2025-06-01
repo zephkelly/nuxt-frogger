@@ -1,6 +1,6 @@
 import type { LoggerObject } from '../../shared/types/log';
 import type { BatchOptions } from '../../shared/types/batch';
-import type { IReporter } from '~/src/runtime/shared/types/reporter';
+import type { IReporter } from '~/src/runtime/shared/types/internal-reporter';
 
 
 

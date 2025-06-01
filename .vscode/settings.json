@@ -6,6 +6,8 @@
     "initialisation",
     "initialised",
     "nuxt",
-    "traceparent"
+    "respose",
+    "traceparent",
+    "tracestate"
 ]
 }

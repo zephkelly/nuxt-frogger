@@ -2,12 +2,14 @@ import { type ConsolaInstance, createConsola } from "consola/core";
 import { generateTraceId, generateSpanId } from "./tracing";
 
 import type { LogObject } from 'consola';
+import type { LoggerObject } from "../types/log";
 import type { FroggerLogger } from "../types/frogger";
 import type { FroggerOptions } from "../types/options";
 import type { LogContext } from "../types/log";
 import type { TraceContext } from "../types/trace";
 import { ConsoleReporter } from "./reporters/console-reporter";
 
+import type { IFroggerReporter } from "../types/frogger-reporter";
 
 export abstract class BaseFroggerLogger implements FroggerLogger {
     protected consola: ConsolaInstance;
@@ -17,6 +19,9 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
     protected level: number;
 
     private consoleReporter: ConsoleReporter | undefined;
+
+    private customReporters: IFroggerReporter[] = [];
+
     
     constructor(options: FroggerOptions = {}) {
         this.traceId = generateTraceId();
@@ -31,8 +36,8 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
         });
         
         this.consola.addReporter({
-            log: (logObj: LogObject) => {
-                this.processLog(logObj);
+            log: async (logObj: LogObject) => {
+                await this.handleLog(logObj);
             }
         });
 
@@ -41,7 +46,8 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
                 log: (logObj: LogObject) => {
                     try {
                         this.consoleReporter?.log(logObj);
-                    } catch (err) {
+                    }
+                    catch (err) {
                         console.log(`[${logObj.type.toUpperCase()}]`, logObj.args?.[0] || '', ...logObj.args?.slice(1) || []);
                     }
                 }
@@ -53,11 +59,74 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
             this.globalContext = { ...options.context };
         }
     }
-    
+
     /**
-     * Process a log entry - abstract method to be implemented by subclasses
+     * Add a custom reporter that receives processed LoggerObject instances
      */
-    protected abstract processLog(logObj: LogObject): void;
+    addReporter(reporter: IFroggerReporter): void {
+        this.customReporters.push(reporter);
+    }
+
+    /**
+     * Remove a custom reporter
+     */
+    removeReporter(reporter: IFroggerReporter): void {
+        const index = this.customReporters.indexOf(reporter);
+        if (index > -1) {
+            this.customReporters.splice(index, 1);
+        }
+    }
+
+    /**
+     * Clear all custom reporters
+     */
+    clearReporters(): void {
+        this.customReporters = [];
+    }
+
+    /**
+     * Get the current list of custom reporters
+     */
+    getReporters(): readonly IFroggerReporter[] {
+        return [...this.customReporters];
+    }
+    
+    private async handleLog(logObj: LogObject): Promise<void> {
+        try {
+            // Create the processed LoggerObject
+            const loggerObject = await this.createLoggerObject(logObj);
+            
+            // Emit to all custom reporters
+            await this.emitToReporters(loggerObject);
+            
+            // Handle implementation-specific processing
+            await this.processLoggerObject(loggerObject);
+        }
+        catch (error) {
+            console.error('Error in log handling pipeline:', error);
+        }
+    }
+
+    /**
+     * Emit LoggerObject to all custom reporters
+     */
+    private async emitToReporters(loggerObject: LoggerObject): Promise<void> {
+        const reporterPromises = this.customReporters.map(async (reporter) => {
+            try {
+                await reporter.log(loggerObject);
+            }
+            catch (error) {
+                console.error('Error in custom reporter:', error);
+            }
+        });
+        
+        await Promise.all(reporterPromises);
+    }
+
+    protected abstract createLoggerObject(logObj: LogObject): LoggerObject | Promise<LoggerObject>;
+
+    protected abstract processLoggerObject(loggerObject: LoggerObject): void | Promise<void>;
+
 
     protected generateTraceContext(suppliedTraceContext?: TraceContext): TraceContext {
         if (suppliedTraceContext) {
@@ -83,6 +152,15 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
         this.lastSpanId = newSpanId;
         
         return traceContext;
+    }
+ 
+    /**
+     * Set the trace ID and last span ID for this logger
+     * (Used internally for SSR-CSR continuity)
+     */
+    protected setTraceContext(traceId: string, parentSpanId: string | null = null): void {
+        this.traceId = traceId;
+        this.lastSpanId = parentSpanId;
     }
 
     /**
@@ -141,52 +219,44 @@ export abstract class BaseFroggerLogger implements FroggerLogger {
         };
     }
 
-    /**
-     * Set the trace ID and last span ID for this logger
-     * (Used internally for SSR-CSR continuity)
-     */
-    protected setTraceContext(traceId: string, parentSpanId: string | null = null): void {
-        this.traceId = traceId;
-        this.lastSpanId = parentSpanId;
-    }
     
-    success(message: string, context?: Object): void {
+    public success(message: string, context?: Object): void {
         this.consola.success(message,
             context,
         )
     }
     
-    debug(message: string, context?: Object): void {
+    public debug(message: string, context?: Object): void {
         this.consola.debug(message,
             context,
         )
     }
 
-    log(message: string, context?: Object): void {
+    public log(message: string, context?: Object): void {
         this.consola.log(message,
             context,
         )
     }
     
-    info(message: string, context?: Object): void {
+    public info(message: string, context?: Object): void {
         this.consola.info(message,
             context,
         );
     }
     
-    warn(message: string, context?: Object): void {
+    public warn(message: string, context?: Object): void {
         this.consola.warn(message,
             context,
         )
     }
 
-    fatal(message: string, context?: Object): void {
+    public fatal(message: string, context?: Object): void {
         this.consola.fatal(message,
             context,
         )
     }
     
-    error(message: string, context?: Object): void {
+    public error(message: string, context?: Object): void {
         this.consola.error(message,
             context,
         )

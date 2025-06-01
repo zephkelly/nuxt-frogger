@@ -1,4 +1,4 @@
-import type { IReporter } from "~/src/runtime/shared/types/reporter"
+import type { IReporter } from "~/src/runtime/shared/types/internal-reporter"
 import type { LoggerObject } from "~/src/runtime/shared/types/log"
 
 

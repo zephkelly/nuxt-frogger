@@ -89,8 +89,39 @@ export class ClientFrogger extends BaseFroggerLogger {
             }
 
             // For all other client instances, we keep the new randomly generated trace ID
-            // from the BaseFroggerLogger constructor (no action needed)
         }
+    }
+
+    /**
+     * Create LoggerObject from Consola's LogObject
+     */
+    protected async createLoggerObject(logObj: LogObject): Promise<LoggerObject> {
+        const traceContext = this.generateTraceContext();
+
+        if (import.meta.server) {
+            // On server: update the last server span ID
+            this.ssrTraceState.value = {
+                ...this.ssrTraceState.value,
+                lastServerSpanId: this.lastSpanId
+            };
+        }
+
+        const env = (import.meta.server) ? 'ssr' :
+            (import.meta.client && this.hasMounted.value) ? 'client' : 'csr';
+
+        return {
+            type: logObj.type,
+            level: logObj.level,
+            date: logObj.date,
+            trace: traceContext,
+            context: {
+                env: env,
+                message: logObj.args?.[0],
+                ...this.globalContext,
+                ...logObj.args?.slice(1)[0],
+            },
+            timestamp: logObj.date.getTime(),
+        };
     }
 
     /**
@@ -120,63 +151,33 @@ export class ClientFrogger extends BaseFroggerLogger {
     /**
      * Process a log entry from Consola
      */
-    protected async processLog(logObj: LogObject): Promise<void> {
-        const traceContext = this.generateTraceContext();
-
-        if (import.meta.server) {
-            // On server: update the last server span ID
-            this.ssrTraceState.value = {
-                ...this.ssrTraceState.value,
-                lastServerSpanId: this.lastSpanId
-            };
-        }
-
-        const env = (import.meta.server) ? 'ssr' :
-            (import.meta.client && this.hasMounted.value) ? 'client' : 'csr';
-
-        const froggerLoggerObject: LoggerObject = {
-            type: logObj.type,
-            level: logObj.level,
-            
-            date: logObj.date,
-
-            trace: traceContext,
-
-            context: {
-                env: env,
-                message: logObj.args?.[0],
-                ...this.globalContext,
-                ...logObj.args?.slice(1)[0],
-            },
-            timestamp: logObj.date.getTime(),
-        }
-        
+    protected async processLoggerObject(loggerObject: LoggerObject): Promise<void> {
         if (import.meta.client) {
             if (this.batchingEnabled) {
                 const nuxtApp = useNuxtApp();
                 const logQueue = nuxtApp.$logQueue as LogQueueService;
-                logQueue.enqueueLog(froggerLoggerObject);
-            } else {
-                await this.sendLogImmediately(froggerLoggerObject);
+                logQueue.enqueueLog(loggerObject);
+            }
+            else {
+                await this.sendLogImmediately(loggerObject);
             }
         }
         else {
+            // Server-side: send immediately
             const batch: LoggerObjectBatch = {
-                logs: [froggerLoggerObject],
+                logs: [loggerObject],
                 app: {
                     name: 'unknown',
                     version: 'unknown'
                 }
             };
 
-            // Immediately send the log batch to the server while we are on the server
-            // to prevent any loss of logs
-            if (!this.options.endpoint) return;
-
-            await $fetch(this.options.endpoint, {
-                method: 'POST',
-                body: batch
-            });
+            if (this.options.endpoint) {
+                await $fetch(this.options.endpoint, {
+                    method: 'POST',
+                    body: batch
+                });
+            }
         }
     }
 }

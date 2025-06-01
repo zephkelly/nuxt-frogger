@@ -67,7 +67,7 @@ export class ServerLogQueueService {
                     try {
                         if (this.fileReporter) {
                             try {
-                                await this.fileReporter.writeBatch(logs)
+                                await this.fileReporter.logBatch(logs)
                             }
                             catch (err) {
                                 console.error('Error writing log to file:', err)
@@ -112,7 +112,7 @@ export class ServerLogQueueService {
                 
                 if (this.fileReporter) {
                     try {
-                        this.fileReporter.writeBatch(logs)
+                        this.fileReporter.logBatch(logs)
                     }
                     catch (fileErr) {
                         console.error('Error in fallback file reporter for batch:', fileErr);
@@ -122,7 +122,7 @@ export class ServerLogQueueService {
         }
         else if (this.fileReporter) {
             try {
-                this.fileReporter.writeBatch(logs);
+                this.fileReporter.logBatch(logs);
             }
             catch (err) {
                 console.error('Error in file reporter for batch:', err);

@@ -21,6 +21,7 @@ export class BatchReporter {
     constructor(options: BatchReporterOptions) {
         const config = useRuntimeConfig()
 
+        
         this.options = defu(options, config.public.frogger.batch) as Required<BatchReporterOptions>;
     }
     
@@ -30,7 +31,7 @@ export class BatchReporter {
     log(logObj: LoggerObject): void {
         const processedLogs = this.processLogs([logObj]);
         if (processedLogs.length === 0) {
-            return;
+            return; // Log was filtered out
         }
         
         this.addLogsToBuffer(processedLogs);
@@ -249,4 +250,44 @@ export class BatchReporter {
         await this.flushPromise;
         return this.flush();
     }
+}
+
+/**
+ * Create a batch reporter for sending logs to a REST API endpoint
+ */
+export function createHttpBatchReporter(
+    url: string, 
+    options: Omit<BatchReporterOptions, 'onFlush'> & {
+        headers?: Record<string, string>;
+        method?: string;
+        timeout?: number;
+    } = {}
+): BatchReporter {
+    return new BatchReporter({
+        ...options,
+        async onFlush(logs) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                controller.abort();
+            }, options.timeout || 10000);
+            
+            try {
+                const response = await $fetch(url, {
+                    method: 'POST',
+                    body: { logs },
+                    signal: controller.signal
+                });
+            }
+            catch (error: any) {
+                if (error.name === 'AbortError') {
+                    console.error('Request timed out');
+                } else {
+                    console.error('Failed to send logs:', error);
+                }
+            }
+            finally {
+                clearTimeout(timeoutId);
+            }
+        }
+    });
 }

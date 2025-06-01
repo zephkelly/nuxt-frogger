@@ -12,7 +12,7 @@ import { BaseReporter } from './base-reporter';
  * Reporter that writes logs to local files
  */
 export class FileReporter extends BaseReporter {
-    name = 'FroggerFileReporter';
+    public readonly name = 'FroggerFileReporter';
 
     protected options: Required<FileReporterOptions>;
     private currentFileName: string = '';

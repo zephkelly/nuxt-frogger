@@ -5,7 +5,6 @@ import type { LoggerObject } from "~/src/runtime/shared/types/log"
 
 export abstract class BaseReporter implements IReporter {
     abstract name: string
-    protected abstract options: Record<string, any>
     
     abstract log(logObj: LoggerObject): Promise<void> | void
     
@@ -18,8 +17,7 @@ export abstract class BaseReporter implements IReporter {
     async flush(): Promise<void> { }
 
     /**
-     * Force flush any pending logs, allows reporters to perform other operations
-     * before final flush. This is an internal function used within the server
+     * This is an internal function used within the server
      * log queue service
      */
     async forceFlush(): Promise<void> {

@@ -102,7 +102,6 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
             if (!this.writeStream) {
                 return reject(new Error('No write stream available'));
             }
-            console.log(`Writing ${contentSize} bytes to file: ${this.currentFileName}`);
             const canContinue = this.writeStream.write(content, err => {
                 if (err) {
                     return reject(err);

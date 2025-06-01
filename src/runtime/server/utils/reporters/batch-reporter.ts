@@ -29,13 +29,11 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
             downstreamReporters: [],
             onFlush: async (logs) => {
                 if (this.options.downstreamReporters.length === 0) {
-                    console.warn('BatchReporter has no downstream reporters and no custom onFlush handler');
                     return;
                 }
                 
                 const promises = this.options.downstreamReporters.map(async (reporter) => {
                     try {
-                        console.log(`Flushing ${logs.length} logs to downstream reporter: ${reporter.name}`);
                         await reporter.logBatch(logs);
                     }
                     catch (err) {

@@ -6,13 +6,9 @@ import type { LoggerObject } from '../../shared/types/log'
 import type { LoggerObjectBatch } from '../../shared/types/batch'
 
 import { useRuntimeConfig } from '#imports'
-import type { BatchReporterOptions } from '../types/batch-reporter'
 
 
 
-/**
- * Centralised server-side log queue service
- */
 export class ServerLogQueueService {
     private static instance: ServerLogQueueService | null = null;
     
@@ -36,9 +32,6 @@ export class ServerLogQueueService {
         return ServerLogQueueService.instance;
     }
 
-    /**
-     * Initialise queue service with options
-     */
     public initialise(): void {
         if (this.initialised) {
             return
@@ -67,9 +60,6 @@ export class ServerLogQueueService {
         }
     }
 
-    /**
-     * Ensure service is initialised
-     */
     private ensureInitialised(): boolean {
         if (!this.initialised) {
             this.initialise();
@@ -78,9 +68,6 @@ export class ServerLogQueueService {
     }
 
     
-    /**
-     * Enqueue a batch of logs
-     */
     public enqueueBatch(loggerObjectBatch: LoggerObjectBatch): void {
         if (!this.ensureInitialised()) return;
 
@@ -102,9 +89,6 @@ export class ServerLogQueueService {
         }
     }
 
-    /**
-     * Enqueue a log
-     */
     public enqueueLog(logObj: LoggerObject): void {
         if (!this.ensureInitialised()) return;
 

@@ -7,6 +7,7 @@ import { ServerLogQueueService } from '../services/server-log-queue';
 
 
 export default eventHandler(async (event) => {
+    console.log('Logger endpoint hit', event.headers);
     const LoggerObjectBatch = await readBody<LoggerObjectBatch>(event);
     
     const serverLogQueue = ServerLogQueueService.getInstance();

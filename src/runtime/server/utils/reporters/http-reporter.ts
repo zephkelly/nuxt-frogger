@@ -6,6 +6,20 @@ import type { LoggerObject } from "~/src/runtime/shared/types/log";
 import type { LoggerObjectBatch } from "~/src/runtime/shared/types/batch";
 
 
+export const defaultHttpReporterOptions: HttpReporterOptions = {
+    endpoint: '',
+    headers: {},
+    timeout: 30000,
+    retryOnFailure: true,
+    maxRetries: 3,
+    retryDelay: 1000,
+    appInfo: {
+        name: 'unknown',
+        version: 'unknown'
+    }
+};
+
+
 
 /**
  * HTTP Reporter that logs directly to an endpoint
@@ -25,7 +39,6 @@ export class HttpReporter implements IReporter {
                 ...options.appInfo
             },
             headers: {
-                'Content-Type': 'application/json',
                 ...options.headers
             },
             timeout: options.timeout || 30000,
@@ -88,6 +101,10 @@ export class HttpReporter implements IReporter {
         const timeoutId = setTimeout(() => controller.abort(), this.options.timeout);
 
         try {
+            console.log(
+                '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
+                `🐸 Sending logs to ${this.options.endpoint} with ${batch.logs.length} logs`
+            );
             await $fetch(this.options.endpoint, {
                 method: 'POST',
                 headers: this.options.headers,

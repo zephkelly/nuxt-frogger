@@ -114,6 +114,7 @@ export class LogQueueService {
                 app: this.appInfo
             };
             
+            console.log('Sending log batch:', batch);
             await $fetch(this.endpoint, {
                 method: 'POST',
                 body: batch
@@ -147,6 +148,7 @@ export class LogQueueService {
         };
 
         try {
+            console.log('Sending single log immediately:', batch);
             await $fetch(this.endpoint, {
                 method: 'POST',
                 body: batch

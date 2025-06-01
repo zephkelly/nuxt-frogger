@@ -3,8 +3,9 @@ import type { LoggerObject } from "~/src/runtime/shared/types/log"
 
 
 
-export abstract class BaseReporter implements IReporter {
+export abstract class BaseReporter<TOptions extends Record<string, any> = Record<string, any>> implements IReporter {
     abstract name: string
+    protected abstract options: TOptions;
     
     abstract log(logObj: LoggerObject): Promise<void> | void
     

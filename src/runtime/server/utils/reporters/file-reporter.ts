@@ -11,7 +11,7 @@ import { BaseReporter } from './base-reporter';
 /**
  * Reporter that writes logs to local files
  */
-export class FileReporter extends BaseReporter {
+export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
     public readonly name = 'FroggerFileReporter';
 
     protected options: Required<FileReporterOptions>;

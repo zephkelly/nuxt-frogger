@@ -10,7 +10,7 @@ import type { LoggerObject } from '~/src/runtime/shared/types/log';
 /**
  * Reporter that batches logs before sending them to a destination
  */
-export class BatchReporter extends BaseReporter {
+export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> {
     public readonly name = 'FroggerBatchReporter';
 
     private logs: LoggerObject[] = [];

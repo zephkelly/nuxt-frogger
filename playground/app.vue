@@ -9,11 +9,6 @@
 
 <script setup>
 const startFrogger = useFrogger();
-startFrogger.addReporter({
-    log: async(loggerObject) => {
-        console.log('Custom reporter log:', loggerObject);
-    },
-})
 startFrogger.error('Hello from the playground!');
 
 

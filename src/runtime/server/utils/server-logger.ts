@@ -2,7 +2,7 @@ import type { LogObject } from 'consola/basic';
 import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
 import type { ServerLoggerOptions } from '../types/logger';
 import type { LoggerObject } from '../../shared/types/log';
-
+import type { IFroggerLogger } from '../../shared/types/frogger';
 import { ServerLogQueueService } from '../services/server-log-queue';
 
 import type { TraceContext } from '../../shared/types/trace';

@@ -1,11 +1,15 @@
-import { useRuntimeConfig } from '#imports';
-import { ServerFroggerLogger } from "./server-logger";
-import type { ServerLoggerOptions } from "../types/logger";
-import type { IFroggerLogger } from "../../shared/types/frogger";
-import type { H3Event } from "h3";
-import type { TraceContext } from "../../shared/types/trace";
-
 import { defu } from 'defu';
+import type { H3Event } from "h3";
+import { useRuntimeConfig } from '#imports';
+
+import { ServerFroggerLogger } from "./server-logger";
+import { ServerLogQueueService } from '../services/server-log-queue';
+
+import type { IFroggerLogger } from "../../shared/types/frogger";
+import type { IReporter } from '../../shared/types/internal-reporter';
+import type { TraceContext } from "../../shared/types/trace";
+import type { ServerLoggerOptions } from "../types/logger";
+
 
 
 
@@ -53,4 +57,14 @@ export function getFrogger(
     
 
     return new ServerFroggerLogger(mergedOptions);
+}
+
+
+
+
+// Add reporter 
+export function addGlobalReporter(reporter: IReporter): void {
+    const logQueue = ServerLogQueueService.getInstance();
+
+    logQueue.addReporter(reporter);
 }

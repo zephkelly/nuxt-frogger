@@ -1,4 +1,4 @@
-import { createBatchReporter } from '../utils/reporters/batch-reporter'
+import { BatchReporter, createBatchReporter } from '../utils/reporters/batch-reporter'
 import { FileReporter } from '../utils/reporters/file-reporter'
 
 import type { IReporter } from '../../shared/types/internal-reporter'
@@ -6,6 +6,7 @@ import type { LoggerObject } from '../../shared/types/log'
 import type { LoggerObjectBatch } from '../../shared/types/batch'
 
 import { useRuntimeConfig } from '#imports'
+import type { BatchReporterOptions } from '../types/batch-reporter'
 
 
 
@@ -177,6 +178,46 @@ export class ServerLogQueueService {
         this.batchReporter = undefined;
         this.directReporters = [];
         this.initialised = false;
+    }
+
+    public addReporter(reporter: IReporter): void {
+        if (!this.ensureInitialised()) return;
+        if (this.batchReporter) {
+            if (typeof (this.batchReporter as any).addDownstreamReporter === 'function') {
+                (this.batchReporter as BatchReporter).addDownstreamReporter(reporter);
+            }
+            else {
+                this.directReporters.push(reporter);
+            }
+        }
+        else {
+            this.directReporters.push(reporter);
+        }
+    }
+
+    public removeReporter(reporter: IReporter): void {
+        if (!this.ensureInitialised()) return;
+
+        if (this.batchReporter && typeof (this.batchReporter as any).removeDownstreamReporter === 'function') {
+            (this.batchReporter as BatchReporter).removeDownstreamReporter(reporter);
+        }
+        else {
+            const index = this.directReporters.indexOf(reporter);
+            if (index > -1) {
+                this.directReporters.splice(index, 1);
+            }
+        }
+    }
+
+    public clearReporters(): void {
+        if (!this.ensureInitialised()) return;
+
+        if (this.batchReporter && typeof (this.batchReporter as any).clearDownstreamReporters === 'function') {
+            (this.batchReporter as BatchReporter).clearDownstreamReporters();
+        }
+        else {
+            this.directReporters = [];
+        }
     }
 
     public getReporterInfo(): { 

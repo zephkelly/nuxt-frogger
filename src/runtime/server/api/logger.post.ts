@@ -30,24 +30,20 @@ function detectLoggingLoop(
     const froggerSource = getHeader(event, 'x-frogger-source');
 
     if (froggerProcessed) {
-        console.log('Frogger processed header detected, this request may be a retry or loop');
         warnings.push('Request has Frogger processed header');
     }
 
     if (isFroggerRequest) {
-        console.log('Frogger request detected');
         warnings.push(`Request originated from Frogger HTTP Reporter (ID: ${froggerReporterId})`);
         
         if (froggerSource && froggerSource === process.env.NUXT_APP_NAME) {
             isLoop = true;
-            console.log('Detected loop: logs are coming from the same application');
             warnings.push(`LOOP DETECTED: Logs are coming from the same application (${froggerSource})`);
         }
     }
 
     // Metadata check
     if (batch.meta?.processed) {
-        console.log('Batch metadata indicates Frogger processing');
         warnings.push('Batch metadata indicates Frogger processing');
         
         if (batch.meta.processChain?.length && batch.meta.processChain?.length > 1) {

@@ -230,7 +230,6 @@ export function extractTraceContext(headers: Record<string, string>): TraceConte
     const tracestate = headers['tracestate'] || headers['Tracestate'];
     if (tracestate) {
         const stateData = parseTracestate(tracestate);
-        console.log('Parsed tracestate:', stateData);
 
     }
     

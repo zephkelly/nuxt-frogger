@@ -69,7 +69,7 @@ export default defineNuxtModule<ModuleOptions>({
         }
 
         _nuxt.options.alias = _nuxt.options.alias || {};
-        _nuxt.options.alias['#frogger'] = resolver.resolve('./runtime/frogger');
+        _nuxt.options.alias['#frogger'] = resolver.resolve('./runtime/index');
 
         const moduleRuntimeConfig = {
             public: {

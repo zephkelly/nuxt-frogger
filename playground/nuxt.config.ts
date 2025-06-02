@@ -5,5 +5,5 @@ export default defineNuxtConfig({
     
     frogger: {
         
-    }
+    },
 })

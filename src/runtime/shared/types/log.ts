@@ -1,5 +1,5 @@
 import type { LogType } from "consola";
-import type { TraceContext } from "./trace";
+import type { TraceContext } from "./trace-headers";
 
 
 

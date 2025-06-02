@@ -16,4 +16,10 @@ export interface LoggerObjectBatch {
         name: string;
         version: string;
     }
+    meta?: {
+        processed?: true;
+        processChain?: string[];
+        source?: string;
+        time?: number;
+    },
 }

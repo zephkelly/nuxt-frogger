@@ -1,4 +1,4 @@
-import { createBatchReporter } from '../utils/reporters/batch-reporter'
+import { BatchReporter, createBatchReporter } from '../utils/reporters/batch-reporter'
 import { FileReporter } from '../utils/reporters/file-reporter'
 
 import type { IReporter } from '../../shared/types/internal-reporter'
@@ -9,9 +9,6 @@ import { useRuntimeConfig } from '#imports'
 
 
 
-/**
- * Centralised server-side log queue service
- */
 export class ServerLogQueueService {
     private static instance: ServerLogQueueService | null = null;
     
@@ -35,9 +32,6 @@ export class ServerLogQueueService {
         return ServerLogQueueService.instance;
     }
 
-    /**
-     * Initialise queue service with options
-     */
     public initialise(): void {
         if (this.initialised) {
             return
@@ -66,9 +60,6 @@ export class ServerLogQueueService {
         }
     }
 
-    /**
-     * Ensure service is initialised
-     */
     private ensureInitialised(): boolean {
         if (!this.initialised) {
             this.initialise();
@@ -77,9 +68,6 @@ export class ServerLogQueueService {
     }
 
     
-    /**
-     * Enqueue a batch of logs
-     */
     public enqueueBatch(loggerObjectBatch: LoggerObjectBatch): void {
         if (!this.ensureInitialised()) return;
 
@@ -101,9 +89,6 @@ export class ServerLogQueueService {
         }
     }
 
-    /**
-     * Enqueue a log
-     */
     public enqueueLog(logObj: LoggerObject): void {
         if (!this.ensureInitialised()) return;
 
@@ -177,6 +162,46 @@ export class ServerLogQueueService {
         this.batchReporter = undefined;
         this.directReporters = [];
         this.initialised = false;
+    }
+
+    public addReporter(reporter: IReporter): void {
+        if (!this.ensureInitialised()) return;
+        if (this.batchReporter) {
+            if (typeof (this.batchReporter as any).addDownstreamReporter === 'function') {
+                (this.batchReporter as BatchReporter).addDownstreamReporter(reporter);
+            }
+            else {
+                this.directReporters.push(reporter);
+            }
+        }
+        else {
+            this.directReporters.push(reporter);
+        }
+    }
+
+    public removeReporter(reporter: IReporter): void {
+        if (!this.ensureInitialised()) return;
+
+        if (this.batchReporter && typeof (this.batchReporter as any).removeDownstreamReporter === 'function') {
+            (this.batchReporter as BatchReporter).removeDownstreamReporter(reporter);
+        }
+        else {
+            const index = this.directReporters.indexOf(reporter);
+            if (index > -1) {
+                this.directReporters.splice(index, 1);
+            }
+        }
+    }
+
+    public clearReporters(): void {
+        if (!this.ensureInitialised()) return;
+
+        if (this.batchReporter && typeof (this.batchReporter as any).clearDownstreamReporters === 'function') {
+            (this.batchReporter as BatchReporter).clearDownstreamReporters();
+        }
+        else {
+            this.directReporters = [];
+        }
     }
 
     public getReporterInfo(): { 

@@ -16,7 +16,14 @@ export interface TraceContext {
     
     /**
      * Parent Span ID - reference to the parent operation
-     * 8-byte array as 16-character hex string (optional)
+     * 8-byte array as 16-character hex string
      */
     parentId?: string;
+
+    flags?: string;
+}
+
+export interface W3CTraceHeaders {
+    traceparent: string;
+    tracestate?: string;
 }

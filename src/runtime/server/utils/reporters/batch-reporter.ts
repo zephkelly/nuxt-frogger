@@ -49,21 +49,12 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         this.options = defu(options, defaultOptions, config.public.frogger.batch) as Required<BatchReporterOptions>;
     }
     
-    /**
-     * Handle an incoming log and add it to the batch
-     */
     log(logObj: LoggerObject): void {
         const processedLogs = this.processLogs([logObj]);
-        if (processedLogs.length === 0) {
-            return; // Log was filtered out
-        }
-        
+        if (processedLogs.length === 0) return;
         this.addLogsToBuffer(processedLogs);
     }
 
-    /**
-     * Handle a batch of incoming logs and add them to the batch
-     */
     override logBatch(logs: LoggerObject[]): void {
         if (logs.length === 0) {
             return;
@@ -78,9 +69,6 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         this.addLogsToBuffer(processedLogs);
     }
 
-    /**
-     * Process logs by filtering and adding additional fields
-     */
     private processLogs(logs: LoggerObject[]): LoggerObject[] {
         const processedLogs: LoggerObject[] = [];
         
@@ -99,7 +87,8 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
     }
 
     /**
-     * Add processed logs to the buffer and handle flushing
+     * Add logs to the internal buffer, maintaining sorted order
+     * and handling max size and flushing logic
      */
     private addLogsToBuffer(logs: LoggerObject[]): void {
         for (const log of logs) {
@@ -114,9 +103,6 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         this.scheduleFlush();
     }
 
-    /**
-     * Handle the case when maxSize is reached
-     */
     private handleMaxSizeReached(): void {
         const now = Date.now();
         const cutoffTime = now - this.options.sortingWindowMs;
@@ -132,9 +118,6 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         }
     }
 
-    /**
-     * Insert log in sorted position (by timestamp)
-     */
     private insertSorted(log: LoggerObject): void {
         let left = 0;
         let right = this.logs.length;
@@ -167,11 +150,12 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         return this.options.downstreamReporters;
     }
 
+    public clearDownstreamReporters(): void {
+        this.options.downstreamReporters = [];
+    }
+
     // Flush handling ------------------------------------------------------
 
-    /**
-     * Handle a failed flush attempt with retry logic
-     */
     private handleFlushFailure(batchId: string, logs: LoggerObject[]): void {
         const retryCount = this.retries.get(batchId) || 0;
         
@@ -204,9 +188,6 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         }, backoffDelay);
     }
 
-    /**
-     * Schedule a flush operation
-     */
     private scheduleFlush(delay: number = this.options.maxAge): void {
         if (this.flushing || (this.timer !== null && delay === this.options.maxAge)) {
             return;
@@ -223,9 +204,6 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         }, delay);
     }
     
-    /**
-     * Manually flush logs
-     */
     override async flush(): Promise<void> {
         if (this.flushing) {
             return;
@@ -282,9 +260,6 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         }
     }
   
-    /**
-     * Force immediate flush and wait for completion
-     */
     override async forceFlush(): Promise<void> {
         await this.flushPromise;
         return this.flush();
@@ -293,7 +268,7 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
 
 export function createBatchReporter(
     downstreamReporters: IReporter[], 
-    options: Omit<BatchReporterOptions, 'onFlush' | 'downstreamReporters'> = {}
+    options: Omit<BatchReporterOptions, 'onFlush' | 'downstreamReporters' | 'addDownstreamReporter' | 'removeDownstreamReporter' | 'getDownstreamReporters'> = {}
 ): BatchReporter {
     return new BatchReporter({
         ...options,

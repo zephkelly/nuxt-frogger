@@ -20,4 +20,5 @@ export interface BatchReporterOptions extends BatchOptions {
     addDownstreamReporter?: (reporter: IReporter) => void;
     removeDownstreamReporter?: (reporter: IReporter) => void;
     getDownstreamReporters?: () => IReporter[];
+    clearDownstreamReporters?: () => void;
 }

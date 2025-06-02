@@ -1,7 +1,7 @@
 import { H3Event, getRequestHeaders  } from 'h3';
 
-import { generateSpanId, generateTraceId } from '../../shared/utils/tracing';
-import type { TraceContext } from '../../shared/types/trace';
+import { generateSpanId, generateTraceId } from '../../shared/utils/trace-headers';
+import type { TraceContext } from '../../shared/types/trace-headers';
 
 //@ts-ignore
 import { defineNitroPlugin } from '#imports';

@@ -116,7 +116,7 @@ export class LogQueueService {
             
             await $fetch(this.endpoint, {
                 method: 'POST',
-                body: batch
+                body: batch,
             });
         }
         catch (error) {

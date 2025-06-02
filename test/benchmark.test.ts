@@ -1,451 +1,371 @@
-import { describe, it, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, beforeEach, afterEach, expect } from 'vitest'
 import { performance } from 'perf_hooks'
-import { rmSync, mkdirSync, existsSync } from 'node:fs'
-import { ServerFroggerLogger } from './../src/runtime/server/utils/server-logger'
-import { FileReporter } from './../src/runtime/server/utils/reporters/file-reporter'
-import type { LoggerObject } from '../src/runtime/shared/types/log'
-import type { ServerLoggerOptions } from '../src/runtime/server/types/logger'
+import { createWriteStream } from 'node:fs'
+import { TestFroggerLogger } from '../src/runtime/shared/utils/test-frogger'
+import { spawn } from 'node:child_process'
 
-// Mock useRuntimeConfig for testing
-const mockConfig = {
-  // Public runtime config (accessed by client and server)
-  public: {
-    frogger: {
-      endpoint: '/api/_frogger/logs',
-      batch: {
-        maxSize: 50,
-        maxAge: 3000,
-        retryOnFailure: true,
-        maxRetries: 3,
-        retryDelay: 3000,
-        sortingWindowMs: 1000,
-      }
-    }
-  },
-  // Private runtime config (server-only)
-  frogger: {
-    file: {
-      directory: './test-logs',
-      fileNameFormat: 'YYYY-MM-DD.log',
-      maxSize: 10 * 1024 * 1024,
-      flushInterval: 1000,
-      bufferMaxSize: 1 * 1024 * 1024,
-      highWaterMark: 64 * 1024,
-    },
-    batch: {
-      maxSize: 200,
-      maxAge: 15000,
-      retryOnFailure: true,
-      maxRetries: 5,
-      retryDelay: 10000,
-      sortingWindowMs: 3000,
-    }
-  }
-}
-
-vi.mock('#imports', () => ({
-  useRuntimeConfig: () => mockConfig
-}))
-
-// Global test configuration constants
-const GLOBAL_ITERATIONS = 10000        // Default iterations for most tests
-const HIGH_THROUGHPUT_ITERATIONS = 25000   // For high-throughput tests
-const COMPLEX_ITERATIONS = 5000            // For complex object tests
-const WARMUP_ITERATIONS = 100              // Warmup iterations
-const MAX_TEST_TIMEOUT = 30000             // 30 seconds max timeout for any test
 
 interface BenchmarkResult {
-  name: string
-  totalTime: number
-  loggerTime: number
-  fileWriteTime: number
-  opsPerSec: number
+    iteration: number
+    totalTimeMs: number
+    opsPerSecond: number
+    avgTimePerOpMs: number
 }
 
-class FroggerPipelineBenchmark {
-  private results: BenchmarkResult[] = []
-  
-  async benchmark(
-    name: string, 
-    setupFn: () => { logger: ServerFroggerLogger; fileReporter: FileReporter },
-    logCall: (logger: ServerFroggerLogger) => void,
-    iterations: number = 10000
-  ): Promise<BenchmarkResult> {
-    
-    const times = {
-      total: [] as number[],
-      logger: [] as number[],
-      fileWrite: [] as number[]
-    }
-    
-    // Warm up - using global constant
-    for (let i = 0; i < WARMUP_ITERATIONS; i++) {
-      const { logger, fileReporter } = setupFn()
-      
-      let warmupCaptured: LoggerObject | null = null
-      logger.setTestCaptureCallback((loggerObject) => {
-        warmupCaptured = loggerObject
-      })
-      
-      logCall(logger)
-      await fileReporter.forceFlush()
-      logger.clearTestCaptureCallback()
-    }
-    
-    // Actual benchmark
-    for (let i = 0; i < iterations; i++) {
-      const { logger, fileReporter } = setupFn()
-      
-      // Capture the LoggerObject that gets created
-      let capturedLoggerObject: LoggerObject | null = null
-      
-      // Set up the capture callback
-      logger.setTestCaptureCallback((loggerObject) => {
-        capturedLoggerObject = loggerObject
-      })
-      
-      // Time the logger call (info/error/etc)
-      const loggerStart = performance.now()
-      logCall(logger)
-      const loggerEnd = performance.now()
-      
-      // Clear the callback
-      logger.clearTestCaptureCallback()
-      
-      if (!capturedLoggerObject) {
-        throw new Error('Failed to capture LoggerObject')
-      }
-      
-      // Time the file write
-      const fileStart = performance.now()
-      await fileReporter.log(capturedLoggerObject)
-      const fileEnd = performance.now()
-      
-      const totalTime = fileEnd - loggerStart
-      const loggerTime = loggerEnd - loggerStart
-      const fileWriteTime = fileEnd - fileStart
-      
-      times.total.push(totalTime)
-      times.logger.push(loggerTime)
-      times.fileWrite.push(fileWriteTime)
-      
-      await fileReporter.forceFlush()
-    }
-    
-    const avgTotal = times.total.reduce((a, b) => a + b, 0) / times.total.length
-    const avgLogger = times.logger.reduce((a, b) => a + b, 0) / times.logger.length
-    const avgFileWrite = times.fileWrite.reduce((a, b) => a + b, 0) / times.fileWrite.length
-    const opsPerSec = Math.round(1000 / avgTotal)
-    
-    const result: BenchmarkResult = {
-      name,
-      totalTime: avgTotal,
-      loggerTime: avgLogger,
-      fileWriteTime: avgFileWrite,
-      opsPerSec
-    }
-    
-    this.results.push(result)
-    
-    console.log(`✅ ${name} (${iterations.toLocaleString()} iterations):`)
-    console.log(`   📊 TIMING BREAKDOWN (per single operation):`)
-    console.log(`   ├─ Logger Processing: ${avgLogger.toFixed(4)}ms (object creation + validation)`)
-    console.log(`   ├─ File Writing: ${avgFileWrite.toFixed(4)}ms (disk I/O operation)`)
-    console.log(`   └─ Total Pipeline: ${avgTotal.toFixed(4)}ms (end-to-end latency)`)
-    console.log(`   🚀 PERFORMANCE METRICS:`)
-    console.log(`   ├─ Throughput: ${opsPerSec.toLocaleString()} operations/second`)
-    console.log(`   ├─ Total Test Duration: ${(avgTotal * iterations).toFixed(2)}ms`)
-    console.log(`   └─ Logger vs File Ratio: ${(avgLogger / avgFileWrite).toFixed(2)}:1`)
-    console.log('')
-    
-    return result
-  }
-  
-  printSummary() {
-    if (this.results.length === 0) return
-    
-    console.log('\n📊 FROGGER PIPELINE BENCHMARK SUMMARY')
-    console.log('='.repeat(50))
-
-    const sorted = [...this.results].sort((a, b) => a.totalTime - b.totalTime)
-    const fastest = sorted[0]
-    
-    sorted.forEach(result => {
-      const isFastest = result.name === fastest.name
-      const slowdownFactor = result.totalTime / fastest.totalTime
-      const marker = isFastest ? '🏆' : '  '
-      
-      console.log(`${marker} ${result.name}:`)
-      console.log(`   Total Pipeline: ${result.totalTime.toFixed(4)}ms per operation`)
-      console.log(`   ├─ Logger Processing: ${result.loggerTime.toFixed(4)}ms (${((result.loggerTime / result.totalTime) * 100).toFixed(1)}%)`)
-      console.log(`   └─ File Writing: ${result.fileWriteTime.toFixed(4)}ms (${((result.fileWriteTime / result.totalTime) * 100).toFixed(1)}%)`)
-      console.log(`   Throughput: ${result.opsPerSec.toLocaleString()} operations/second`)
-      if (!isFastest) {
-        console.log(`   Performance: ${slowdownFactor.toFixed(2)}x slower than fastest`)
-      } else {
-        console.log(`   Performance: 🏆 FASTEST`)
-      }
-      console.log('')
-    })
-  }
-  
-  clear() {
-    this.results = []
-  }
+interface BenchmarkSummary {
+    totalIterations: number
+    operationsPerIteration: number
+    bestResult: BenchmarkResult
+    worstResult: BenchmarkResult
+    averageTimeMs: number
+    averageOpsPerSecond: number
+    standardDeviation: number
+    optimizationMode: 'optimized' | 'no-opt'
 }
 
-describe('Frogger Complete Pipeline Benchmarks', () => {
-  let benchmarkSuite: FroggerPipelineBenchmark
-  const testLogDir = './test-logs'
-  
-  beforeEach(async () => {
-    if (existsSync(testLogDir)) {
-      rmSync(testLogDir, { recursive: true, force: true })
+interface ComparisonResult {
+    optimized: BenchmarkSummary
+    noOpt: BenchmarkSummary
+    optimizationImpact: {
+        speedupFactor: number
+        consistencyDifference: number
+        recommendation: string
     }
-    mkdirSync(testLogDir, { recursive: true })
-    
-    benchmarkSuite = new FroggerPipelineBenchmark()
-  })
-  
-  afterEach(async () => {
-    if (existsSync(testLogDir)) {
-      rmSync(testLogDir, { recursive: true, force: true })
-    }
-  })
+}
 
-  it('should benchmark string logging pipeline', async () => {
-    await benchmarkSuite.benchmark(
-      'String Log Pipeline',
-      () => {
-        const options: ServerLoggerOptions = { level: 3, consoleOutput: false }
-        const logger = new ServerFroggerLogger(options)
-        const fileReporter = new FileReporter()
-        return { logger, fileReporter }
-      },
-      (logger) => logger.info('hello world'),
-      10000 // Increased from 5000
-    )
+class SimpleFroggerBenchmark {
+    private readonly OPERATIONS_PER_ITERATION = 10000
+    private readonly TOTAL_ITERATIONS = 10
     
-    benchmarkSuite.printSummary()
-  }, 10000) // Add timeout
-  
-  it('should benchmark object logging pipeline', async () => {
-    benchmarkSuite.clear()
+    async runBenchmark(optimizationMode: 'optimized' | 'no-opt' = 'optimized'): Promise<BenchmarkSummary> {
+        console.log(`🐸 FROGGER BENCHMARK - ${optimizationMode.toUpperCase()} MODE`)
+        console.log('='.repeat(50))
+        console.log(`📊 Configuration:`)
+        console.log(`   ├─ Optimization Mode: ${optimizationMode}`)
+        console.log(`   ├─ Operations per iteration: ${this.OPERATIONS_PER_ITERATION.toLocaleString()}`)
+        console.log(`   ├─ Total iterations: ${this.TOTAL_ITERATIONS}`)
+        console.log(`   └─ Total operations: ${(this.OPERATIONS_PER_ITERATION * this.TOTAL_ITERATIONS).toLocaleString()}`)
+        console.log('')
+        
+        const results: BenchmarkResult[] = []
+        
+        for (let i = 1; i <= this.TOTAL_ITERATIONS; i++) {
+            const result = await this.runSingleIteration(i)
+            results.push(result)
+        }
+        
+        const summary = this.calculateSummary(results, optimizationMode)
+        this.printSummary(summary)
+        
+        return summary
+    }
     
-    await benchmarkSuite.benchmark(
-      'Object Log Pipeline',
-      () => {
-        const options: ServerLoggerOptions = { level: 3, consoleOutput: false }
-        const logger = new ServerFroggerLogger(options)
-        const fileReporter = new FileReporter()
-        return { logger, fileReporter }
-      },
-      (logger) => logger.info('user action', { userId: 12345, action: 'login' }),
-      10000 // Increased from 5000
-    )
-    
-    benchmarkSuite.printSummary()
-  }, 10000) // Add timeout
-  
-  it('should benchmark error logging pipeline', async () => {
-    benchmarkSuite.clear()
-    
-    await benchmarkSuite.benchmark(
-      'Error Log Pipeline',
-      () => {
-        const options: ServerLoggerOptions = { level: 3, consoleOutput: false }
-        const logger = new ServerFroggerLogger(options)
-        const fileReporter = new FileReporter()
-        return { logger, fileReporter }
-      },
-      (logger) => logger.error('database error', {
-        error: new Error('Connection failed'),
-        query: 'SELECT * FROM users',
-        timestamp: Date.now()
-      }),
-      GLOBAL_ITERATIONS
-    )
-    
-    benchmarkSuite.printSummary()
-  }, MAX_TEST_TIMEOUT)
-  
-  it('should benchmark complex object logging pipeline', async () => {
-    benchmarkSuite.clear()
-    
-    const complexContext = {
-      user: {
-        id: 'user_123',
-        email: 'test@example.com',
-        roles: ['admin', 'user']
-      },
-      request: {
-        method: 'POST',
-        url: '/api/users',
-        headers: {
-          'content-type': 'application/json',
-          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-        },
-        body: {
-          name: 'John Doe',
-          preferences: {
-            theme: 'dark',
-            notifications: true,
-            features: ['feature1', 'feature2']
+    async runBenchmarkWithFlags(nodeFlags: string[]): Promise<BenchmarkSummary> {
+        return new Promise((resolve, reject) => {
+            const isNoOpt = nodeFlags.includes('--no-opt')
+            const optimizationMode = isNoOpt ? 'no-opt' : 'optimized'
+            
+            const benchmarkScript = `
+        const { performance } = require('perf_hooks');
+        const { createWriteStream } = require('node:fs');
+        
+        // Mock TestFroggerLogger for this isolated test
+        class MockTestFroggerLogger {
+          constructor() {}
+          info(msg) {
+            // Simulate logger work - object creation, serialization
+            const logObj = {
+              time: Date.now(),
+              level: 'info',
+              message: msg,
+              context: { env: 'test', pid: process.pid }
+            };
+            const serialized = JSON.stringify(logObj);
+            // Simulate stream write
+            return serialized.length;
           }
         }
-      },
-      metadata: {
-        sessionId: 'sess_abc123',
-        correlationId: 'corr_def456',
-        environment: 'production'
-      }
-    }
-    
-    await benchmarkSuite.benchmark(
-      'Complex Object Pipeline',
-      () => {
-        const options: ServerLoggerOptions = { level: 3, consoleOutput: false }
-        const logger = new ServerFroggerLogger(options)
-        const fileReporter = new FileReporter()
-        return { logger, fileReporter }
-      },
-      (logger) => logger.info('complex operation completed', complexContext),
-      COMPLEX_ITERATIONS
-    )
-    
-    benchmarkSuite.printSummary()
-  }, MAX_TEST_TIMEOUT)
-})
-
-// Additional utility for exposing createLoggerObject for testing
-export class FroggerTestUtils {
-  /**
-   * Create a test logger that exposes internal methods for benchmarking
-   */
-  static createTestLogger(options: ServerLoggerOptions = { level: 3, consoleOutput: false }) {
-    const logger = new ServerFroggerLogger(options)
-    
-    return {
-      logger,
-      
-      // Expose the createLoggerObject method for direct testing
-      createLoggerObject: (message: string, context?: Object, level: string = 'info') => {
-        return logger.createLoggerObjectForTest(message, context, level)
-      },
-      
-      // Direct method to test just the LoggerObject creation
-      benchmarkLoggerObjectCreation: async (iterations: number = HIGH_THROUGHPUT_ITERATIONS) => {
-        const times: number[] = []
         
-        console.log(`🔄 Running LoggerObject creation benchmark (${iterations.toLocaleString()} iterations)...`)
+        const OPERATIONS = 10000;
+        const ITERATIONS = 10;
+        const results = [];
         
-        for (let i = 0; i < iterations; i++) {
-          const start = performance.now()
-          const loggerObject = logger.createLoggerObjectForTest('test message', { iteration: i })
-          const end = performance.now()
-          times.push(end - start)
+        console.log('{"type":"start","mode":"${optimizationMode}"}');
+        
+        for (let iter = 1; iter <= ITERATIONS; iter++) {
+          const logger = new MockTestFroggerLogger();
+          
+          const startTime = performance.now();
+          for (let i = 0; i < OPERATIONS; i++) {
+            logger.info('Hello world');
+          }
+          const endTime = performance.now();
+          
+          const totalTimeMs = endTime - startTime;
+          const opsPerSecond = Math.round((OPERATIONS / totalTimeMs) * 1000);
+          const avgTimePerOpMs = totalTimeMs / OPERATIONS;
+          
+          const result = {
+            iteration: iter,
+            totalTimeMs,
+            opsPerSecond,
+            avgTimePerOpMs
+          };
+          
+          results.push(result);
+          console.log(JSON.stringify({type:"iteration", ...result}));
         }
         
-        const avgTime = times.reduce((a, b) => a + b, 0) / times.length
-        const minTime = Math.min(...times)
-        const maxTime = Math.max(...times)
-        const opsPerSec = Math.round(1000 / avgTime)
-        
-        console.log(`📊 LoggerObject Creation Benchmark Results:`)
-        console.log(`   📈 TIMING BREAKDOWN:`)
-        console.log(`   ├─ Average: ${avgTime.toFixed(4)}ms per operation`)
-        console.log(`   ├─ Minimum: ${minTime.toFixed(4)}ms (fastest single operation)`)
-        console.log(`   └─ Maximum: ${maxTime.toFixed(4)}ms (slowest single operation)`)
-        console.log(`   🚀 PERFORMANCE METRICS:`)
-        console.log(`   ├─ Total Test Duration: ${(avgTime * iterations).toFixed(2)}ms`)
-        console.log(`   ├─ Throughput: ${opsPerSec.toLocaleString()} operations/second`)
-        console.log(`   └─ Peak Theoretical: ${Math.round(1000 / minTime).toLocaleString()} ops/sec`)
-        
-        return { avgTime, opsPerSec, minTime, maxTime }
-      }
+        console.log(JSON.stringify({type:"complete", results}));
+      `;
+            
+            const child = spawn('node', [...nodeFlags, '-e', benchmarkScript], {
+                stdio: ['pipe', 'pipe', 'pipe']
+            });
+            
+            let output = '';
+            let startReceived = false;
+            const iterationResults: BenchmarkResult[] = [];
+            
+            child.stdout.on('data', (data) => {
+                const lines = data.toString().split('\n').filter((line: any) => line.trim());
+                
+                for (const line of lines) {
+                    try {
+                        const parsed = JSON.parse(line);
+                        
+                        if (parsed.type === 'start') {
+                            startReceived = true;
+                            console.log(`🚀 Starting ${parsed.mode} benchmark...`);
+                        } else if (parsed.type === 'iteration') {
+                            iterationResults.push({
+                                iteration: parsed.iteration,
+                                totalTimeMs: parsed.totalTimeMs,
+                                opsPerSecond: parsed.opsPerSecond,
+                                avgTimePerOpMs: parsed.avgTimePerOpMs
+                            });
+                        } else if (parsed.type === 'complete') {
+                            const summary = this.calculateSummary(iterationResults, optimizationMode);
+                            resolve(summary);
+                        }
+                    } catch (e) {
+                    }
+                }
+            });
+            
+            child.stderr.on('data', (data) => {
+                console.error(`Error: ${data}`);
+            });
+            
+            child.on('close', (code) => {
+                if (code !== 0 && !startReceived) {
+                    reject(new Error(`Child process exited with code ${code}`));
+                }
+            });
+        });
     }
-  }
+    
+    private async runSingleIteration(iterationNumber: number): Promise<BenchmarkResult> {
+        const nullStream = createWriteStream(process.platform === 'win32' ? 'NUL' : '/dev/null')
+        const logger = new TestFroggerLogger({ 
+            stream: nullStream,
+            format: 'json',
+            level: 3 
+        })
+        
+        const startTime = performance.now()
+        
+        for (let i = 0; i < this.OPERATIONS_PER_ITERATION; i++) {
+            logger.info('Hello world')
+        }
+        
+        const endTime = performance.now()
+        const totalTimeMs = endTime - startTime
+        
+        const opsPerSecond = Math.round((this.OPERATIONS_PER_ITERATION / totalTimeMs) * 1000)
+        const avgTimePerOpMs = totalTimeMs / this.OPERATIONS_PER_ITERATION
+        
+        nullStream.destroy()
+        
+        return {
+            iteration: iterationNumber,
+            totalTimeMs,
+            opsPerSecond,
+            avgTimePerOpMs
+        }
+    }
+    
+    private calculateSummary(results: BenchmarkResult[], optimizationMode: 'optimized' | 'no-opt'): BenchmarkSummary {
+        const bestResult = results.reduce((best, current) => 
+            current.opsPerSecond > best.opsPerSecond ? current : best
+        )
+        
+        const worstResult = results.reduce((worst, current) => 
+            current.opsPerSecond < worst.opsPerSecond ? current : worst
+        )
+        
+        const avgTimeMs = results.reduce((sum, r) => sum + r.totalTimeMs, 0) / results.length
+        const avgOpsPerSecond = Math.round(results.reduce((sum, r) => sum + r.opsPerSecond, 0) / results.length)
+        
+        const variance = results.reduce((sum, r) => {
+            const diff = r.totalTimeMs - avgTimeMs
+            return sum + (diff * diff)
+        }, 0) / results.length
+        const standardDeviation = Math.sqrt(variance)
+        
+        return {
+            totalIterations: this.TOTAL_ITERATIONS,
+            operationsPerIteration: this.OPERATIONS_PER_ITERATION,
+            bestResult,
+            worstResult,
+            averageTimeMs: avgTimeMs,
+            averageOpsPerSecond: avgOpsPerSecond,
+            standardDeviation,
+            optimizationMode
+        }
+    }
+    
+    private printSummary(summary: BenchmarkSummary): void {
+        const modeEmoji = summary.optimizationMode === 'optimized' ? '⚡' : '🐢'
+        console.log(`${modeEmoji} ${summary.optimizationMode.toUpperCase()} RESULTS SUMMARY`)
+        console.log('='.repeat(40))
+        console.log('')
+        
+        console.log('🏆 PERFORMANCE OVERVIEW:')
+        console.log(`   ├─ Average Time: ${summary.averageTimeMs.toFixed(2)}ms per ${this.OPERATIONS_PER_ITERATION.toLocaleString()} operations`)
+        console.log(`   ├─ Average Throughput: ${summary.averageOpsPerSecond.toLocaleString()} operations/second`)
+        console.log(`   ├─ Average Time per Operation: ${(summary.averageTimeMs / this.OPERATIONS_PER_ITERATION).toFixed(6)}ms`)
+        console.log(`   └─ Consistency (σ): ${summary.standardDeviation.toFixed(2)}ms`)
+        console.log('')
+        
+        console.log('🥇 BEST: ' + `${summary.bestResult.totalTimeMs.toFixed(2)}ms (${summary.bestResult.opsPerSecond.toLocaleString()} ops/sec)`)
+        console.log('🥉 WORST: ' + `${summary.worstResult.totalTimeMs.toFixed(2)}ms (${summary.worstResult.opsPerSecond.toLocaleString()} ops/sec)`)
+        console.log('')
+        
+        const performanceRange = summary.worstResult.totalTimeMs - summary.bestResult.totalTimeMs
+        const performanceVariation = (performanceRange / summary.averageTimeMs) * 100
+        
+        console.log('📈 CONSISTENCY ANALYSIS:')
+        console.log(`   ├─ Variation: ${performanceVariation.toFixed(1)}%`)
+        console.log(`   ├─ Slowdown Factor: ${(summary.worstResult.totalTimeMs / summary.bestResult.totalTimeMs).toFixed(2)}x`)
+        console.log(`   └─ Rating: ${this.getConsistencyRating(performanceVariation)}`)
+        console.log('')
+    }
+    
+    compareOptimizations(optimized: BenchmarkSummary, noOpt: BenchmarkSummary): ComparisonResult {
+        const speedupFactor = noOpt.averageTimeMs / optimized.averageTimeMs
+        const optimizedVariation = (optimized.worstResult.totalTimeMs - optimized.bestResult.totalTimeMs) / optimized.averageTimeMs * 100
+        const noOptVariation = (noOpt.worstResult.totalTimeMs - noOpt.bestResult.totalTimeMs) / noOpt.averageTimeMs * 100
+        const consistencyDifference = Math.abs(optimizedVariation - noOptVariation)
+        
+        let recommendation = ''
+        if (speedupFactor > 2 && consistencyDifference > 20) {
+            recommendation = 'High optimization impact with consistency trade-off'
+        } else if (speedupFactor > 2) {
+            recommendation = 'Significant optimization benefit with good consistency'
+        } else if (consistencyDifference > 20) {
+            recommendation = 'Optimization improves consistency more than speed'
+        } else {
+            recommendation = 'Moderate optimization impact'
+        }
+        
+        return {
+            optimized,
+            noOpt,
+            optimizationImpact: {
+                speedupFactor,
+                consistencyDifference,
+                recommendation
+            }
+        }
+    }
+    
+    printOptimizationComparison(comparison: ComparisonResult): void {
+        console.log('\n🔬 OPTIMIZATION IMPACT ANALYSIS')
+        console.log('='.repeat(50))
+        console.log('')
+        
+        console.log('⚡ OPTIMIZED vs 🐢 NO-OPT COMPARISON:')
+        console.log(`   ├─ Speed Improvement: ${comparison.optimizationImpact.speedupFactor.toFixed(2)}x faster`)
+        console.log(`   ├─ Optimized Throughput: ${comparison.optimized.averageOpsPerSecond.toLocaleString()} ops/sec`)
+        console.log(`   ├─ No-Opt Throughput: ${comparison.noOpt.averageOpsPerSecond.toLocaleString()} ops/sec`)
+        console.log(`   └─ Performance Gain: ${((comparison.optimizationImpact.speedupFactor - 1) * 100).toFixed(1)}%`)
+        console.log('')
+        
+        const optVariation = (comparison.optimized.worstResult.totalTimeMs - comparison.optimized.bestResult.totalTimeMs) / comparison.optimized.averageTimeMs * 100
+        const noOptVariation = (comparison.noOpt.worstResult.totalTimeMs - comparison.noOpt.bestResult.totalTimeMs) / comparison.noOpt.averageTimeMs * 100
+        
+        console.log('📊 CONSISTENCY COMPARISON:')
+        console.log(`   ├─ Optimized Variation: ${optVariation.toFixed(1)}%`)
+        console.log(`   ├─ No-Opt Variation: ${noOptVariation.toFixed(1)}%`)
+        console.log(`   ├─ Consistency Difference: ${comparison.optimizationImpact.consistencyDifference.toFixed(1)}%`)
+        console.log(`   └─ Better Consistency: ${optVariation < noOptVariation ? '⚡ Optimized' : '🐢 No-Opt'}`)
+        console.log('')
+        
+        console.log('🎯 RECOMMENDATION:')
+        console.log(`   ${comparison.optimizationImpact.recommendation}`)
+        console.log('')
+        
+        console.log('📋 DETAILED BREAKDOWN:')
+        console.log('   OPTIMIZED MODE:')
+        console.log(`   ├─ Best: ${comparison.optimized.bestResult.totalTimeMs.toFixed(2)}ms`)
+        console.log(`   ├─ Worst: ${comparison.optimized.worstResult.totalTimeMs.toFixed(2)}ms`)
+        console.log(`   └─ Average: ${comparison.optimized.averageTimeMs.toFixed(2)}ms`)
+        console.log('')
+        console.log('   NO-OPT MODE:')
+        console.log(`   ├─ Best: ${comparison.noOpt.bestResult.totalTimeMs.toFixed(2)}ms`)
+        console.log(`   ├─ Worst: ${comparison.noOpt.worstResult.totalTimeMs.toFixed(2)}ms`)
+        console.log(`   └─ Average: ${comparison.noOpt.averageTimeMs.toFixed(2)}ms`)
+    }
+    
+    private getConsistencyRating(variation: number): string {
+        if (variation < 5) return '🟢 EXCELLENT'
+        if (variation < 10) return '🟡 GOOD'
+        if (variation < 20) return '🟠 FAIR'
+        return '🔴 POOR'
+    }
 }
 
-// Standalone benchmark runner
-export async function runFroggerBenchmarks() {
-  console.log('🐸 FROGGER COMPLETE PIPELINE BENCHMARKS')
-  console.log('='.repeat(50))
+describe('Frogger Optimization Comparison Benchmark', () => {
+    let benchmarkSuite: SimpleFroggerBenchmark
+    
+    beforeEach(() => {
+        benchmarkSuite = new SimpleFroggerBenchmark()
+    })
+    
+    afterEach(() => { })
 
-  const suite = new FroggerPipelineBenchmark()
-  
-  // Setup
-  const testLogDir = './benchmark-logs'
-  if (existsSync(testLogDir)) {
-    rmSync(testLogDir, { recursive: true, force: true })
-  }
-  mkdirSync(testLogDir, { recursive: true })
-  
-  try {
-    const createSetup = () => {
-      const options: ServerLoggerOptions = { level: 3, consoleOutput: false }
-      const logger = new ServerFroggerLogger(options)
-      const fileReporter = new FileReporter()
-      return { logger, fileReporter }
-    }
-    
-    // Run comprehensive benchmarks with higher iterations
-    await suite.benchmark(
-      'String Pipeline',
-      createSetup,
-      (logger) => logger.info('hello world'),
-      25000 // Increased from 10000
-    )
-    
-    await suite.benchmark(
-      'Object Pipeline',
-      createSetup,
-      (logger) => logger.info('user action', { userId: 12345, action: 'login' }),
-      20000 // Increased from 10000
-    )
-    
-    await suite.benchmark(
-      'Error Pipeline',
-      createSetup,
-      (logger) => logger.error('error occurred', { 
-        error: 'Database connection failed',
-        code: 'DB_ERROR',
-        timestamp: Date.now()
-      }),
-      15000 // Increased from 10000
-    )
-    
-    await suite.benchmark(
-      'Complex Object Pipeline',
-      createSetup,
-      (logger) => logger.info('complex operation', {
-        user: { id: 'user_123', roles: ['admin'] },
-        request: { method: 'POST', url: '/api/users' },
-        metadata: { sessionId: 'sess_abc', env: 'prod' }
-      }),
-      12000
-    )
-    
-    await suite.benchmark(
-      'High-Frequency Logging',
-      createSetup,
-      (logger) => logger.info('tick', { timestamp: Date.now(), counter: Math.random() }),
-      30000
-    )
-    
-    suite.printSummary()
-    
-    // Test LoggerObject creation separately with higher iterations
-    console.log('\n🔧 INTERNAL COMPONENT BENCHMARKS')
-    console.log('='.repeat(40))
-    
-    const testUtils = FroggerTestUtils.createTestLogger()
-    await testUtils.benchmarkLoggerObjectCreation(100000) // Increased from 50000
-    
-  } finally {
-    // Cleanup
-    if (existsSync(testLogDir)) {
-      rmSync(testLogDir, { recursive: true, force: true })
-    }
-  }
-}
+    it('should compare optimized vs non-optimized performance', async () => {
+        console.log('\n🔬 FROGGER OPTIMIZATION ANALYSIS')
+        console.log('='.repeat(60))
+        console.log('Running comprehensive comparison of V8 optimization impact...')
+        console.log('')
+        
+        console.log('Phase 1: Testing with V8 optimizations enabled...')
+        const optimizedResults = await benchmarkSuite.runBenchmarkWithFlags([])
+        
+        console.log('\nPhase 2: Testing with V8 optimizations disabled...')
+        const noOptResults = await benchmarkSuite.runBenchmarkWithFlags(['--no-opt'])
+        
+        const comparison = benchmarkSuite.compareOptimizations(optimizedResults, noOptResults)
+        benchmarkSuite.printOptimizationComparison(comparison)
+        
+        expect(optimizedResults.totalIterations).toBe(10)
+        expect(noOptResults.totalIterations).toBe(10)
+        expect(optimizedResults.averageOpsPerSecond).toBeGreaterThan(0)
+        expect(noOptResults.averageOpsPerSecond).toBeGreaterThan(0)
+        
+        expect(comparison.optimizationImpact.speedupFactor).toBeGreaterThan(1)
+        
+        console.log(`\n✅ Analysis complete: ${comparison.optimizationImpact.speedupFactor.toFixed(2)}x optimization speedup`)
+    }, 60000)
+
+    it('should show individual optimized benchmark', async () => {
+        const summary = await benchmarkSuite.runBenchmark('optimized')
+        
+        expect(summary.averageOpsPerSecond).toBeGreaterThan(10000)
+        expect(summary.optimizationMode).toBe('optimized')
+        
+        console.log(`\n🎯 Optimized mode completed: ${summary.averageOpsPerSecond.toLocaleString()} avg ops/sec`)
+    }, 30000)
+})

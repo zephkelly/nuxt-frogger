@@ -45,6 +45,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             this.consola.addReporter({
                 log: (logObj: LogObject) => {
                     try {
+                        console.log('Calling console reporter with logObj:', logObj);
                         this.consoleReporter?.log(logObj);
                     }
                     catch (err) {

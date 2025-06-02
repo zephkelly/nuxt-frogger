@@ -139,9 +139,14 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         };
 
         try {
+            console.log('Sending log immediately:', logObj);
+            console.log('Endpoint:', this.options.endpoint);
             await $fetch(this.options.endpoint, {
                 method: 'POST',
-                body: batch
+                body: batch,
+                headers: {
+                    ...this.getHeaders()
+                }
             });
         } catch (error) {
             console.error('Failed to send log immediately:', error);
@@ -173,9 +178,14 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             };
 
             if (this.options.endpoint) {
+                console.log('Sending server log immediately:', loggerObject);
+                console.log('Server Endpoint:', this.options.endpoint);
                 await $fetch(this.options.endpoint, {
                     method: 'POST',
-                    body: batch
+                    body: batch,
+                    headers: {
+                        ...this.getHeaders()
+                    }
                 });
             }
         }

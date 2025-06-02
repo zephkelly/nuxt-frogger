@@ -128,7 +128,6 @@ export class HttpReporter implements IReporter {
         return {
             'Content-Type': 'application/json',
             // Loop prevention headers
-            'X-Frogger-Reporter': 'true',
             'X-Frogger-Reporter-Id': this.reporterId,
             'X-Frogger-Processed': 'true',
             'X-Frogger-Source': this.options.appInfo.name,
@@ -143,11 +142,6 @@ export class HttpReporter implements IReporter {
         const timeoutId = setTimeout(() => controller.abort(), this.options.timeout);
 
         try {
-            console.log(
-                '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
-                `🐸 Sending logs to ${this.options.endpoint} with ${batch.logs.length} logs`
-            );
-
             const headers = this.createRequestHeaders(batch);
 
             await $fetch(this.options.endpoint, {

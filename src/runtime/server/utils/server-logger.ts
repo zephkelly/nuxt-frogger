@@ -2,7 +2,6 @@ import type { LogObject } from 'consola/basic';
 import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
 import type { ServerLoggerOptions } from '../types/logger';
 import type { LoggerObject } from '../../shared/types/log';
-import type { IFroggerLogger } from '../../shared/types/frogger';
 import { ServerLogQueueService } from '../services/server-log-queue';
 
 import type { TraceContext } from '../../shared/types/trace-headers';
@@ -35,7 +34,8 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         let currentTraceContext: TraceContext | null = null;
         if (this.madeFirstLog || this.traceContext === null) {
             currentTraceContext = this.generateTraceContext();
-        } else {
+        }
+        else {
             // This will only be called once on first initialisation so long as a
             // trace context is provided. This is used to link traces from the client
             // to the server.

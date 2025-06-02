@@ -83,7 +83,7 @@ export function createHttpReporter(endpointOrOptions: string | HttpReporterOptio
             ...defaultHttpReporterOptions,
             endpoint: endpointOrOptions,
         };
-        
+
         return new HttpReporter(options);
     }
     else {

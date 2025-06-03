@@ -87,38 +87,57 @@ import { getRateLimiter, extractRateLimitIdentifier } from '../services/rate-lim
 export default eventHandler(async (event) => {
     const rateLimiter = getRateLimiter();
 
-    // Only check rate limits if enabled
     if (rateLimiter.isRateLimitingEnabled()) {
         const identifier = extractRateLimitIdentifier(event);
         const rateLimitResult = await rateLimiter.checkRateLimit(identifier);
 
-        if (rateLimitResult && !rateLimitResult.allowed) {
-            // Log the rate limit violation for monitoring
-            console.warn(
-                '%cFROGGER RATE LIMIT', 
-                'color: white; background-color: #f59e0b; font-weight: bold; font-size: 1.1rem;',
-                `⚠️ Rate limit exceeded for ${identifier.ip} (${rateLimitResult.tier} tier): ${rateLimitResult.current}/${rateLimitResult.limit}`
-            );
+        console.log(rateLimitResult)
 
-            // Block IP if this is a rate limit violation (not already blocked)
-            if (!rateLimitResult.isBlocked) {
-                await rateLimiter.blockIP(identifier.ip);
+        if (rateLimitResult && !rateLimitResult.allowed) {
+            if (rateLimitResult.limit > 0) {
                 console.warn(
-                    '%cFROGGER IP BLOCKED', 
-                    'color: white; background-color: #dc2626; font-weight: bold; font-size: 1.2rem;',
-                    `🚨 IP ${identifier.ip} has been blocked due to rate limit violations`
+                    '%cFROGGER RATE LIMIT', 
+                    'color: white; background-color: #f59e0b; font-weight: bold; font-size: 1.1rem;',
+                    `⚠️ Rate limit exceeded for ${identifier.ip} (${rateLimitResult.tier} tier): ${rateLimitResult.current}/${rateLimitResult.limit}`
+                );
+
+                if (!rateLimitResult.isBlocked) {
+                    await rateLimiter.blockIP(identifier.ip);
+                    console.warn(
+                        '%cFROGGER IP BLOCKED', 
+                        'color: white; background-color: #dc2626; font-weight: bold; font-size: 1.2rem;',
+                        `🚨 IP ${identifier.ip} has been blocked due to rate limit violations`
+                    );
+                }
+            } else {
+                console.error(
+                    '%cFROGGER CONFIG ERROR',
+                    'color: white; background-color: #dc2626; font-weight: bold;',
+                    `❌ Rate limiter misconfigured: limits are 0. Either disable rate limiting or set proper limits.`
                 );
             }
             
-            // Return rate limit error response
             const response = RateLimitResponseFactory.createH3Response(rateLimitResult);
             throw createError(response);
         }
 
-        // Log successful rate limit check in debug mode
         if (import.meta.dev) {
             console.debug(`Rate limit check passed for ${identifier.ip}: ${rateLimitResult?.current || 0} requests`);
         }
+    }
+
+    const contentLength = getHeader(event, 'content-length');
+    const maxRequestSize = 1024 * 1024;
+    
+    if (contentLength && parseInt(contentLength) > maxRequestSize) {
+        throw createError({
+            statusCode: 413,
+            statusMessage: 'Request Too Large',
+            data: {
+                error: 'REQUEST_TOO_LARGE',
+                maxSize: maxRequestSize
+            }
+        });
     }
 
 

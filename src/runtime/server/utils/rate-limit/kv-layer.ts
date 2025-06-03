@@ -13,6 +13,10 @@ export class RateLimitKVLayer implements IRateLimitStorage {
     constructor(storageKey: string = 'rate-limiter') {
         this.storageKey = storageKey
     }
+
+    getStorageKey(): string {
+        return this.storageKey
+    }
     
     async get<T = any>(key: string): Promise<T | null> {
         try {

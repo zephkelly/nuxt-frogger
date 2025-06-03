@@ -26,12 +26,8 @@ export class SlidingWindowRateLimiter {
         this.isEnabled = rateLimiterConfig !== false
 
         if (!this.isEnabled) {
-            this.storage = new RateLimitKVLayer()
-            this.config = {
-                limits: { perIp: 0 },
-                windows: { perIp: 0 },
-                blocking: { enabled: false, escalationResetHours: 0, timeouts: [] }
-            }
+            this.storage = undefined as unknown as IRateLimitStorage
+            this.config = {} as RateLimitingOptions
             return
         }
 
@@ -56,6 +52,15 @@ export class SlidingWindowRateLimiter {
                 timeouts: rateLimiterConfig.blocking?.timeouts || [60, 300, 1800]
             }
         }
+
+        setInterval(async () => {
+            try {
+                await this.cleanup()
+            }
+            catch (error) {
+                console.error('Failed to cleanup expired rate limit keys:', error)
+            }
+        }, 5 * 60 * 1000)
     }
 
     public static getInstance(): SlidingWindowRateLimiter {
@@ -93,7 +98,7 @@ export class SlidingWindowRateLimiter {
         ]
 
         for (const check of checks) {
-            if (!check.limit || !check.window || !check.key) continue
+            if (!check.key || !check.limit || check.limit <= 0 || !check.window || check.window <= 0) continue
 
             const result = await this.checkSlidingWindow(
                 check.key,
@@ -131,21 +136,34 @@ export class SlidingWindowRateLimiter {
         const windowMs = windowSeconds * 1000
         const windowStart = now - windowMs
 
-        const windowData = await this.storage.get<number[]>(windowKey) || []
+        let windowData = await this.storage.get<number[]>(windowKey) || []
+
+        if (windowData.length > limit * 5) {
+            console.warn(`Rate limiter array for ${tier}:${key} is too large (${windowData.length}), trimming...`)
+            windowData = windowData
+                .filter(timestamp => timestamp > windowStart)
+                .sort((a, b) => b - a)
+                .slice(0, limit * 2)
+            
+            await this.storage.set(windowKey, windowData, windowSeconds + 60)
+        }
 
         console.log(`Checking sliding window for ${tier}:${key}`, {
             windowKey,
             windowMs,
             windowStart,
-            windowData
+            windowDataEntries: windowData.length
         })
 
-        const validTimestamps = windowData.filter(timestamp => timestamp > windowStart)
+        const validTimestamps = windowData.filter(timestamp => timestamp > windowStart).slice(0, Math.max(limit * 2, 1000))
         
         const current = validTimestamps.length
         const allowed = current < limit
         
-        const oldestRequest = Math.min(...validTimestamps)
+        const oldestRequest = validTimestamps.length > 0 
+            ? validTimestamps.reduce((min, timestamp) => Math.min(min, timestamp), validTimestamps[0])
+            : null
+
         const resetTime = oldestRequest ? oldestRequest + windowMs : now + windowMs
         const retryAfter = allowed ? 0 : Math.ceil((resetTime - now) / 1000)
 
@@ -160,26 +178,40 @@ export class SlidingWindowRateLimiter {
     }
 
     private async recordRequest(identifier: RateLimitIdentifier, timestamp: number): Promise<void> {
+        if (!this.isEnabled) {
+            return
+        }
+
         const keys = [
             { tier: 'global', key: 'global', window: this.config.windows.global },
             { tier: 'ip', key: identifier.ip, window: this.config.windows.perIp },
             { tier: 'reporter', key: identifier.reporterId, window: this.config.windows.perReporter },
             { tier: 'app', key: identifier.appName, window: this.config.windows.perApp }
         ]
+        
+        const relevantLimit = this.config.limits.perReporter || this.config.limits.perIp || this.config.limits.global || 1000
+        const maxLimit = Math.min(relevantLimit * 2, 500)
 
         const promises = keys
-            .filter(item => item.key && item.window)
+            .filter(item => item.key && item.window && item.window > 0 && maxLimit && maxLimit > 0)
             .map(async (item) => {
                 const windowKey = `rate_limit:${item.tier}:${item.key}`
                 const windowMs = item.window! * 1000
                 const windowStart = timestamp - windowMs
 
-                const windowData = await this.storage.get<number[]>(windowKey) || []
+                let windowData = await this.storage.get<number[]>(windowKey) || []
+
+                windowData = windowData.filter(ts => ts > windowStart)
+                
+                if (windowData.length >= maxLimit) {
+                    windowData = windowData
+                        .sort((a, b) => b - a)
+                        .slice(0, maxLimit - 1)
+                }
                 
                 const updatedData = [...windowData, timestamp]
-                    .filter(ts => ts > windowStart)
                     .sort((a, b) => b - a)
-                    .slice(0, Math.max(this.config.limits.perIp, this.config.limits.perReporter || 0, this.config.limits.perApp || 0)) // Keep only what we need
+                    .slice(0, maxLimit)
 
                 await this.storage.set(windowKey, updatedData, item.window! + 60)
             })
@@ -294,9 +326,13 @@ export class SlidingWindowRateLimiter {
             const windowStart = now - windowMs
 
             const windowData = await this.storage.get<number[]>(windowKey) || []
-            console.log(`Window data for ${check.tier}:${check.key}`, windowData)
+            console.log(`Window data for ${check.tier}:${check.key}`, windowData.length)
+            const validTimestamps = windowData.filter(timestamp => timestamp > windowStart)
             const current = windowData.filter(timestamp => timestamp > windowStart).length
-            const oldestRequest = Math.min(...windowData.filter(ts => ts > windowStart))
+            const oldestRequest = validTimestamps.length > 0 
+                ? validTimestamps.reduce((min, timestamp) => Math.min(min, timestamp), validTimestamps[0])
+                : null
+
             const resetTime = oldestRequest ? oldestRequest + windowMs : now + windowMs
 
             stats[check.tier] = {
@@ -313,19 +349,31 @@ export class SlidingWindowRateLimiter {
         if (!this.isEnabled) return
 
         try {
-            const keys = await this.storage.get(`frogger-rate-limiter:keys`) || []
+            const keys = await this.storage.get(`${this.storage.getStorageKey()}:keys`) || []
 
-            const cleanupPromises = keys.map(async (key: string) => {
-                const value = await this.storage.get(key)
-                if (value && typeof value === 'object' && 'expiresAt' in value) {
-                    const wrapped = value as { data: any; expiresAt: number }
-                    if (Date.now() > wrapped.expiresAt) {
-                        await useStorage().removeItem(key)
+            const chunkSize = 50
+            for (let i = 0; i < keys.length; i += chunkSize) {
+                const chunk = keys.slice(i, i + chunkSize)
+                
+                const cleanupPromises = chunk.map(async (key: string) => {
+                    try {
+                        const value = await this.storage.get(key)
+                        if (value && typeof value === 'object' && 'expiresAt' in value) {
+                            const wrapped = value as { data: any; expiresAt: number }
+                            if (Date.now() > wrapped.expiresAt) {
+                                const cleanKey = key.startsWith(`${this.storage.getStorageKey()}:`) 
+                                    ? key.replace(`${this.storage.getStorageKey()}:`, '') 
+                                    : key
+                                await this.storage.delete(cleanKey)
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`Failed to cleanup key ${key}:`, error)
                     }
-                }
-            })
-            
-            await Promise.all(cleanupPromises)
+                })
+                
+                await Promise.all(cleanupPromises)
+            }
         }
         catch (error) {
             console.error('Failed to cleanup expired rate limit keys:', error)

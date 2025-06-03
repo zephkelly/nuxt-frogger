@@ -15,13 +15,10 @@ startFrogger.error('Hello from the playground!');
 
 const testing = () => {
     const clickFrogger = useFrogger();
-    clickFrogger.info('Test button clicked!');
-    clickFrogger.error('This is an error message');
-    clickFrogger.warn('This is a warning message');
-    clickFrogger.debug('This is a debug message');
-    clickFrogger.fatal('This is an fatal message');
-    clickFrogger.success('This is a success message');
-    clickFrogger.log('This is a log message');
+
+    for (let i = 0; i < 100; i++) {
+        clickFrogger.info(`Click number ${i + 1}`);
+    }
 };
 
 const test2 = async () => {

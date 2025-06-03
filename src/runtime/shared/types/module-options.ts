@@ -1,6 +1,6 @@
 import type { BatchOptions } from "./batch"
 import type { FileOptions } from "./file";
-
+import type { RateLimitingOptions } from "../../server/types/rate-limiter";
 
 
 export interface ModuleOptions {
@@ -11,6 +11,8 @@ export interface ModuleOptions {
     file?: FileOptions
     
     batch?: BatchOptions | false
+
+    rateLimiter?: RateLimitingOptions | false
     
     public?: {
         endpoint?: string

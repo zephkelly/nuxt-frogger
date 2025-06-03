@@ -43,6 +43,34 @@ export default defineNuxtModule<ModuleOptions>({
             sortingWindowMs: 3000,
         },
         
+        rateLimiter: {
+            limits: {
+                global: 10000,      // 10k requests per window for entire endpoint
+                perIp: 100,         // 100 requests per IP per window
+                perReporter: 50,    // 50 requests per reporter per window  
+                perApp: 30          // 30 requests per app per window
+            },
+            
+            windows: {
+                global: 60,         // 1 minute global window
+                perIp: 60,          // 1 minute per IP
+                perReporter: 60,    // 1 minute per reporter
+                perApp: 60          // 1 minute per app
+            },
+            
+            blocking: {
+                enabled: true,
+                escalationResetHours: 24,           // Reset escalation after 24 hours
+                timeouts: [60, 300, 1800]          // 1min, 5min, 30min blocks
+            },
+    
+            storage: {
+                // Will use Nitro KV by default
+                driver: undefined,
+                options: {}
+            }
+        },
+
         // Set in the public runtime config, can be overridden
         // at runtime using 'NUXT_PUBLIC_FROGGER_' environment variables
         public: {
@@ -88,7 +116,9 @@ export default defineNuxtModule<ModuleOptions>({
                     highWaterMark: _options.file?.highWaterMark,
                 },
                 
-                batch: _options.batch
+                batch: _options.batch,
+
+                rateLimiter: _options.rateLimiter
             }
         };
 

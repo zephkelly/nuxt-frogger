@@ -3,8 +3,7 @@ import { H3Event, H3Error, eventHandler, readBody, getHeader, createError } from
 import type { LoggerObjectBatch } from '../../shared/types/batch';
 
 import { ServerLogQueueService } from '../services/server-log-queue';
-
-
+import { RateLimitResponseFactory } from '../utils/rate-limit/response-factory';
 
 interface LoopDetectionResult {
     isLoop: boolean;
@@ -83,8 +82,46 @@ function detectLoggingLoop(
     };
 }
 
+import { getRateLimiter, extractRateLimitIdentifier } from '../services/rate-limiter';
 
 export default eventHandler(async (event) => {
+    const rateLimiter = getRateLimiter();
+
+    // Only check rate limits if enabled
+    if (rateLimiter.isRateLimitingEnabled()) {
+        const identifier = extractRateLimitIdentifier(event);
+        const rateLimitResult = await rateLimiter.checkRateLimit(identifier);
+
+        if (rateLimitResult && !rateLimitResult.allowed) {
+            // Log the rate limit violation for monitoring
+            console.warn(
+                '%cFROGGER RATE LIMIT', 
+                'color: white; background-color: #f59e0b; font-weight: bold; font-size: 1.1rem;',
+                `⚠️ Rate limit exceeded for ${identifier.ip} (${rateLimitResult.tier} tier): ${rateLimitResult.current}/${rateLimitResult.limit}`
+            );
+
+            // Block IP if this is a rate limit violation (not already blocked)
+            if (!rateLimitResult.isBlocked) {
+                await rateLimiter.blockIP(identifier.ip);
+                console.warn(
+                    '%cFROGGER IP BLOCKED', 
+                    'color: white; background-color: #dc2626; font-weight: bold; font-size: 1.2rem;',
+                    `🚨 IP ${identifier.ip} has been blocked due to rate limit violations`
+                );
+            }
+            
+            // Return rate limit error response
+            const response = RateLimitResponseFactory.createH3Response(rateLimitResult);
+            throw createError(response);
+        }
+
+        // Log successful rate limit check in debug mode
+        if (import.meta.dev) {
+            console.debug(`Rate limit check passed for ${identifier.ip}: ${rateLimitResult?.current || 0} requests`);
+        }
+    }
+
+
     const logBatch = await readBody<LoggerObjectBatch>(event);
 
     try {

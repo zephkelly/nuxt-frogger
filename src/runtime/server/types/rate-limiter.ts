@@ -1,13 +1,17 @@
-export interface RateLimitConfig {
-    // Rate limits per tier (requests per window)
+export interface RateLimitingOptions {
+    /**
+     * Rate limits per tier (requests per window)
+     */
     limits: {
-        global?: number;      // Overall endpoint limit
-        perIp: number;        // Per IP address
-        perReporter?: number; // Per reporter ID
-        perApp?: number;      // Per app name
+        global?: number;
+        perIp: number;
+        perReporter?: number;
+        perApp?: number;
     };
     
-    // Time windows in seconds
+    /**
+     * Time windows in seconds
+     */
     windows: {
         global?: number;
         perIp: number;
@@ -15,11 +19,21 @@ export interface RateLimitConfig {
         perApp?: number;
     };
     
-    // Blocking configuration
+    /**
+     * IP blocking configuration
+     */
     blocking: {
         enabled: boolean;
         escalationResetHours: number;
-        timeouts: number[]; // [60, 300, 1800] = 1min, 5min, 30min
+        timeouts: number[];
+    };
+
+    /**
+     * Storage configuration for rate limiting data
+     */
+    storage?: {
+        driver?: string;
+        options?: Record<string, any>;
     };
 }
 

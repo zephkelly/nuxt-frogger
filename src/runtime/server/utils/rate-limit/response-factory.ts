@@ -1,4 +1,4 @@
-import type { RateLimitCheckResult, RateLimitHeaders, RateLimitResponse } from "../types/rate-limiter";
+import type { RateLimitCheckResult, RateLimitHeaders, RateLimitResponse } from "../../types/rate-limiter";
 
 
 

@@ -10,6 +10,8 @@ import type {
     RateLimitCheckResult
 } from "../types/rate-limiter"
 
+import type { RateLimitScope } from '../../shared/types/rate-limit'
+
 import { RateLimitKVLayer } from "../utils/rate-limit/kv-layer"
 import { RateLimitResponseFactory } from '../utils/rate-limit/response-factory';
 import { extractRateLimitIdentifier } from '../services/rate-limiter';
@@ -82,6 +84,15 @@ export class SlidingWindowRateLimiter {
         return this.isEnabled
     }
 
+    getChecks(identifier: RateLimitIdentifier): { tier: RateLimitScope; key?: string; limit?: number; window?: number }[] {
+        return [
+            { tier: 'global', key: 'global', limit: this.config.limits?.global, window: this.config.windows?.global },
+            { tier: 'ip', key: identifier.ip, limit: this.config.limits?.perIp, window: this.config.windows?.perIp },
+            { tier: 'reporter', key: identifier.reporterId, limit: this.config.limits?.perReporter, window: this.config.windows?.perReporter }, 
+            { tier: 'app', key: identifier.appName, limit: this.config.limits?.perApp, window: this.config.windows?.perApp }
+        ]
+    }
+
     async checkRateLimit(identifier: RateLimitIdentifier): Promise<RateLimitCheckResult[] | null> {
         if (!this.isEnabled) {
             return null
@@ -94,12 +105,7 @@ export class SlidingWindowRateLimiter {
             return [blockResult]
         }
 
-        const checks = [
-            { tier: 'global' as const, key: 'global', limit: this.config.limits.global, window: this.config.windows.global },
-            { tier: 'ip' as const, key: identifier.ip, limit: this.config.limits.perIp, window: this.config.windows.perIp },
-            { tier: 'app' as const, key: identifier.appName, limit: this.config.limits.perApp, window: this.config.windows.perApp },
-            { tier: 'reporter' as const, key: identifier.reporterId, limit: this.config.limits.perReporter, window: this.config.windows.perReporter },
-        ]
+        const checks = this.getChecks(identifier)
 
         const results: RateLimitCheckResult[] = []
 
@@ -130,7 +136,7 @@ export class SlidingWindowRateLimiter {
 
     private async checkSlidingWindow(
         key: string,
-        tier: 'global' | 'ip' | 'reporter' | 'app',
+        tier: RateLimitScope,
         limit: number,
         windowSeconds: number,
         now: number
@@ -178,14 +184,9 @@ export class SlidingWindowRateLimiter {
             return
         }
 
-        const keys = [
-            { tier: 'global', key: 'global', window: this.config.windows.global },
-            { tier: 'ip', key: identifier.ip, window: this.config.windows.perIp },
-            { tier: 'reporter', key: identifier.reporterId, window: this.config.windows.perReporter },
-            { tier: 'app', key: identifier.appName, window: this.config.windows.perApp }
-        ]
-        
-        const relevantLimit = this.config.limits.perReporter || this.config.limits.perIp || this.config.limits.global || 1000
+        const keys = this.getChecks(identifier)
+
+        const relevantLimit = this.config.limits?.perReporter || this.config.limits?.perIp || this.config.limits?.global || 1000
         const maxLimit = Math.min(relevantLimit * 2, 500)
 
         const promises = keys
@@ -216,7 +217,7 @@ export class SlidingWindowRateLimiter {
     }
 
     private async checkIPBlock(ip: string): Promise<RateLimitCheckResult> {
-        if (!this.config.blocking.enabled) {
+        if (!this.config.blocking?.enabled) {
             return { allowed: true, tier: 'ip', limit: 0, current: 0, resetTime: 0, retryAfter: 0 }
         }
 
@@ -255,7 +256,7 @@ export class SlidingWindowRateLimiter {
     }
 
     async blockIP(ip: string): Promise<void> {
-        if (!this.isEnabled || !this.config.blocking.enabled) return
+        if (!this.isEnabled || !this.config.blocking?.enabled) return
 
         const blockKey = `ip_block:${ip}`
         const now = Date.now()
@@ -307,12 +308,7 @@ export class SlidingWindowRateLimiter {
         const now = Date.now()
         const stats: Record<string, { current: number; limit: number; resetTime: number }> = {}
 
-        const checks = [
-            { tier: 'global', key: 'global', limit: this.config.limits.global, window: this.config.windows.global },
-            { tier: 'ip', key: identifier.ip, limit: this.config.limits.perIp, window: this.config.windows.perIp },
-            { tier: 'reporter', key: identifier.reporterId, limit: this.config.limits.perReporter, window: this.config.windows.perReporter },
-            { tier: 'app', key: identifier.appName, limit: this.config.limits.perApp, window: this.config.windows.perApp }
-        ]
+        const checks = this.getChecks(identifier)
 
         for (const check of checks) {
             if (!check.limit || !check.window || !check.key) continue

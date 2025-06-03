@@ -8,9 +8,9 @@ import type { IRateLimitStorage } from '../../types/rate-limiter'
  * Nitro KV Storage adapter for rate limiting
  */
 export class RateLimitKVLayer implements IRateLimitStorage {
-    private storageKey: string
+    private readonly storageKey: string
     
-    constructor(storageKey: string = 'rate-limiter') {
+    constructor(storageKey: string = 'frogger-rate-limiter') {
         this.storageKey = storageKey
     }
 

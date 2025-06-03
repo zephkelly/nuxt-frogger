@@ -2,7 +2,7 @@ export interface RateLimitingOptions {
     /**
      * Rate limits per tier (requests per window)
      */
-    limits: {
+    limits?: {
         global?: number;
         perIp: number;
         perReporter?: number;
@@ -12,7 +12,7 @@ export interface RateLimitingOptions {
     /**
      * Time windows in seconds
      */
-    windows: {
+    windows?: {
         global?: number;
         perIp: number;
         perReporter?: number;
@@ -22,7 +22,7 @@ export interface RateLimitingOptions {
     /**
      * IP blocking configuration
      */
-    blocking: {
+    blocking?: {
         enabled: boolean;
         escalationResetHours: number;
         timeouts: number[];
@@ -71,12 +71,12 @@ export interface RateLimitResponse {
 }
 
 export interface RateLimitHeaders {
-    'X-Rate-Limit-Limit': string;
-    'X-Rate-Limit-Remaining': string;
-    'X-Rate-Limit-Reset': string;
-    'X-Rate-Limit-Retry-After': string;
-    'X-Frogger-Action': 'pause' | 'backoff' | 'block';
-    'X-Frogger-Rate-Limit-Tier': string;
+    'x-rate-limit-limit': string;
+    'x-rate-limit-remaining': string;
+    'x-rate-limit-reset': string;
+    'x-rate-limit-retry-after': string;
+    'x-frogger-action': 'pause' | 'backoff' | 'block';
+    'x-frogger-rate-limit-tier': string;
 }
 
 

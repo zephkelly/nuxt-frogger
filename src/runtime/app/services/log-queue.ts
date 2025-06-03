@@ -1,7 +1,12 @@
+import { H3Error } from 'h3';
+
 import type { LoggerObject } from '../../shared/types/log';
 import type { LoggerObjectBatch } from '../../shared/types/batch';
 
 import { useRuntimeConfig } from '#app';
+import { uuidv7 } from '../../shared/utils/uuid';
+
+import { handleRateLimit } from '../../shared/utils/rate-limit/handler';
 
 
 interface RetryState {
@@ -18,6 +23,7 @@ export class LogQueueService {
     private timer: ReturnType<typeof setTimeout> | null = null;
     private sending: boolean = false;
     private batchingEnabled: boolean = true;
+    private readonly reporterId: string;
 
     private endpoint: string;
     private maxBatchSize: number | undefined;
@@ -40,6 +46,8 @@ export class LogQueueService {
     private readonly rateLimitBackoffMs = 60000;
 
     constructor() {
+        this.reporterId = 'client-log-queue-' + uuidv7();
+
         const config = useRuntimeConfig();
         
         this.endpoint = config.public.frogger.endpoint;
@@ -95,31 +103,64 @@ export class LogQueueService {
         };
     }
 
-    /**
-     * Handle rate limit response and set appropriate backoff
-     */
-    private handleRateLimit(retryAfter?: number): void {
-        const backoffMs = retryAfter 
-            ? retryAfter * 1000
-            : Math.min(
-                this.rateLimitBackoffMs * this.retryState.backoffMultiplier,
-                this.maxBackoffMs
-            );
+ 
+    private handleRateLimit(error: H3Error, retryAfter?: number): boolean {
+        const { rateLimitInfo, strategy, shouldRetry, delayMs } = handleRateLimit(error, {
+            maxRetries: this.maxRetries,
+            baseBackoffMs: this.baseBackoffMs,
+            maxBackoffMs: this.maxBackoffMs,
+            respectServerTiming: true,
+            onRateLimit: (info, strat) => {
 
-        this.retryState.nextRetryAt = Date.now() + backoffMs;
-        this.retryState.count++;
-        this.retryState.backoffMultiplier *= 2;
-
-        console.warn(
-            `Rate limited! Backing off for ${Math.round(backoffMs / 1000)}s. ` +
-            `Retry attempt ${this.retryState.count}/${this.maxRetries}`
-        );
-
-        setTimeout(() => {
-            if (this.queue.length > 0) {
-                this.scheduleSend();
+                console.log(
+                    `🚦 Frogger Rate Limit [${info.tier}]: ${strat.message}`
+                );
+                
+                if (info.isBlocked) {
+                    console.error(
+                        `🚨 IP BLOCKED: Level ${info.blockInfo?.level || 'unknown'} until ${
+                            info.blockInfo?.expiresAt ? new Date(info.blockInfo.expiresAt).toISOString() : 'unknown'
+                        }`
+                    );
+                }
             }
-        }, backoffMs);
+        });
+
+        if (!rateLimitInfo.isRateLimited) {
+            return false;
+        }
+
+        this.retryState.count++;
+        this.retryState.nextRetryAt = Date.now() + delayMs;
+
+        if (rateLimitInfo.isBlocked) {
+            console.error(`Dropping ${this.queue.length} logs due to IP block`);
+            this.queue = []; 
+            this.resetRetryState();
+            return true;
+        }
+
+        if (rateLimitInfo.isPaused) {
+            this.retryState.backoffMultiplier = Math.min(this.retryState.backoffMultiplier * 1.5, 4);
+        }
+        else {
+            this.retryState.backoffMultiplier = Math.min(this.retryState.backoffMultiplier * 2, 8);
+        }
+
+        if (shouldRetry && this.retryState.count < this.maxRetries) {
+            setTimeout(() => {
+                if (this.queue.length > 0) {
+                    this.scheduleSend();
+                }
+            }, delayMs);
+        }
+        else if (this.retryState.count >= this.maxRetries) {
+            console.error(`Max retries reached for rate limiting. Dropping ${this.queue.length} logs.`);
+            this.queue = [];
+            this.resetRetryState();
+        }
+
+        return true;
     }
 
     /**
@@ -225,21 +266,13 @@ export class LogQueueService {
             this.resetRetryState();
         }
         catch (error: any) {
-            console.error('Failed to send logs:', error);
+            const wasRateLimit = this.handleRateLimit(error);
             
-            if (error.response?.status === 429) {
-                const retryAfter = error.response.headers?.['x-rate-limit-retry-after'] || 
-                                 error.response.headers?.['retry-after'];
-                
-                if (this.maxQueueSize) {
-                    this.queue = [...logs, ...this.queue].slice(0, this.maxQueueSize);
-                }
-                
-                this.handleRateLimit(retryAfter ? parseInt(retryAfter) : undefined);
+            if (wasRateLimit) {
                 return;
             }
 
-            if (error.response?.status >= 400 && error.response?.status < 500 && error.response?.status !== 429) {
+            if (error.response?.status >= 400 && error.response?.status < 500) {
                 console.error(`Client error (${error.response.status}). Dropping logs to prevent retry loop.`);
                 this.resetRetryState();
                 return;
@@ -290,17 +323,10 @@ export class LogQueueService {
         catch (error: any) {
             console.error('Failed to send log immediately:', error);
             
-            if (error.response?.status === 429) {
-                const retryAfter = error.response.headers?.['x-rate-limit-retry-after'] || 
-                                 error.response.headers?.['retry-after'];
-                this.handleRateLimit(retryAfter ? parseInt(retryAfter) : undefined);
-            }
+            this.handleRateLimit(error);
         }
     }
 
-    /**
-     * Force flush any pending logs (only applicable when batching is enabled)
-     */
     async flush(): Promise<void> {
         if (!this.batchingEnabled) {
             return;

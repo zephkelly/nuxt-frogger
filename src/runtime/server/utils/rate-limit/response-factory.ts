@@ -9,14 +9,13 @@ export class RateLimitResponseFactory {
         body: RateLimitResponse 
     } {
         const isBlocked = result.isBlocked || false;
-        
         const headers: RateLimitHeaders = {
-            'X-Rate-Limit-Limit': result.limit.toString(),
-            'X-Rate-Limit-Remaining': Math.max(0, result.limit - result.current).toString(),
-            'X-Rate-Limit-Reset': result.resetTime.toString(),
-            'X-Rate-Limit-Retry-After': result.retryAfter.toString(),
-            'X-Frogger-Action': isBlocked ? 'block' : (result.tier === 'global' ? 'pause' : 'backoff'),
-            'X-Frogger-Rate-Limit-Tier': result.tier
+            'x-rate-limit-limit': result.limit.toString(),
+            'x-rate-limit-remaining': Math.max(0, result.limit - result.current).toString(),
+            'x-rate-limit-reset': result.resetTime.toString(),
+            'x-rate-limit-retry-after': result.retryAfter.toString(),
+            'x-frogger-action': isBlocked ? 'block' : (result.tier === 'global' ? 'pause' : 'backoff'),
+            'x-frogger-rate-limit-tier': result.tier
         };
 
         const body: RateLimitResponse = {
@@ -25,7 +24,7 @@ export class RateLimitResponseFactory {
                 ? `IP address is temporarily blocked (level ${result.blockLevel})` 
                 : `Rate limit exceeded for ${result.tier}`,
             retryAfter: result.retryAfter,
-            action: headers['X-Frogger-Action'],
+            action: headers['x-frogger-action'],
             limit: result.limit,
             current: result.current,
             resetTime: result.resetTime

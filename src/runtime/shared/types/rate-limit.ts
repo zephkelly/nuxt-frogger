@@ -1,0 +1,1 @@
+export type RateLimitScope = 'global' | 'ip' | 'reporter' | 'app'

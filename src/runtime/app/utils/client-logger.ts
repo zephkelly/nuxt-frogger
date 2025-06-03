@@ -124,9 +124,6 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         };
     }
 
-    /**
-     * Send a single log immediately to the server
-     */
     private async sendLogImmediately(logObj: LoggerObject): Promise<void> {
         if (!this.options.endpoint) return;
 
@@ -151,9 +148,6 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         }
     }
     
-    /**
-     * Process a log entry from Consola
-     */
     protected async processLoggerObject(loggerObject: LoggerObject): Promise<void> {
         if (import.meta.client) {
             if (this.batchingEnabled) {

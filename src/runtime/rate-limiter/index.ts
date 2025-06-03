@@ -386,8 +386,8 @@ export class SlidingWindowRateLimiter {
 
         const validTimestamps = windowData.filter(timestamp => timestamp > windowStart).slice(0, Math.max(limit * 2, 1000))
         
-        const current = validTimestamps.length
-        const allowed = current < limit
+        const current = validTimestamps.length + 1
+        const allowed = current < limit + 1
         
         const oldestRequest = validTimestamps.length > 0 
             ? validTimestamps.reduce((min, timestamp) => Math.min(min, timestamp), validTimestamps[0])

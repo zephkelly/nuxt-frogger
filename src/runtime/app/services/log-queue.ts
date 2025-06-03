@@ -4,6 +4,12 @@ import type { LoggerObjectBatch } from '../../shared/types/batch';
 import { useRuntimeConfig } from '#app';
 
 
+interface RetryState {
+    count: number;
+    nextRetryAt: number;
+    backoffMultiplier: number;
+}
+
 /**
  * Centralized log queue service
  */
@@ -23,6 +29,16 @@ export class LogQueueService {
         version: 'unknown' 
     };
 
+    private retryState: RetryState = {
+        count: 0,
+        nextRetryAt: 0,
+        backoffMultiplier: 1
+    };
+    private readonly maxRetries = 5;
+    private readonly baseBackoffMs = 1000;
+    private readonly maxBackoffMs = 300000;
+    private readonly rateLimitBackoffMs = 60000;
+
     constructor() {
         const config = useRuntimeConfig();
         
@@ -35,7 +51,7 @@ export class LogQueueService {
 
         this.maxBatchSize = config.public.frogger.batch?.maxSize;
         this.maxBatchAge = config.public.frogger.batch?.maxAge;
-        this.maxQueueSize = config.public.frogger.batch?.maxSize;
+        this.maxQueueSize = config.public.frogger.batch?.maxSize || 1000;
     }
 
     /**
@@ -59,9 +75,82 @@ export class LogQueueService {
         // Trim the queue if it exceeds the maximum size
         if (this.maxQueueSize && this.queue.length > this.maxQueueSize) {
             this.queue = this.queue.slice(-this.maxQueueSize);
+            console.warn(`Log queue exceeded maximum size of ${this.maxQueueSize}. Old logs have been discarded.`);
         }
         
         this.scheduleSend();
+    }
+
+    private isRateLimited(): boolean {
+        return Date.now() < this.retryState.nextRetryAt;
+    }
+
+    private resetRetryState(): void {
+        this.retryState = {
+            count: 0,
+            nextRetryAt: 0,
+            backoffMultiplier: 1
+        };
+    }
+
+    /**
+     * Handle rate limit response and set appropriate backoff
+     */
+    private handleRateLimit(retryAfter?: number): void {
+        const backoffMs = retryAfter 
+            ? retryAfter * 1000
+            : Math.min(
+                this.rateLimitBackoffMs * this.retryState.backoffMultiplier,
+                this.maxBackoffMs
+            );
+
+        this.retryState.nextRetryAt = Date.now() + backoffMs;
+        this.retryState.count++;
+        this.retryState.backoffMultiplier *= 2;
+
+        console.warn(
+            `Rate limited! Backing off for ${Math.round(backoffMs / 1000)}s. ` +
+            `Retry attempt ${this.retryState.count}/${this.maxRetries}`
+        );
+
+        setTimeout(() => {
+            if (this.queue.length > 0) {
+                this.scheduleSend();
+            }
+        }, backoffMs);
+    }
+
+    /**
+     * Handle general error with exponential backoff
+     */
+    private handleGeneralError(error: any): void {
+        this.retryState.count++;
+        
+        if (this.retryState.count >= this.maxRetries) {
+            console.error(`Max retries (${this.maxRetries}) reached. Dropping ${this.queue.length} logs.`);
+            this.queue = [];
+            this.resetRetryState();
+            return;
+        }
+
+        const backoffMs = Math.min(
+            this.baseBackoffMs * Math.pow(2, this.retryState.count - 1),
+            this.maxBackoffMs
+        );
+
+        this.retryState.nextRetryAt = Date.now() + backoffMs;
+
+        console.warn(
+            `Send failed (attempt ${this.retryState.count}/${this.maxRetries}). ` +
+            `Retrying in ${Math.round(backoffMs / 1000)}s. Error:`, 
+            error.message || error
+        );
+
+        setTimeout(() => {
+            if (this.queue.length > 0) {
+                this.scheduleSend();
+            }
+        }, backoffMs);
     }
 
     /**
@@ -69,6 +158,10 @@ export class LogQueueService {
      */
     private scheduleSend(): void {
         if (!this.batchingEnabled) return;
+
+        if (this.isRateLimited()) {
+            return;
+        }
 
         if (this.maxBatchSize && this.queue.length >= this.maxBatchSize) {
             this.sendLogs();
@@ -92,6 +185,10 @@ export class LogQueueService {
         if (!this.batchingEnabled || this.queue.length === 0 || this.sending) {
             return;
         }
+
+        if (this.isRateLimited()) {
+            return;
+        }
         
         if (this.timer !== null) {
             clearTimeout(this.timer);
@@ -111,25 +208,54 @@ export class LogQueueService {
             
             const batch: LoggerObjectBatch = {
                 logs,
-                app: this.appInfo
+                app: this.appInfo,
+                meta: {
+                    time: Date.now(),
+                    processChain: [this.appInfo.name]
+                }
             };
             
-            await $fetch(this.endpoint, {
+            await $fetch.raw(this.endpoint, {
                 method: 'POST',
                 body: batch,
             });
-        }
-        catch (error) {
-            console.error('Failed to send logs:', error);
-            if (!this.batchingEnabled || !this.maxQueueSize) return;
 
-            // Put the logs back in the queue
-            this.queue = [...logs, ...this.queue].slice(-this.maxQueueSize);
+            this.resetRetryState();
+        }
+        catch (error: any) {
+            console.error('Failed to send logs:', error);
+            
+            if (error.response?.status === 429) {
+                const retryAfter = error.response.headers?.['x-rate-limit-retry-after'] || 
+                                 error.response.headers?.['retry-after'];
+                
+                if (this.maxQueueSize) {
+                    this.queue = [...logs, ...this.queue].slice(0, this.maxQueueSize);
+                }
+                
+                this.handleRateLimit(retryAfter ? parseInt(retryAfter) : undefined);
+                return;
+            }
+
+            if (error.response?.status >= 400 && error.response?.status < 500 && error.response?.status !== 429) {
+                console.error(`Client error (${error.response.status}). Dropping logs to prevent retry loop.`);
+                this.resetRetryState();
+                return;
+            }
+
+            this.queue = [...logs, ...this.queue];
+            if (this.maxQueueSize && this.queue.length > this.maxQueueSize) {
+                const dropped = this.queue.length - this.maxQueueSize;
+                this.queue = this.queue.slice(0, this.maxQueueSize);
+                console.warn(`Dropped ${dropped} logs due to queue overflow during retry`);
+            }
+            
+            this.handleGeneralError(error);
         }
         finally {
             this.sending = false;
             
-            if (this.queue.length > 0) {
+            if (this.queue.length > 0 && !this.isRateLimited()) {
                 this.scheduleSend();
             }
         }
@@ -141,19 +267,32 @@ export class LogQueueService {
     private async sendLogImmediately(log: LoggerObject): Promise<void> {
         if (!this.endpoint) return;
 
+        if (this.isRateLimited()) {
+            console.debug('Dropping immediate log due to rate limiting');
+            return;
+        }
+
         const batch: LoggerObjectBatch = {
             logs: [log],
             app: this.appInfo
         };
 
         try {
-            await $fetch(this.endpoint, {
+            await $fetch.raw(this.endpoint, {
                 method: 'POST',
-                body: batch
+                body: batch,
             });
+
+            this.resetRetryState();
         }
-        catch (error) {
+        catch (error: any) {
             console.error('Failed to send log immediately:', error);
+            
+            if (error.response?.status === 429) {
+                const retryAfter = error.response.headers?.['x-rate-limit-retry-after'] || 
+                                 error.response.headers?.['retry-after'];
+                this.handleRateLimit(retryAfter ? parseInt(retryAfter) : undefined);
+            }
         }
     }
 

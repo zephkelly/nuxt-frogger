@@ -76,8 +76,8 @@ export default defineNuxtModule<ModuleOptions>({
         public: {
             endpoint: '/api/_frogger/logs',
             batch: {
-                maxSize: 50,
                 maxAge: 3000,
+                maxSize: 100,
                 retryOnFailure: true,
                 maxRetries: 3,
                 retryDelay: 3000,

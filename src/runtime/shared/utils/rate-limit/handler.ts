@@ -1,3 +1,5 @@
+import { getHeader } from 'h3'
+
 interface RateLimitInfo {
     isRateLimited: boolean;
     action: 'block' | 'pause' | 'backoff' | 'none';
@@ -27,6 +29,26 @@ interface RateLimitStrategy {
     message: string;
 }
 
+function getHeaderValue(headers: any, key: string): string | undefined {
+    if (!headers) return undefined;
+    
+    if (typeof headers.get === 'function') {
+        return headers.get(key) || undefined;
+    }
+    
+    if (typeof headers === 'object') {
+        if (headers[key] !== undefined) return headers[key];
+        
+        const lowerKey = key.toLowerCase();
+        if (headers[lowerKey] !== undefined) return headers[lowerKey];
+        
+        const foundKey = Object.keys(headers).find(k => k.toLowerCase() === lowerKey);
+        if (foundKey && headers[foundKey] !== undefined) return headers[foundKey];
+    }
+    
+    return undefined;
+}
+
 
 export function parseRateLimitError(error: any): RateLimitInfo {
     const defaultInfo: RateLimitInfo = {
@@ -50,13 +72,17 @@ export function parseRateLimitError(error: any): RateLimitInfo {
     }
 
     const headers = error.response.headers || {};
-    
-    const limit = parseInt(headers['x-rate-limit'] || '0');
-    const remaining = parseInt(headers['x-rate-limit-remaining'] || '0');
-    const resetTime = parseInt(headers['x-rate-limit-reset'] || '0');
-    const retryAfter = parseInt(headers['x-rate-limit-retry-after'] || headers['retry-after'] || '0');
-    const action = headers['x-frogger-action'] || 'backoff';
-    const tier = headers['x-frogger-rate-limit-tier'] || 'unknown';
+
+    const limit = parseInt(getHeaderValue(headers, 'x-rate-limit-limit') || '0');
+    const remaining = parseInt(getHeaderValue(headers, 'x-rate-limit-remaining') || '0');
+    const resetTime = parseInt(getHeaderValue(headers, 'x-rate-limit-reset') || '0');
+    const retryAfter = parseInt(
+        getHeaderValue(headers, 'x-rate-limit-retry-after') || 
+        getHeaderValue(headers, 'retry-after') || 
+        '0'
+    );
+    const action = getHeaderValue(headers, 'x-frogger-action') || 'backoff';
+    const tier = getHeaderValue(headers, 'x-frogger-rate-limit-tier') || 'unknown';
 
     const current = limit - remaining;
     const retryAfterMs = retryAfter * 1000;

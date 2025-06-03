@@ -3,7 +3,9 @@ import { H3Event, H3Error, eventHandler, readBody, getHeader, createError } from
 import type { LoggerObjectBatch } from '../../shared/types/batch';
 
 import { ServerLogQueueService } from '../services/server-log-queue';
-import { RateLimitResponseFactory } from '../utils/rate-limit/response-factory';
+import { getFroggerRateLimiter } from '../services/rate-limiter';
+
+
 
 interface LoopDetectionResult {
     isLoop: boolean;
@@ -22,7 +24,6 @@ function detectLoggingLoop(
     const warnings: string[] = [];
     let isLoop = false;
 
-    // Check for Frogger headers (primary detection method)
     const isFroggerRequest = getHeader(event, 'x-frogger-reporter') === 'true';
     const froggerReporterId = getHeader(event, 'x-frogger-reporter-id');
     const froggerProcessed = getHeader(event, 'x-frogger-processed') === 'true';
@@ -41,7 +42,6 @@ function detectLoggingLoop(
         }
     }
 
-    // Metadata check
     if (batch.meta?.processed) {
         warnings.push('Batch metadata indicates Frogger processing');
         
@@ -61,7 +61,7 @@ function detectLoggingLoop(
                 warnings.push(`Old logs detected (${Math.round(age / 1000)}s old) - possible retry loop`);
             }
 
-            if (age > 600000) { // 10 minutes
+            if (age > 600000) {
                 isLoop = true;
                 warnings.push(`LOOP DETECTED: Logs are older than 10 minutes (${Math.round(age / 1000)}s old)`);
             }
@@ -82,50 +82,8 @@ function detectLoggingLoop(
     };
 }
 
-import { getRateLimiter, extractRateLimitIdentifier } from '../services/rate-limiter';
 
 export default eventHandler(async (event) => {
-    const rateLimiter = getRateLimiter();
-
-    if (rateLimiter.isRateLimitingEnabled()) {
-        const identifier = extractRateLimitIdentifier(event);
-        const rateLimitResult = await rateLimiter.checkRateLimit(identifier);
-
-        console.log(rateLimitResult)
-
-        if (rateLimitResult && !rateLimitResult.allowed) {
-            if (rateLimitResult.limit > 0) {
-                console.warn(
-                    '%cFROGGER RATE LIMIT', 
-                    'color: white; background-color: #f59e0b; font-weight: bold; font-size: 1.1rem;',
-                    `⚠️ Rate limit exceeded for ${identifier.ip} (${rateLimitResult.tier} tier): ${rateLimitResult.current}/${rateLimitResult.limit}`
-                );
-
-                if (!rateLimitResult.isBlocked) {
-                    await rateLimiter.blockIP(identifier.ip);
-                    console.warn(
-                        '%cFROGGER IP BLOCKED', 
-                        'color: white; background-color: #dc2626; font-weight: bold; font-size: 1.2rem;',
-                        `🚨 IP ${identifier.ip} has been blocked due to rate limit violations`
-                    );
-                }
-            } else {
-                console.error(
-                    '%cFROGGER CONFIG ERROR',
-                    'color: white; background-color: #dc2626; font-weight: bold;',
-                    `❌ Rate limiter misconfigured: limits are 0. Either disable rate limiting or set proper limits.`
-                );
-            }
-            
-            const response = RateLimitResponseFactory.createH3Response(rateLimitResult);
-            throw createError(response);
-        }
-
-        if (import.meta.dev) {
-            console.debug(`Rate limit check passed for ${identifier.ip}: ${rateLimitResult?.current || 0} requests`);
-        }
-    }
-
     const contentLength = getHeader(event, 'content-length');
     const maxRequestSize = 1024 * 1024;
     
@@ -140,6 +98,7 @@ export default eventHandler(async (event) => {
         });
     }
 
+    await getFroggerRateLimiter().check(event);
 
     const logBatch = await readBody<LoggerObjectBatch>(event);
 
@@ -167,7 +126,6 @@ export default eventHandler(async (event) => {
                 );
             }
             
-            // Return error to break the loop
             throw createError({
                 statusCode: 400,
                 statusMessage: 'Logging loop detected',

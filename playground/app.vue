@@ -16,7 +16,7 @@ startFrogger.error('Hello from the playground!');
 const testing = () => {
     const clickFrogger = useFrogger();
 
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 10; i++) {
         clickFrogger.info(`Click number ${i + 1}`);
     }
 };

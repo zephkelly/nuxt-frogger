@@ -1,5 +1,7 @@
+import { H3Event, createError } from 'h3'
+
 //@ts-ignore
-import { useRuntimeConfig, useStorage } from '#imports'
+import { useRuntimeConfig } from '#imports'
 
 import type {
     IRateLimitStorage,
@@ -9,6 +11,8 @@ import type {
 } from "../types/rate-limiter"
 
 import { RateLimitKVLayer } from "../utils/rate-limit/kv-layer"
+import { RateLimitResponseFactory } from '../utils/rate-limit/response-factory';
+import { extractRateLimitIdentifier } from '../services/rate-limiter';
 
 
 
@@ -147,13 +151,6 @@ export class SlidingWindowRateLimiter {
             
             await this.storage.set(windowKey, windowData, windowSeconds + 60)
         }
-
-        console.log(`Checking sliding window for ${tier}:${key}`, {
-            windowKey,
-            windowMs,
-            windowStart,
-            windowDataEntries: windowData.length
-        })
 
         const validTimestamps = windowData.filter(timestamp => timestamp > windowStart).slice(0, Math.max(limit * 2, 1000))
         
@@ -326,7 +323,6 @@ export class SlidingWindowRateLimiter {
             const windowStart = now - windowMs
 
             const windowData = await this.storage.get<number[]>(windowKey) || []
-            console.log(`Window data for ${check.tier}:${check.key}`, windowData.length)
             const validTimestamps = windowData.filter(timestamp => timestamp > windowStart)
             const current = windowData.filter(timestamp => timestamp > windowStart).length
             const oldestRequest = validTimestamps.length > 0 
@@ -343,6 +339,45 @@ export class SlidingWindowRateLimiter {
         }
 
         return stats
+    }
+
+    async check(event: H3Event): Promise<void> {
+        if (this.isRateLimitingEnabled()) {
+            const identifier = extractRateLimitIdentifier(event);
+            const rateLimitResult = await this.checkRateLimit(identifier);
+
+            if (rateLimitResult && !rateLimitResult.allowed) {
+                if (rateLimitResult.limit > 0) {
+                    console.warn(
+                        '%cFROGGER RATE LIMIT', 
+                        'color: white; background-color: #f59e0b; font-weight: bold; font-size: 1.1rem;',
+                        `⚠️ Rate limit exceeded for ${identifier.ip} (${rateLimitResult.tier} tier): ${rateLimitResult.current}/${rateLimitResult.limit}`
+                    );
+
+                    if (!rateLimitResult.isBlocked) {
+                        await this.blockIP(identifier.ip);
+                        console.warn(
+                            '%cFROGGER IP BLOCKED', 
+                            'color: white; background-color: #dc2626; font-weight: bold; font-size: 1.2rem;',
+                            `🚨 IP ${identifier.ip} has been blocked due to rate limit violations`
+                        );
+                    }
+                } else {
+                    console.error(
+                        '%cFROGGER CONFIG ERROR',
+                        'color: white; background-color: #dc2626; font-weight: bold;',
+                        `❌ Rate limiter misconfigured: limits are 0. Either disable rate limiting or set proper limits.`
+                    );
+                }
+                
+                const response = RateLimitResponseFactory.createH3Response(rateLimitResult);
+                throw createError(response);
+            }
+
+            if (import.meta.dev) {
+                console.debug(`Rate limit check passed for ${identifier.ip}: ${rateLimitResult?.current || 0} requests`);
+            }
+        }
     }
 
     async cleanup(): Promise<void> {
@@ -381,8 +416,15 @@ export class SlidingWindowRateLimiter {
     }
 }
 
-export function getRateLimiter(): SlidingWindowRateLimiter {
-    return SlidingWindowRateLimiter.getInstance()
+export function getFroggerRateLimiter(): SlidingWindowRateLimiter {
+    const rateLimiter = SlidingWindowRateLimiter.getInstance()
+
+    try {
+
+    }
+    finally {
+        return rateLimiter
+    }
 }
 
 export { extractRateLimitIdentifier } from '../utils/rate-limit/extract-identifier'

@@ -49,9 +49,11 @@ export class LogQueueService {
 
         if (!this.batchingEnabled) return;
 
+        console.log(config.public.frogger.batch);
+
         this.maxBatchSize = config.public.frogger.batch?.maxSize;
         this.maxBatchAge = config.public.frogger.batch?.maxAge;
-        this.maxQueueSize = config.public.frogger.batch?.maxSize || 1000;
+        this.maxQueueSize = config.public.frogger.batch?.maxSize;
     }
 
     /**

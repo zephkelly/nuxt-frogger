@@ -1,6 +1,6 @@
 //@ts-ignore
 import { useStorage } from '#imports'
-import type { IRateLimitStorage } from '../../types/rate-limiter'
+import type { IRateLimitStorage } from '../types/storage'
 
 
 

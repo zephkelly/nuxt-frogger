@@ -1,5 +1,5 @@
 import { H3Event, getHeader, getRequestIP } from 'h3'
-import type { RateLimitIdentifier } from '../../types/rate-limiter'
+import type { RateLimitIdentifier } from '../types'
 
 
 function extractClientIP(event: H3Event): string {

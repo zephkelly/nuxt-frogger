@@ -45,27 +45,28 @@ export default defineNuxtModule<ModuleOptions>({
         
         rateLimiter: {
             limits: {
-                global: 10000,      // 10k requests per window for entire endpoint
-                perIp: 100,         // 100 requests per IP per window
-                perReporter: 50,    // 50 requests per reporter per window  
-                perApp: 30          // 30 requests per app per window
+                global: 10000,
+                perIp: 100,
+                perReporter: 50,
+                perApp: 30
             },
             
             windows: {
-                global: 60,         // 1 minute global window
-                perIp: 60,          // 1 minute per IP
-                perReporter: 60,    // 1 minute per reporter
-                perApp: 60          // 1 minute per app
+                global: 60,
+                perIp: 60,
+                perReporter: 60,
+                perApp: 60
             },
             
             blocking: {
                 enabled: true,
-                escalationResetHours: 24,           // Reset escalation after 24 hours
-                timeouts: [60, 300, 1800]          // 1min, 5min, 30min blocks
+                escalationResetHours: 24,
+                timeouts: [60, 300, 1800],
+                violationsBeforeBlock: 3,
+                finalBanHours: 12
             },
     
             storage: {
-                // Will use Nitro KV by default
                 driver: undefined,
                 options: {}
             }

@@ -6,7 +6,10 @@ import type { LoggerObjectBatch } from '../../shared/types/batch';
 import { useRuntimeConfig } from '#app';
 import { uuidv7 } from '../../shared/utils/uuid';
 
-import { handleRateLimit } from '../../shared/utils/rate-limit/handler';
+import { handleRateLimit } from '../../rate-limiter/utils/limit-handler';
+import { SimpleConsoleLogger } from '../../shared/utils/console-frogger';
+
+
 
 
 interface RetryState {
@@ -15,9 +18,6 @@ interface RetryState {
     backoffMultiplier: number;
 }
 
-/**
- * Centralized log queue service
- */
 export class LogQueueService {
     private queue: LoggerObject[] = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
@@ -29,6 +29,8 @@ export class LogQueueService {
     private maxBatchSize: number | undefined;
     private maxBatchAge: number | undefined;
     private maxQueueSize: number | undefined;
+
+    private consoleLogger: SimpleConsoleLogger = new SimpleConsoleLogger()
     
     private appInfo: { name: string; version: string } = { 
         name: 'unknown', 
@@ -64,16 +66,10 @@ export class LogQueueService {
         this.maxQueueSize = config.public.frogger.batch?.maxSize;
     }
 
-    /**
-     * Set application information for the log batch
-     */
     setAppInfo(name: string, version: string): void {
         this.appInfo = { name, version };
     }
 
-    /**
-     * Add a log to the centralized queue
-     */
     enqueueLog(log: LoggerObject): void {
         if (!this.batchingEnabled) {
             this.sendLogImmediately(log);
@@ -82,7 +78,6 @@ export class LogQueueService {
 
         this.queue.push(log);
         
-        // Trim the queue if it exceeds the maximum size
         if (this.maxQueueSize && this.queue.length > this.maxQueueSize) {
             this.queue = this.queue.slice(-this.maxQueueSize);
             console.warn(`Log queue exceeded maximum size of ${this.maxQueueSize}. Old logs have been discarded.`);
@@ -103,7 +98,6 @@ export class LogQueueService {
         };
     }
 
- 
     private handleRateLimit(error: H3Error, retryAfter?: number): boolean {
         const { rateLimitInfo, strategy, shouldRetry, delayMs } = handleRateLimit(error, {
             maxRetries: this.maxRetries,
@@ -111,17 +105,10 @@ export class LogQueueService {
             maxBackoffMs: this.maxBackoffMs,
             respectServerTiming: true,
             onRateLimit: (info, strat) => {
-
-                console.log(
-                    `🚦 Frogger Rate Limit [${info.tier}]: ${strat.message}`
-                );
+                this.consoleLogger.error(`Rate limit hit: ${strat.message} (Tier: ${info.tier})`);
                 
                 if (info.isBlocked) {
-                    console.error(
-                        `🚨 IP BLOCKED: Level ${info.blockInfo?.level || 'unknown'} until ${
-                            info.blockInfo?.expiresAt ? new Date(info.blockInfo.expiresAt).toISOString() : 'unknown'
-                        }`
-                    );
+                    this.consoleLogger.error(`IP blocked due to rate limit. Dropping logs.`);
                 }
             }
         });
@@ -163,9 +150,6 @@ export class LogQueueService {
         return true;
     }
 
-    /**
-     * Handle general error with exponential backoff
-     */
     private handleGeneralError(error: any): void {
         this.retryState.count++;
         
@@ -196,9 +180,6 @@ export class LogQueueService {
         }, backoffMs);
     }
 
-    /**
-     * Schedule sending logs to the server
-     */
     private scheduleSend(): void {
         if (!this.batchingEnabled) return;
 
@@ -221,9 +202,6 @@ export class LogQueueService {
         }, this.maxBatchAge);
     }
 
-    /**
-     * Send logs to the server endpoint
-     */
     private async sendLogs(): Promise<void> {
         if (!this.batchingEnabled || this.queue.length === 0 || this.sending) {
             return;
@@ -296,9 +274,6 @@ export class LogQueueService {
         }
     }
 
-    /**
-     * Send a single log immediately (used when batching is disabled)
-     */
     private async sendLogImmediately(log: LoggerObject): Promise<void> {
         if (!this.endpoint) return;
 

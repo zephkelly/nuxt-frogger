@@ -3,7 +3,7 @@ import { H3Event, H3Error, eventHandler, readBody, getHeader, createError } from
 import type { LoggerObjectBatch } from '../../shared/types/batch';
 
 import { ServerLogQueueService } from '../services/server-log-queue';
-import { getFroggerRateLimiter } from '../services/rate-limiter';
+import { getFroggerRateLimiter } from '../../rate-limiter';
 
 
 

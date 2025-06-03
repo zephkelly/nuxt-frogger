@@ -7,12 +7,15 @@ import type { FileReporterOptions } from '../../types/file-reporter';
 import type { LoggerObject } from '~/src/runtime/shared/types/log';
 import { BaseReporter } from './base-reporter';
 
+import { uuidv7 } from '../../../shared/utils/uuid';
+
 
 /**
  * Reporter that writes logs to local files
  */
 export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
     public readonly name = 'FroggerFileReporter';
+    public readonly reporterId: string;
 
     protected options: Required<FileReporterOptions>;
     private currentFileName: string = '';
@@ -26,6 +29,7 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
     
     constructor() {
         super();
+        this.reporterId = `frogger-file-${uuidv7()}`;
         const config = useRuntimeConfig()
 
         this.options = config.frogger.file

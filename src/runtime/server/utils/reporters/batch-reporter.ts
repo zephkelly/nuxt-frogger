@@ -6,12 +6,14 @@ import type { BatchReporterOptions } from '../../types/batch-reporter';
 import type { LoggerObject } from '~/src/runtime/shared/types/log';
 import type { IReporter } from '~/src/runtime/shared/types/internal-reporter';
 
+import { uuidv7 } from '../../../shared/utils/uuid';
 
 /**
  * Reporter that batches logs before sending them to a destination
  */
 export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> {
     public readonly name = 'FroggerBatchReporter';
+    public readonly reporterId: string;
 
     private logs: LoggerObject[] = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
@@ -23,6 +25,8 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
 
     constructor(options: BatchReporterOptions) {
         super();
+        this.reporterId = `frogger-batcher-${uuidv7()}`;
+
         const config = useRuntimeConfig()
 
         const defaultOptions: BatchReporterOptions = {

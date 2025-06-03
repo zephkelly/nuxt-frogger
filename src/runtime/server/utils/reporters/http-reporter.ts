@@ -7,6 +7,7 @@ import type { HttpReporterOptions } from "../../types/http-reporter";
 import type { LoggerObject } from "~/src/runtime/shared/types/log";
 import type { LoggerObjectBatch } from "~/src/runtime/shared/types/batch";
 
+import { uuidv7 } from '../../../shared/utils/uuid';
 
 export const defaultHttpReporterOptions: HttpReporterOptions = {
     endpoint: '',
@@ -29,13 +30,13 @@ export const defaultHttpReporterOptions: HttpReporterOptions = {
  */
 export class HttpReporter implements IReporter {
     public readonly name = 'FroggerHttpReporter';
-    private reporterId: string;
+    public readonly reporterId: string;
     
     private options: Required<HttpReporterOptions>;
     private retries: Map<string, number> = new Map();
 
     constructor(options: HttpReporterOptions) {
-        this.reporterId = `frogger-http-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        this.reporterId = `frogger-http-${uuidv7()}`;
 
         this.options = {
             endpoint: options.endpoint,

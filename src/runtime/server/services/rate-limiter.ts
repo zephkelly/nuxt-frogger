@@ -1,4 +1,4 @@
-import { H3Event, createError } from 'h3'
+import { H3Event, createError, setResponseHeaders } from 'h3'
 
 //@ts-ignore
 import { useRuntimeConfig } from '#imports'
@@ -82,7 +82,7 @@ export class SlidingWindowRateLimiter {
         return this.isEnabled
     }
 
-    async checkRateLimit(identifier: RateLimitIdentifier): Promise<RateLimitCheckResult | null> {
+    async checkRateLimit(identifier: RateLimitIdentifier): Promise<RateLimitCheckResult[] | null> {
         if (!this.isEnabled) {
             return null
         }
@@ -91,15 +91,17 @@ export class SlidingWindowRateLimiter {
 
         const blockResult = await this.checkIPBlock(identifier.ip)
         if (blockResult.isBlocked) {
-            return blockResult
+            return [blockResult]
         }
 
         const checks = [
             { tier: 'global' as const, key: 'global', limit: this.config.limits.global, window: this.config.windows.global },
             { tier: 'ip' as const, key: identifier.ip, limit: this.config.limits.perIp, window: this.config.windows.perIp },
+            { tier: 'app' as const, key: identifier.appName, limit: this.config.limits.perApp, window: this.config.windows.perApp },
             { tier: 'reporter' as const, key: identifier.reporterId, limit: this.config.limits.perReporter, window: this.config.windows.perReporter },
-            { tier: 'app' as const, key: identifier.appName, limit: this.config.limits.perApp, window: this.config.windows.perApp }
         ]
+
+        const results: RateLimitCheckResult[] = []
 
         for (const check of checks) {
             if (!check.key || !check.limit || check.limit <= 0 || !check.window || check.window <= 0) continue
@@ -112,21 +114,18 @@ export class SlidingWindowRateLimiter {
                 now
             )
 
+            results.push(result)
+            
+            console.log(`Rate limit check for ${check.tier}:${check.key} - Allowed: ${result.allowed}, Current: ${result.current}/${result.limit}`)
+            
             if (!result.allowed) {
-                return result
+                return [result]
             }
         }
 
         await this.recordRequest(identifier, now)
 
-        return {
-            allowed: true,
-            tier: 'ip',
-            limit: this.config.limits.perIp,
-            current: 0,
-            resetTime: now + (this.config.windows.perIp * 1000),
-            retryAfter: 0
-        }
+        return results
     }
 
     private async checkSlidingWindow(
@@ -344,38 +343,38 @@ export class SlidingWindowRateLimiter {
     async check(event: H3Event): Promise<void> {
         if (this.isRateLimitingEnabled()) {
             const identifier = extractRateLimitIdentifier(event);
-            const rateLimitResult = await this.checkRateLimit(identifier);
+            const rateLimitResults = await this.checkRateLimit(identifier);
 
-            if (rateLimitResult && !rateLimitResult.allowed) {
-                if (rateLimitResult.limit > 0) {
+            const ipResult = rateLimitResults?.find(result => result.tier === 'ip');
+            const firstResult = ipResult || rateLimitResults?.[0];
+
+            if (firstResult && !firstResult.allowed) {
+                console.warn(
+                    '%cFROGGER RATE LIMIT', 
+                    'color: white; background-color: #f59e0b; font-weight: bold; font-size: 1.1rem;',
+                    `⚠️ Rate limit exceeded for ${identifier.ip} (${firstResult.tier} tier): ${firstResult.current}/${firstResult.limit}`
+                );
+
+                if (!firstResult.isBlocked) {
+                    await this.blockIP(identifier.ip);
                     console.warn(
-                        '%cFROGGER RATE LIMIT', 
-                        'color: white; background-color: #f59e0b; font-weight: bold; font-size: 1.1rem;',
-                        `⚠️ Rate limit exceeded for ${identifier.ip} (${rateLimitResult.tier} tier): ${rateLimitResult.current}/${rateLimitResult.limit}`
-                    );
-
-                    if (!rateLimitResult.isBlocked) {
-                        await this.blockIP(identifier.ip);
-                        console.warn(
-                            '%cFROGGER IP BLOCKED', 
-                            'color: white; background-color: #dc2626; font-weight: bold; font-size: 1.2rem;',
-                            `🚨 IP ${identifier.ip} has been blocked due to rate limit violations`
-                        );
-                    }
-                } else {
-                    console.error(
-                        '%cFROGGER CONFIG ERROR',
-                        'color: white; background-color: #dc2626; font-weight: bold;',
-                        `❌ Rate limiter misconfigured: limits are 0. Either disable rate limiting or set proper limits.`
+                        '%cFROGGER IP BLOCKED', 
+                        'color: white; background-color: #dc2626; font-weight: bold; font-size: 1.2rem;',
+                        `🚨 IP ${identifier.ip} has been blocked due to rate limit violations`
                     );
                 }
                 
-                const response = RateLimitResponseFactory.createH3Response(rateLimitResult);
+                const response = RateLimitResponseFactory.createH3Response(firstResult);
+                setResponseHeaders(event, response.headers);
                 throw createError(response);
+            }
+            else if (firstResult && firstResult.allowed) {
+                console.log(firstResult)
+                console.log(`🚨 IP ${identifier.ip} request this window: ${firstResult.current}/${firstResult.limit}`)
             }
 
             if (import.meta.dev) {
-                console.debug(`Rate limit check passed for ${identifier.ip}: ${rateLimitResult?.current || 0} requests`);
+                console.debug(`Rate limit check passed for ${identifier.ip}: ${firstResult?.current || 0} requests`);
             }
         }
     }

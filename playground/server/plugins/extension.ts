@@ -1,3 +1,3 @@
 export default defineNitroPlugin((nitroApp) => {
-    addGlobalReporter(createHttpReporter('/api/_frogger/logs'));
+    addGlobalReporter(createHttpReporter('/api/ingest'));
 });

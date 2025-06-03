@@ -43,13 +43,42 @@ export default defineNuxtModule<ModuleOptions>({
             sortingWindowMs: 3000,
         },
         
+        rateLimiter: {
+            limits: {
+                global: 10000,
+                perIp: 100,
+                perReporter: 50,
+                perApp: 30
+            },
+            
+            windows: {
+                global: 60,
+                perIp: 60,
+                perReporter: 60,
+                perApp: 60
+            },
+            
+            blocking: {
+                enabled: true,
+                escalationResetHours: 24,
+                timeouts: [60, 300, 1800],
+                violationsBeforeBlock: 3,
+                finalBanHours: 12
+            },
+    
+            storage: {
+                driver: undefined,
+                options: {}
+            }
+        },
+
         // Set in the public runtime config, can be overridden
         // at runtime using 'NUXT_PUBLIC_FROGGER_' environment variables
         public: {
             endpoint: '/api/_frogger/logs',
             batch: {
-                maxSize: 50,
                 maxAge: 3000,
+                maxSize: 100,
                 retryOnFailure: true,
                 maxRetries: 3,
                 retryDelay: 3000,
@@ -88,7 +117,9 @@ export default defineNuxtModule<ModuleOptions>({
                     highWaterMark: _options.file?.highWaterMark,
                 },
                 
-                batch: _options.batch
+                batch: _options.batch,
+
+                rateLimiter: _options.rateLimiter
             }
         };
 

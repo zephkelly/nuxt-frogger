@@ -8,6 +8,7 @@
     "nuxt",
     "respose",
     "traceparent",
-    "tracestate"
+    "tracestate",
+    "uuidv"
 ]
 }

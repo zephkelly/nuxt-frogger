@@ -1,4 +1,4 @@
-import type { LoggerObject } from '../../shared/types/log';
+ import type { LoggerObject } from '../../shared/types/log';
 import type { BatchOptions } from '../../shared/types/batch';
 import type { IReporter } from '~/src/runtime/shared/types/internal-reporter';
 
@@ -21,4 +21,6 @@ export interface BatchReporterOptions extends BatchOptions {
     removeDownstreamReporter?: (reporter: IReporter) => void;
     getDownstreamReporters?: () => IReporter[];
     clearDownstreamReporters?: () => void;
+
+    getDownstreamReporterIds?: () => string[];
 }

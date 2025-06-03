@@ -3,6 +3,7 @@ import { H3Event, H3Error, eventHandler, readBody, getHeader, createError } from
 import type { LoggerObjectBatch } from '../../shared/types/batch';
 
 import { ServerLogQueueService } from '../services/server-log-queue';
+import { getFroggerRateLimiter } from '../../rate-limiter';
 
 
 
@@ -23,7 +24,6 @@ function detectLoggingLoop(
     const warnings: string[] = [];
     let isLoop = false;
 
-    // Check for Frogger headers (primary detection method)
     const isFroggerRequest = getHeader(event, 'x-frogger-reporter') === 'true';
     const froggerReporterId = getHeader(event, 'x-frogger-reporter-id');
     const froggerProcessed = getHeader(event, 'x-frogger-processed') === 'true';
@@ -42,7 +42,6 @@ function detectLoggingLoop(
         }
     }
 
-    // Metadata check
     if (batch.meta?.processed) {
         warnings.push('Batch metadata indicates Frogger processing');
         
@@ -62,7 +61,7 @@ function detectLoggingLoop(
                 warnings.push(`Old logs detected (${Math.round(age / 1000)}s old) - possible retry loop`);
             }
 
-            if (age > 600000) { // 10 minutes
+            if (age > 600000) {
                 isLoop = true;
                 warnings.push(`LOOP DETECTED: Logs are older than 10 minutes (${Math.round(age / 1000)}s old)`);
             }
@@ -85,6 +84,22 @@ function detectLoggingLoop(
 
 
 export default eventHandler(async (event) => {
+    const contentLength = getHeader(event, 'content-length');
+    const maxRequestSize = 1024 * 1024;
+    
+    if (contentLength && parseInt(contentLength) > maxRequestSize) {
+        throw createError({
+            statusCode: 413,
+            statusMessage: 'Request Too Large',
+            data: {
+                error: 'REQUEST_TOO_LARGE',
+                maxSize: maxRequestSize
+            }
+        });
+    }
+
+    await getFroggerRateLimiter().check(event);
+
     const logBatch = await readBody<LoggerObjectBatch>(event);
 
     try {
@@ -111,7 +126,6 @@ export default eventHandler(async (event) => {
                 );
             }
             
-            // Return error to break the loop
             throw createError({
                 statusCode: 400,
                 statusMessage: 'Logging loop detected',

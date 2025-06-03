@@ -7,12 +7,16 @@ import type { FileReporterOptions } from '../../types/file-reporter';
 import type { LoggerObject } from '~/src/runtime/shared/types/log';
 import { BaseReporter } from './base-reporter';
 
+import { uuidv7 } from '../../../shared/utils/uuid';
+
+
 
 /**
  * Reporter that writes logs to local files
  */
 export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
     public readonly name = 'FroggerFileReporter';
+    public readonly reporterId: string;
 
     protected options: Required<FileReporterOptions>;
     private currentFileName: string = '';
@@ -26,6 +30,7 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
     
     constructor() {
         super();
+        this.reporterId = `frogger-file-${uuidv7()}`;
         const config = useRuntimeConfig()
 
         this.options = config.frogger.file
@@ -35,9 +40,6 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
         });
     }
 
-    /**
-     * Handle a log object and add it to the buffer
-     */
     async log(logObj: LoggerObject): Promise<void> {
         try {
             const logEntry = this.formatLogEntry(logObj);
@@ -94,9 +96,6 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
         return this.writePromise;
     }
 
-    /**
-     * Write content to the current write stream
-     */
     private async writeToFile(content: string, contentSize: number): Promise<void> {
         return new Promise((resolve, reject) => {
             if (!this.writeStream) {
@@ -121,9 +120,6 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
         });
     }
 
-    /**
-     * Open a new write stream
-     */
     private async openNewStream(fileName: string): Promise<void> {
         await this.closeCurrentStream();
         
@@ -152,9 +148,6 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
         });
     }
     
-    /**
-     * Close the current write stream if open
-     */
     private async closeCurrentStream(): Promise<void> {
         if (this.writeStream) {
             const stream = this.writeStream;
@@ -170,9 +163,6 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
     }
 
 
-    /**
-     * Format a log entry based on configuration
-     */
     private formatLogEntry(logObj: LoggerObject): string {
         const enrichedLog = {
             ...logObj,
@@ -182,9 +172,6 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
         return JSON.stringify(enrichedLog);
     }
 
-    /**
-     * Get the current log file name based on the format
-     */
     private getLogFileName(): string {
         const now = new Date();
         let fileName = this.options.fileNameFormat;
@@ -198,9 +185,6 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
         return fileName;
     }
 
-    /**
-     * Get the size of a file if it exists
-     */
     private async getFileSize(fileName: string): Promise<number> {
         const filePath = join(this.options.directory, fileName);
         if (existsSync(filePath)) {
@@ -210,9 +194,6 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
         return 0;
     }
 
-    /**
-     * Rotate the log file when it exceeds the maximum size
-     */
     private async rotateLogFile(fileName: string): Promise<void> {
         const filePath = join(this.options.directory, fileName);
         if (existsSync(filePath)) {
@@ -225,9 +206,6 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
         }
     }
 
-    /**
-     * Schedule a buffer flush
-     */
     private scheduleFlush(): void {
         if (this.flushTimer === null) {
             this.flushTimer = setTimeout(() => {
@@ -239,9 +217,6 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
         }
     }
 
-    /**
-     * Flush the log buffer to disk
-     */
     override async flush(): Promise<void> {
         if (this.logBuffer.length === 0) {
             return;
@@ -281,9 +256,6 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
         return this.writePromise;
     }
 
-    /**
-     * Force flush any pending operations and close streams
-     */
     override async forceFlush(): Promise<void> {
         if (this.flushTimer) {
             clearTimeout(this.flushTimer);
@@ -294,9 +266,6 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
         await this.closeCurrentStream();
     }
 
-    /**
-     * Ensure the log directory exists
-     */
     private async ensureDirectoryExists(): Promise<void> {
         if (!existsSync(this.options.directory)) {
             try {

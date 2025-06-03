@@ -4,6 +4,7 @@ import type { LoggerObject } from './log'
 
 export interface IReporter {
     name: string
+    reporterId: string
     
     log(logObj: LoggerObject): Promise<void> | void
     logBatch(logs: LoggerObject[]): Promise<void> | void

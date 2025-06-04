@@ -10,7 +10,7 @@ export default defineNuxtPlugin((nuxtApp) => {
 
         const componentInformation = {
             name: instance?.$.type?.__name,
-            props: instance?.$attrs || {},
+            props: instance?.$props || {},
             outerHTML: instance?.$el.outerHTML || null,
         }
 

@@ -1,7 +1,10 @@
 //@ts-ignore
 import { useStorage } from '#imports'
 
-import type { IWebSocketStorage, PersistedChannel, PersistedSubscription } from './types';
+import type { IWebSocketStorage } from './types';
+import type { PersistedChannel, PersistedSubscription } from '../types';
+
+
 
 /**
  * Nitro KV Storage adapter for WebSocket log reporter
@@ -208,7 +211,7 @@ export class WebSocketKVLayer implements IWebSocketStorage {
         try {
             const channel = await this.getChannel(channelId);
             if (channel) {
-                channel.last_activity = new Date().toISOString();
+                channel.last_activity = new Date().getTime();
                 await this.setChannel(channelId, channel);
             }
         }
@@ -221,7 +224,7 @@ export class WebSocketKVLayer implements IWebSocketStorage {
         try {
             const subscription = await this.getSubscription(peerId);
             if (subscription) {
-                subscription.last_activity = new Date().toISOString();
+                subscription.last_activity = new Date().getTime();
                 await this.setSubscription(peerId, subscription);
             }
         }
@@ -281,7 +284,7 @@ export class WebSocketKVLayer implements IWebSocketStorage {
             const channels = await this.getAllChannels();
             
             for (const channel of channels) {
-                const peers = await this.getChannelPeers(channel.channel_id);
+                const peers = await this.getChannelPeers(channel.channel_uuid);
                 
                 if (peers.length === 0) {
                     const lastActivity = new Date(channel.last_activity);
@@ -289,8 +292,8 @@ export class WebSocketKVLayer implements IWebSocketStorage {
                     const hoursSinceActivity = (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
                     
                     if (hoursSinceActivity > 24) {
-                        await this.deleteChannel(channel.channel_id);
-                        console.log(`WebSocketKVLayer: Cleaned up stale empty channel: ${channel.channel_id}`);
+                        await this.deleteChannel(channel.channel_uuid);
+                        console.log(`WebSocketKVLayer: Cleaned up stale empty channel: ${channel.channel_uuid}`);
                     }
                 }
             }
@@ -316,7 +319,7 @@ export class WebSocketKVLayer implements IWebSocketStorage {
             let orphanedPeerMappings = 0;
             
             for (const channel of channels) {
-                const peers = await this.getChannelPeers(channel.channel_id);
+                const peers = await this.getChannelPeers(channel.channel_uuid);
                 if (peers.length > 0) {
                     channelsWithPeers++;
                 }
@@ -325,7 +328,7 @@ export class WebSocketKVLayer implements IWebSocketStorage {
             const peerMappingKeys = await this.getKeys(`${this.channelPeersPrefix}:`);
             for (const key of peerMappingKeys) {
                 const channelId = key.split(':').pop();
-                if (channelId && !channels.find(c => c.channel_id === channelId)) {
+                if (channelId && !channels.find(c => c.channel_uuid === channelId)) {
                     orphanedPeerMappings++;
                 }
             }

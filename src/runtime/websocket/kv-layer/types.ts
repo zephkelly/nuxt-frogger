@@ -1,21 +1,6 @@
-import type { SubscriptionFilter } from "../types";
+import type { PersistedChannel, PersistedSubscription } from "../types";
 
 
-export interface PersistedChannel {
-    channel_id: string;
-    created_at: string;
-    last_activity: string;
-    subscriber_count: number;
-    metadata?: Record<string, any>;
-}
-
-export interface PersistedSubscription {
-    peer_id: string;
-    channels: string[];
-    filters?: SubscriptionFilter;
-    subscribed_at: string;
-    last_activity: string;
-}
 
 export interface IWebSocketStorage {
     getChannel(channelId: string): Promise<PersistedChannel | null>;
@@ -35,4 +20,11 @@ export interface IWebSocketStorage {
     cleanup(): Promise<void>;
     updateChannelActivity(channelId: string): Promise<void>;
     updateSubscriptionActivity(peerId: string): Promise<void>;
+
+    getStorageStats(): Promise<{
+        totalChannels: number;
+        totalSubscriptions: number;
+        channelsWithPeers: number;
+        orphanedPeerMappings: number;
+    }>
 }

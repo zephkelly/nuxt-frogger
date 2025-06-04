@@ -15,4 +15,6 @@ export interface LoggerObject {
     msg?: string;
     ctx: LogContext;
     trace: TraceContext;
+    source?: string;
+    tags?: string[];
 }

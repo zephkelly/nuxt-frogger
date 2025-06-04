@@ -1,13 +1,5 @@
-import { Peer } from "crossws";
+import type { Peer } from 'crossws';
 
-
-
-export interface LogChannel {
-    channel_id: string;
-    subscribers: Map<string, Peer>;
-    created_at: Date;
-    last_activity: Date;
-}
 
 export interface SubscriptionFilter {
     level?: string[];
@@ -15,9 +7,18 @@ export interface SubscriptionFilter {
     tags?: string[];
 }
 
-export interface AdminSubscription {
+export interface PersistedChannel {
+    channel_uuid: string;
+    created_at: number;
+    last_activity: number;
+    subscribers: Map<string, Peer>;
+    metadata?: Record<string, any>;
+}
+
+export interface PersistedSubscription {
     peer_id: string;
     channels: string[];
     filters?: SubscriptionFilter;
-    subscribed_at: Date;
+    subscribed_at: number;
+    last_activity: number;
 }

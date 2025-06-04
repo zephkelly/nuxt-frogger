@@ -1,4 +1,6 @@
 import { H3Error } from "h3";
+import { useRuntimeConfig } from '#imports';
+import { parseAppInfoConfig } from "../../../app-info/parse";
 
 import { generateW3CTraceHeaders } from "./../../../shared/utils/trace-headers";
 
@@ -17,10 +19,8 @@ export const defaultHttpReporterOptions: HttpReporterOptions = {
     retryOnFailure: true,
     maxRetries: 3,
     retryDelay: 1000,
-    appInfo: {
-        name: 'unknown',
-        version: 'unknown'
-    },
+    //@ts-ignore
+    appInfo: {}
 };
 
 
@@ -38,13 +38,18 @@ export class HttpReporter implements IReporter {
     constructor(options: HttpReporterOptions) {
         this.reporterId = `frogger-http-${uuidv7()}`;
 
+        const config = useRuntimeConfig()
+        const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
+
         this.options = {
             endpoint: options.endpoint,
             vendor: options.vendor || 'frogger',
-            appInfo: {
+            appInfo: isSet ? { 
+                name: name || 'unknown', 
+                version 
+            } : { 
                 name: 'unknown',
-                version: 'unknown',
-                ...options.appInfo
+                version: 'unknown'
             },
             headers: {
                 ...options.headers
@@ -125,17 +130,20 @@ export class HttpReporter implements IReporter {
             parentSpanId: traceContext?.spanId,
             vendorData: { frogger: this.reporterId }
         });
+
+        const headers: Headers = new Headers({
+            'x-frogger-reporter-id': this.reporterId,
+            'x-frogger-processed': 'true',
+
+            'traceparent': w3cHeaders.traceparent,
+            ...(w3cHeaders.tracestate && { tracestate: w3cHeaders.tracestate })
+        });
+
+        if (this.options.appInfo) {
+            headers.set('x-frogger-source', this.options.appInfo.name);
+        }
         
-        return {
-            'Content-Type': 'application/json',
-            // Loop prevention headers
-            'X-Frogger-Reporter-Id': this.reporterId,
-            'X-Frogger-Processed': 'true',
-            'X-Frogger-Source': this.options.appInfo.name,
-            // W3C Trace headers
-            traceparent: w3cHeaders.traceparent,
-            ...(w3cHeaders.tracestate && { tracestate: w3cHeaders.tracestate }),
-        };
+        return Object.fromEntries(headers.entries());
     }
 
     private async performHttpRequest(batch: LoggerObjectBatch): Promise<void> {

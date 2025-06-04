@@ -12,9 +12,9 @@ export interface BatchOptions {
 
 export interface LoggerObjectBatch {
     logs: LoggerObject[];
-    app: {
-        name: string;
-        version: string;
+    app?: {
+        name?: string;
+        version?: string;
     }
     meta?: {
         processed?: true;

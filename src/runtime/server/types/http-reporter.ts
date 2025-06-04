@@ -8,6 +8,6 @@ export interface HttpReporterOptions {
     retryDelay?: number;
     appInfo?: {
         name: string;
-        version: string;
+        version?: string;
     };
 }

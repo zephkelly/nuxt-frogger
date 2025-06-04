@@ -9,7 +9,7 @@ import {
     updateRuntimeConfig
 } from '@nuxt/kit'
 
-import { join } from 'node:path'
+import { join, isAbsolute } from 'node:path'
 
 import type { ModuleOptions } from './runtime/shared/types/module-options'
 
@@ -24,6 +24,7 @@ export default defineNuxtModule<ModuleOptions>({
         clientModule: true,
         serverModule: true,
 
+        app: 'nuxt-frogger',
         
         file: {
             directory: 'logs',
@@ -75,6 +76,14 @@ export default defineNuxtModule<ModuleOptions>({
         // Set in the public runtime config, can be overridden
         // at runtime using 'NUXT_PUBLIC_FROGGER_' environment variables
         public: {
+
+            globalErrorCapture: {
+                includeComponent: true,
+                includeComponentProps: false,
+                includeComponentOuterHTML: true,
+                includeStack: true,
+                includeInfo: true
+            },
             endpoint: '/api/_frogger/logs',
             batch: {
                 maxAge: 3000,
@@ -89,13 +98,10 @@ export default defineNuxtModule<ModuleOptions>({
     setup(_options, _nuxt) {
         const resolver = createResolver(import.meta.url)
 
-        const logDir = join(_nuxt.options.rootDir, _options.file?.directory || 'logs');
-        if (_options.file && typeof _options.file === 'object') {
-            _options.file.directory = logDir;
-        }
-        else if (_options.file === true) {
-            _options.file = { directory: logDir };
-        }
+        const configuredDirectory = _options.file?.directory || 'logs';
+        const logDir = isAbsolute(configuredDirectory) 
+            ? configuredDirectory 
+            : join(_nuxt.options.rootDir, configuredDirectory);
 
         _nuxt.options.alias = _nuxt.options.alias || {};
         _nuxt.options.alias['#frogger'] = resolver.resolve('./runtime/index');
@@ -103,6 +109,8 @@ export default defineNuxtModule<ModuleOptions>({
         const moduleRuntimeConfig = {
             public: {
                 frogger: {
+                    app: _options.app,
+                    globalErrorCapture: _options.public?.globalErrorCapture,
                     endpoint: _options.public?.endpoint,
                     batch: _options.public?.batch
                 }
@@ -159,6 +167,10 @@ export default defineNuxtModule<ModuleOptions>({
             addImportsDir(resolver.resolve('./runtime/app/utils'))
             addImportsDir(resolver.resolve('./runtime/app/composables'))
             addPlugin(resolver.resolve('./runtime/app/plugins/log-queue.client'))
+            
+            if (_options.public?.globalErrorCapture !== false && _options.public?.globalErrorCapture !== undefined) {
+                addPlugin(resolver.resolve('./runtime/app/plugins/global-vue-errors'))
+            }
         }
 
         if (_options.serverModule) {

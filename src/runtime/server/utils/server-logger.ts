@@ -14,7 +14,6 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
     private madeFirstLog: boolean = false;
     private traceContext: TraceContext | null = null;
     
-    // Test-only callback for capturing LoggerObjects
     private testCaptureCallback: ((loggerObject: LoggerObject) => void) | null = null;
    
    
@@ -25,17 +24,12 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         this.traceContext = traceContext;
     }
 
-    /**
-     * Test-only method to set a capture callback
-     * This will be called with every LoggerObject that gets created
-     */
+
+    // Capture any loggerObjects created during tests
     setTestCaptureCallback(callback: (loggerObject: LoggerObject) => void | null): void {
         this.testCaptureCallback = callback;
     }
 
-    /**
-     * Test-only method to clear the capture callback
-     */
     clearTestCaptureCallback(): void {
         this.testCaptureCallback = null;
     }

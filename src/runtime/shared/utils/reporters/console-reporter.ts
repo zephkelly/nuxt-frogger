@@ -16,10 +16,10 @@ export class ConsoleReporter /*implements IFroggerReporter*/ {
         const timestamp = logObj.date.toISOString();
 
         if (this.isServer) {
-            this.logToNodeConsole(logObj.type, message, context, timestamp);
+            this.logToNodeConsole(logObj.type, message, timestamp);
         }
         else {
-            this.logToBrowserConsole(logObj.type, message, context, timestamp);
+            this.logToBrowserConsole(logObj.type, message, timestamp);
         }
     }
 
@@ -28,7 +28,7 @@ export class ConsoleReporter /*implements IFroggerReporter*/ {
         return context && context.length > 0 && context[0] !== undefined;
     }
     
-    private logToNodeConsole(type: string, message: string, context: any[], timestamp: string): void {
+    private logToNodeConsole(type: string, message: string, timestamp: string): void {
         const colors = {
             reset: '\x1b[0m',
             bright: '\x1b[1m',
@@ -39,7 +39,9 @@ export class ConsoleReporter /*implements IFroggerReporter*/ {
             magenta: '\x1b[35m',
             cyan: '\x1b[36m',
             white: '\x1b[37m',
-            gray: '\x1b[90m'
+            gray: '\x1b[90m',
+            bgRed: '\x1b[41m',
+            bgBrightRed: '\x1b[101m'
         };
         
         const typeColors = {
@@ -73,23 +75,21 @@ export class ConsoleReporter /*implements IFroggerReporter*/ {
         switch (type) {
             case 'error':
             case 'fatal':
-                this.hasContext(context) ? console.log(formattedMessage, ...context) : console.log(formattedMessage);
+                console.log(formattedMessage);
                 break;
             case 'warn':
-                this.hasContext(context) ? console.log(formattedMessage, ...context) : console.log(formattedMessage);
+                console.log(formattedMessage);
                 break;
             case 'debug':
             case 'trace':
-                this.hasContext(context) ? console.log(formattedMessage, ...context) : console.log(formattedMessage);
+                console.log(formattedMessage);
                 break;
             default:
-                this.hasContext(context)
-                    ? console.log(`${colors.gray}[${timestamp}]${colors.reset}  ${color}${icon} ${typeLabel}${colors.reset} ${message}`, ...context) 
-                    : console.log(`${colors.gray}[${timestamp}]${colors.reset}  ${color}${icon} ${typeLabel}${colors.reset} ${message}`);
+                console.log(`${colors.gray}[${timestamp}]${colors.reset}  ${color}${icon} ${typeLabel}${colors.reset} ${message}`);
         }
     }
 
-    private logToBrowserConsole(type: string, message: string, context: any[], timestamp: string): void {
+    private logToBrowserConsole(type: string, message: string, timestamp: string): void {
         const typeStyles = {
             error: 'color: #ff6b6b; font-weight: bold;',
             warn: 'color: #feca57; font-weight: bold;',
@@ -119,25 +119,25 @@ export class ConsoleReporter /*implements IFroggerReporter*/ {
         const messageTypeStyling = `${icon} %c[${typeLabel}]`.padEnd(12);
         const timestampStyle = 'color: #a4b0be; font-size: 0.8em;';
 
-        
-        switch (type) {
-            case 'error':
-            case 'fatal':
-                this.hasContext(context) ? console.log(messageTypeStyling, style, message, ...context) : console.log(messageTypeStyling, style, message);
-                console.log(`%c${timestamp}`, timestampStyle);
-                break;
-            case 'warn':
-                this.hasContext(context) ? console.log(messageTypeStyling, style, message, ...context) : console.log(messageTypeStyling, style, message);
-                console.log(`%c${timestamp}`, timestampStyle);
-                break;
-            case 'debug':
-            case 'trace':
-                this.hasContext(context) ? console.log(messageTypeStyling, style, message, ...context) : console.log(messageTypeStyling, style, message);
-                console.log(`%c${timestamp}`, timestampStyle);
-                break;
-            default:
-                this.hasContext(context) ? console.log(messageTypeStyling, style, message, ...context) : console.log(messageTypeStyling, style, message);
-                console.log(`%c${timestamp}`, timestampStyle);
+        if (type === 'error' || type === 'fatal') {
+            const fullMessage = `${icon} [${typeLabel}] ${message}`;
+            console.error(fullMessage);
+        }
+        else {
+            switch (type) {
+                case 'warn':
+                    console.log(messageTypeStyling, style, message);
+                    console.log(`%c${timestamp}`, timestampStyle);
+                    break;
+                case 'debug':
+                case 'trace':
+                    console.log(messageTypeStyling, style, message);
+                    console.log(`%c${timestamp}`, timestampStyle);
+                    break;
+                default:
+                    console.log(messageTypeStyling, style, message);
+                    console.log(`%c${timestamp}`, timestampStyle);
+            }
         }
     }
 }

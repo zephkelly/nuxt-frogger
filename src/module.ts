@@ -23,7 +23,6 @@ export default defineNuxtModule<ModuleOptions>({
     defaults: {
         clientModule: true,
         serverModule: true,
-
         
         file: {
             directory: 'logs',
@@ -75,6 +74,7 @@ export default defineNuxtModule<ModuleOptions>({
         // Set in the public runtime config, can be overridden
         // at runtime using 'NUXT_PUBLIC_FROGGER_' environment variables
         public: {
+            globalErrorCapture: true,
             endpoint: '/api/_frogger/logs',
             batch: {
                 maxAge: 3000,
@@ -103,6 +103,7 @@ export default defineNuxtModule<ModuleOptions>({
         const moduleRuntimeConfig = {
             public: {
                 frogger: {
+                    globalErrorCapture: _options.public?.globalErrorCapture,
                     endpoint: _options.public?.endpoint,
                     batch: _options.public?.batch
                 }
@@ -159,6 +160,10 @@ export default defineNuxtModule<ModuleOptions>({
             addImportsDir(resolver.resolve('./runtime/app/utils'))
             addImportsDir(resolver.resolve('./runtime/app/composables'))
             addPlugin(resolver.resolve('./runtime/app/plugins/log-queue.client'))
+
+            if (_options.public?.globalErrorCapture !== false) {
+                addPlugin(resolver.resolve('./runtime/app/plugins/global-vue-errors'))
+            }
         }
 
         if (_options.serverModule) {

@@ -14,6 +14,7 @@ export interface ModuleOptions {
     rateLimiter?: RateLimitingOptions | false
     
     public?: {
+        globalErrorCapture?: boolean
         endpoint?: string
         batch?: BatchOptions | false
     }

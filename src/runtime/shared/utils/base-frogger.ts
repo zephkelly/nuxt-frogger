@@ -300,12 +300,14 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         )
     }
     
+    // 4 ----------------------------------------------------
     public debug(message: string, context?: Object): void {
         this.consola.debug(message,
             context,
         )
     }
 
+    // 5 ----------------------------------------------------
     public trace(message: string, context?: Object): void {
         this.consola.trace(message,
             context,

@@ -11,6 +11,10 @@ export default defineNuxtConfig({
         },
 
         public: {
+            app: {
+                name: 'paincoach',
+                version: '1.0.0',
+            },
             globalErrorCapture: {
                 includeComponentOuterHTML: false,
                 includeComponentProps: false,

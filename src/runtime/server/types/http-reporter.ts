@@ -7,7 +7,7 @@ export interface HttpReporterOptions {
     maxRetries?: number;
     retryDelay?: number;
     appInfo?: {
-        name: string;
-        version: string;
+        name?: string;
+        version?: string;
     };
 }

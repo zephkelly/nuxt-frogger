@@ -2,6 +2,9 @@ import type { BatchOptions } from "./batch"
 import type { FileOptions } from "./file";
 import type { RateLimitingOptions } from "../../rate-limiter/types";
 
+import type { AppInfoOptions } from "../../app-info/types";
+
+
 
 export interface ModuleOptions {
     clientModule?: boolean
@@ -14,6 +17,12 @@ export interface ModuleOptions {
     rateLimiter?: RateLimitingOptions | false
     
     public?: {
+        app?: AppInfoOptions,
+
+        endpoint?: string
+        batch?: BatchOptions | false
+
+
         globalErrorCapture?: {
             includeComponent?: boolean
             includeComponentOuterHTML?: boolean
@@ -21,7 +30,5 @@ export interface ModuleOptions {
             includeStack?: boolean
             includeInfo?: boolean
         } | boolean
-        endpoint?: string
-        batch?: BatchOptions | false
     }
 }

@@ -74,6 +74,8 @@ export default defineNuxtModule<ModuleOptions>({
         // Set in the public runtime config, can be overridden
         // at runtime using 'NUXT_PUBLIC_FROGGER_' environment variables
         public: {
+            app: 'nuxt-frogger',
+
             globalErrorCapture: {
                 includeComponent: true,
                 includeComponentProps: false,
@@ -106,6 +108,7 @@ export default defineNuxtModule<ModuleOptions>({
         const moduleRuntimeConfig = {
             public: {
                 frogger: {
+                    app: _options.public?.app || 'nuxt-frogger',
                     globalErrorCapture: _options.public?.globalErrorCapture,
                     endpoint: _options.public?.endpoint,
                     batch: _options.public?.batch

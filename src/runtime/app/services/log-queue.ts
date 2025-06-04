@@ -9,7 +9,7 @@ import { uuidv7 } from '../../shared/utils/uuid';
 import { handleRateLimit } from '../../rate-limiter/utils/limit-handler';
 import { SimpleConsoleLogger } from '../../shared/utils/console-frogger';
 
-
+import { parseAppInfoConfig } from '../../app-info/parse';
 
 
 interface RetryState {
@@ -32,10 +32,7 @@ export class LogQueueService {
 
     private consoleLogger: SimpleConsoleLogger = new SimpleConsoleLogger()
     
-    private appInfo: { name: string; version: string } = { 
-        name: 'unknown', 
-        version: 'unknown' 
-    };
+    private appInfo: { name?: string; version?: string } | undefined = undefined;
 
     private retryState: RetryState = {
         count: 0,
@@ -51,6 +48,10 @@ export class LogQueueService {
         this.reporterId = 'client-log-queue-' + uuidv7();
 
         const config = useRuntimeConfig();
+        //@ts-ignore
+        const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
+
+        this.appInfo = isSet ? { name, version } : { name: 'unknown', version: 'unknown' };
         
         this.endpoint = config.public.frogger.endpoint;
 
@@ -58,8 +59,6 @@ export class LogQueueService {
         this.batchingEnabled = config.public?.frogger?.batch !== false;
 
         if (!this.batchingEnabled) return;
-
-        console.log(config.public.frogger.batch);
 
         this.maxBatchSize = config.public.frogger.batch?.maxSize;
         this.maxBatchAge = config.public.frogger.batch?.maxAge;
@@ -232,7 +231,7 @@ export class LogQueueService {
                 app: this.appInfo,
                 meta: {
                     time: Date.now(),
-                    processChain: [this.appInfo.name]
+                    processChain: this.appInfo?.name ? [this.appInfo.name] : [],
                 }
             };
             

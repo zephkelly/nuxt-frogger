@@ -50,13 +50,6 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         this.batchingEnabled = config.public.frogger.batch !== false;
         
         this.setupTraceContext();
-        
-        if (import.meta.client) {
-            const nuxtApp = useNuxtApp();
-            const logQueue = nuxtApp.$logQueue as LogQueueService;
-            
-            logQueue.setAppInfo('unknown', 'unknown');
-        }
     }
 
     /**

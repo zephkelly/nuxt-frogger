@@ -9,7 +9,7 @@ import {
     updateRuntimeConfig
 } from '@nuxt/kit'
 
-import { join } from 'node:path'
+import { join, isAbsolute } from 'node:path'
 
 import type { ModuleOptions } from './runtime/shared/types/module-options'
 
@@ -95,13 +95,10 @@ export default defineNuxtModule<ModuleOptions>({
     setup(_options, _nuxt) {
         const resolver = createResolver(import.meta.url)
 
-        const logDir = join(_nuxt.options.rootDir, _options.file?.directory || 'logs');
-        if (_options.file && typeof _options.file === 'object') {
-            _options.file.directory = logDir;
-        }
-        else if (_options.file === true) {
-            _options.file = { directory: logDir };
-        }
+        const configuredDirectory = _options.file?.directory || 'logs';
+        const logDir = isAbsolute(configuredDirectory) 
+            ? configuredDirectory 
+            : join(_nuxt.options.rootDir, configuredDirectory);
 
         _nuxt.options.alias = _nuxt.options.alias || {};
         _nuxt.options.alias['#frogger'] = resolver.resolve('./runtime/index');
@@ -167,15 +164,7 @@ export default defineNuxtModule<ModuleOptions>({
             addImportsDir(resolver.resolve('./runtime/app/composables'))
             addPlugin(resolver.resolve('./runtime/app/plugins/log-queue.client'))
             
-            console.log(_options.public?.globalErrorCapture)
-
-            console.log(_options.public?.globalErrorCapture !== false, _options.public?.globalErrorCapture !== undefined)
-
             if (_options.public?.globalErrorCapture !== false && _options.public?.globalErrorCapture !== undefined) {
-                console.log(
-                    '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
-                    `🐸 Registering global Vue error handler`
-                );
                 addPlugin(resolver.resolve('./runtime/app/plugins/global-vue-errors'))
             }
         }

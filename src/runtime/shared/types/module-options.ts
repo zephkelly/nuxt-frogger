@@ -14,7 +14,13 @@ export interface ModuleOptions {
     rateLimiter?: RateLimitingOptions | false
     
     public?: {
-        globalErrorCapture?: boolean
+        globalErrorCapture?: {
+            includeComponent?: boolean
+            includeComponentOuterHTML?: boolean
+            includeComponentProps?: boolean
+            includeStack?: boolean
+            includeInfo?: boolean
+        } | boolean
         endpoint?: string
         batch?: BatchOptions | false
     }

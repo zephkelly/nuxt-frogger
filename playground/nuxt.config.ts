@@ -8,6 +8,13 @@ export default defineNuxtConfig({
             limits: {
                 perIp: 10,
             }
+        },
+
+        public: {
+            globalErrorCapture: {
+                includeComponentOuterHTML: false,
+                includeComponentProps: false,
+            }
         }
     }
 })

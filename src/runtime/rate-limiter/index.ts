@@ -42,9 +42,9 @@ export class SlidingWindowRateLimiter {
 
     constructor() {
         const runtimeConfig = useRuntimeConfig()
-        //@ts-ignore
         const rateLimiterConfig = runtimeConfig.frogger?.rateLimiter
 
+        //@ts-ignore
         this.isEnabled = rateLimiterConfig !== false
 
         if (!this.isEnabled) {

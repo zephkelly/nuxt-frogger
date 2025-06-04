@@ -102,8 +102,6 @@ export default eventHandler(async (event) => {
 
     const logBatch = await readBody<LoggerObjectBatch>(event);
 
-    console.log(logBatch)
-
     try {
         const loopDetectionResult = detectLoggingLoop(event, logBatch);
 

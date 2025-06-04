@@ -39,13 +39,18 @@ export class HttpReporter implements IReporter {
         this.reporterId = `frogger-http-${uuidv7()}`;
 
         const config = useRuntimeConfig()
-        //@ts-ignore
         const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
 
         this.options = {
             endpoint: options.endpoint,
             vendor: options.vendor || 'frogger',
-            appInfo: isSet ? { name, version } : { name: 'unknown', version: 'unknown' },
+            appInfo: isSet ? { 
+                name: name || 'unknown', 
+                version 
+            } : { 
+                name: 'unknown',
+                version: 'unknown'
+            },
             headers: {
                 ...options.headers
             },
@@ -135,7 +140,6 @@ export class HttpReporter implements IReporter {
         });
 
         if (this.options.appInfo) {
-            //@ts-ignore
             headers.set('x-frogger-source', this.options.appInfo.name);
         }
         

@@ -22,7 +22,12 @@ const testing = () => {
         clickFrogger.info(`Click number ${i + 1}`);
     }
 
-    throw new Error('This is a test error');
+    try {
+        throw new Error('This is a test error');
+    }
+    catch (error) {
+        console.log(' We caught an error!', error);
+    }
 };
 
 const test2 = async () => {

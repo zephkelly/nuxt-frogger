@@ -4,6 +4,11 @@ export default defineNuxtConfig({
     ssr: true,
 
     frogger: {
+        app: {
+            name: 'test-nuxt-frogger',
+            version: '1.0.0',
+        },
+
         rateLimiter: {
             limits: {
                 perIp: 10,
@@ -11,10 +16,6 @@ export default defineNuxtConfig({
         },
 
         public: {
-            app: {
-                name: 'paincoach',
-                version: '1.0.0',
-            },
             globalErrorCapture: {
                 includeComponentOuterHTML: false,
                 includeComponentProps: false,

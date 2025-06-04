@@ -9,6 +9,7 @@ import type { ClientLoggerOptions } from '../types/logger';
 import type { LogObject } from 'consola/browser';
 import type { LoggerObject } from '../../shared/types/log';
 import type { LoggerObjectBatch } from '../../shared/types/batch';
+import { parseAppInfoConfig } from '../../app-info/parse';
 
 
 
@@ -36,8 +37,16 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
 
         const config = useRuntimeConfig();
+        const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
 
         this.options = {
+            appInfo: isSet ? { 
+                name: name || 'unknown', 
+                version 
+            } : { 
+                name: 'unknown',
+                version: 'unknown'
+            },
             endpoint: config.public.frogger.endpoint,
 
             level: 3,
@@ -103,6 +112,8 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         const env = (import.meta.server) ? 'ssr' :
             (import.meta.client && this.hasMounted.value) ? 'client' : 'csr';
 
+            console.log(this.globalContext)
+
         return {
             time: logObj.date.getTime(),
             lvl: logObj.level,
@@ -117,60 +128,37 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         };
     }
 
-    private async sendLogImmediately(logObj: LoggerObject): Promise<void> {
+    private async sendLogImmediate(logObj: LoggerObject): Promise<void> {
         if (!this.options.endpoint) return;
 
         const batch: LoggerObjectBatch = {
             logs: [logObj],
-            app: {
-                name: 'unknown',
-                version: 'unknown'
-            }
+            app: this.options.appInfo
         };
 
-        try {
-            await $fetch(this.options.endpoint, {
-                method: 'POST',
-                body: batch,
-                headers: {
-                    ...this.getHeaders()
-                }
-            });
-        } catch (error) {
-            console.error('Failed to send log immediately:', error);
-        }
+        return $fetch(this.options.endpoint, {
+            method: 'POST',
+            body: batch,
+            headers: {
+                ...this.getHeaders()
+            }
+        });
     }
     
     protected async processLoggerObject(loggerObject: LoggerObject): Promise<void> {
         if (import.meta.client) {
             if (this.batchingEnabled) {
                 const nuxtApp = useNuxtApp();
+
                 const logQueue = nuxtApp.$logQueue as LogQueueService;
                 logQueue.enqueueLog(loggerObject);
+                return;
             }
-            else {
-                await this.sendLogImmediately(loggerObject);
-            }
-        }
-        else {
-            // Server-side: send immediately
-            const batch: LoggerObjectBatch = {
-                logs: [loggerObject],
-                app: {
-                    name: 'unknown',
-                    version: 'unknown'
-                }
-            };
 
-            if (this.options.endpoint) {
-                await $fetch(this.options.endpoint, {
-                    method: 'POST',
-                    body: batch,
-                    headers: {
-                        ...this.getHeaders()
-                    }
-                });
-            }
+            await this.sendLogImmediate(loggerObject);
+            return;
         }
+        
+        await this.sendLogImmediate(loggerObject);
     }
 }

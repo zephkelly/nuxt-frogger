@@ -10,6 +10,8 @@ export interface ModuleOptions {
     clientModule?: boolean
     serverModule?: boolean
     
+    app: AppInfoOptions,
+
     file?: FileOptions
     
     batch?: BatchOptions | false
@@ -17,11 +19,8 @@ export interface ModuleOptions {
     rateLimiter?: RateLimitingOptions | false
     
     public?: {
-        app?: AppInfoOptions,
-
         endpoint?: string
         batch?: BatchOptions | false
-
 
         globalErrorCapture?: {
             includeComponent?: boolean

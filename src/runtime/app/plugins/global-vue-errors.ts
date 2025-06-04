@@ -10,9 +10,9 @@ export default defineNuxtPlugin((nuxtApp) => {
     nuxtApp.vueApp.config.errorHandler = (error, instance, info) => {
         const globalLogger = useFrogger();
 
-        //@ts-expect-error
         const globalErrorCaptureConfig = config.public.frogger.globalErrorCapture;
 
+        //@ts-ignore
         if (!globalErrorCaptureConfig || globalErrorCaptureConfig === false) {
             return;
         }
@@ -54,7 +54,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 component: componentInformation,
                 info: globalErrorCaptureConfig.includeInfo ? info : undefined,
                 stack: globalErrorCaptureConfig.includeStack ? error.stack : undefined,
-                global: true,
+                uncaught: true,
             });
         }
         else if (error instanceof H3Error) {
@@ -63,7 +63,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 data: error.data,
                 component: componentInformation,
                 info: info,
-                global: true,
+                uncaught: true,
             });
         }
         else {
@@ -71,7 +71,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                 error: error,
                 component: componentInformation,
                 info: globalErrorCaptureConfig.includeInfo ? info : undefined,
-                global: true,
+                uncaught: true,
             });
         }
     }

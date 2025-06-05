@@ -140,7 +140,7 @@ describe('LogDeduplicator', () => {
 
             const filtered = manager.filterDuplicates(logs);
             
-            expect(filtered).toHaveLength(5);
+            expect(filtered).toHaveLength(2);
 			
 			const stats = manager.getStats();
 			expect(stats.totalEntries).toBe(2);
@@ -199,7 +199,7 @@ describe('LogDeduplicator', () => {
             const info = manager.getDetailedInfo();
             
             expect(info.stats.totalEntries).toBe(1);
-            expect(info.configuration.maxEntries).toBe(10000);
+            expect(info.configuration.maxEntries).toBe(1000);
             expect(info.currentState.activeEntries).toBe(1);
             expect(info.currentState.oldestEntryAge).toBeGreaterThanOrEqual(0);
             expect(info.currentState.newestEntryAge).toBeGreaterThanOrEqual(0);
@@ -347,4 +347,379 @@ describe('LogDeduplicator', () => {
             expect(memoryAfter).toBe(0);
         });
     });
+
+    describe("Malformed Data", () => {
+        const createMockLog = (traceId: any, spanId: any): LoggerObject => ({
+            lvl: 3,
+            msg: 'Test log',
+            time: new Date().getTime(),
+            trace: { traceId: traceId, spanId: spanId },
+            source: 'test',
+            tags: [],
+            ctx: { type: 'info' }
+        });
+
+        describe('Non-string trace/span IDs (should be rejected as UUIDs must be strings)', () => {
+            it('should handle null values', () => {
+                expect(() => manager.isRecentLog(null as any, null as any)).not.toThrow();
+                expect(() => manager.markLogSeen(null as any, null as any)).not.toThrow();
+                
+                expect(manager.isRecentLog(null as any, null as any)).toBe(false);
+                manager.markLogSeen(null as any, null as any);
+                expect(manager.isRecentLog(null as any, null as any)).toBe(false);
+            });
+
+            it('should handle undefined values', () => {
+                expect(() => manager.isRecentLog(undefined as any, undefined as any)).not.toThrow();
+                expect(() => manager.markLogSeen(undefined as any, undefined as any)).not.toThrow();
+                
+                expect(manager.isRecentLog(undefined as any, undefined as any)).toBe(false);
+                manager.markLogSeen(undefined as any, undefined as any);
+                expect(manager.isRecentLog(undefined as any, undefined as any)).toBe(false);
+            });
+
+            it('should reject number values', () => {
+                expect(() => manager.isRecentLog(123 as any, 456 as any)).not.toThrow();
+                expect(() => manager.markLogSeen(123 as any, 456 as any)).not.toThrow();
+                
+                expect(manager.isRecentLog(123 as any, 456 as any)).toBe(false);
+                manager.markLogSeen(123 as any, 456 as any);
+                expect(manager.isRecentLog(123 as any, 456 as any)).toBe(false);
+            });
+
+            it('should reject boolean values', () => {
+                expect(() => manager.isRecentLog(true as any, false as any)).not.toThrow();
+                expect(() => manager.markLogSeen(true as any, false as any)).not.toThrow();
+                
+                expect(manager.isRecentLog(true as any, false as any)).toBe(false);
+                manager.markLogSeen(true as any, false as any);
+                expect(manager.isRecentLog(true as any, false as any)).toBe(false);
+            });
+
+            it('should reject object values', () => {
+                const obj1 = { id: 'trace' };
+                const obj2 = { id: 'span' };
+                
+                expect(() => manager.isRecentLog(obj1 as any, obj2 as any)).not.toThrow();
+                expect(() => manager.markLogSeen(obj1 as any, obj2 as any)).not.toThrow();
+                
+                expect(manager.isRecentLog(obj1 as any, obj2 as any)).toBe(false);
+                manager.markLogSeen(obj1 as any, obj2 as any);
+                expect(manager.isRecentLog(obj1 as any, obj2 as any)).toBe(false);
+            });
+
+            it('should reject array values', () => {
+                const arr1 = ['trace', 'id'];
+                const arr2 = ['span', 'id'];
+                
+                expect(() => manager.isRecentLog(arr1 as any, arr2 as any)).not.toThrow();
+                expect(() => manager.markLogSeen(arr1 as any, arr2 as any)).not.toThrow();
+                
+                expect(manager.isRecentLog(arr1 as any, arr2 as any)).toBe(false);
+                manager.markLogSeen(arr1 as any, arr2 as any);
+                expect(manager.isRecentLog(arr1 as any, arr2 as any)).toBe(false);
+            });
+
+            it('should reject function values', () => {
+                const fn1 = () => 'trace';
+                const fn2 = () => 'span';
+                
+                expect(() => manager.isRecentLog(fn1 as any, fn2 as any)).not.toThrow();
+                expect(() => manager.markLogSeen(fn1 as any, fn2 as any)).not.toThrow();
+                
+                expect(manager.isRecentLog(fn1 as any, fn2 as any)).toBe(false);
+                manager.markLogSeen(fn1 as any, fn2 as any);
+                expect(manager.isRecentLog(fn1 as any, fn2 as any)).toBe(false);
+            });
+        });
+
+        describe('Special string values (should work as they are valid strings)', () => {
+            it('should handle very long strings', () => {
+                const longTrace = 'x'.repeat(10000);
+                const longSpan = 'y'.repeat(10000);
+                
+                expect(() => manager.isRecentLog(longTrace, longSpan)).not.toThrow();
+                
+                expect(manager.isRecentLog(longTrace, longSpan)).toBe(false);
+                
+                expect(() => manager.markLogSeen(longTrace, longSpan)).not.toThrow();
+                manager.markLogSeen(longTrace, longSpan);
+                
+                expect(manager.isRecentLog(longTrace, longSpan)).toBe(true);
+            });
+
+            it('should handle unicode characters', () => {
+                const unicodeTrace = '🚀trace😀';
+                const unicodeSpan = '🎯span🔥';
+                
+                expect(() => manager.isRecentLog(unicodeTrace, unicodeSpan)).not.toThrow();
+                
+                expect(manager.isRecentLog(unicodeTrace, unicodeSpan)).toBe(false);
+                
+                expect(() => manager.markLogSeen(unicodeTrace, unicodeSpan)).not.toThrow();
+                manager.markLogSeen(unicodeTrace, unicodeSpan);
+                
+                expect(manager.isRecentLog(unicodeTrace, unicodeSpan)).toBe(true);
+            });
+
+            it('should handle special characters', () => {
+                const specialTrace = '\\n\\t\\r\\0';
+                const specialSpan = '<>&"\'';
+                
+                expect(() => manager.isRecentLog(specialTrace, specialSpan)).not.toThrow();
+                
+                expect(manager.isRecentLog(specialTrace, specialSpan)).toBe(false);
+                
+                expect(() => manager.markLogSeen(specialTrace, specialSpan)).not.toThrow();
+                manager.markLogSeen(specialTrace, specialSpan);
+                
+                expect(manager.isRecentLog(specialTrace, specialSpan)).toBe(true);
+            });
+
+            it('should handle whitespace-only strings', () => {
+                const whitespaceTrace = '   ';
+                const whitespaceSpan = '\t\n\r';
+                
+                expect(() => manager.isRecentLog(whitespaceTrace, whitespaceSpan)).not.toThrow();
+                
+                expect(manager.isRecentLog(whitespaceTrace, whitespaceSpan)).toBe(false);
+                
+                expect(() => manager.markLogSeen(whitespaceTrace, whitespaceSpan)).not.toThrow();
+                manager.markLogSeen(whitespaceTrace, whitespaceSpan);
+                
+                expect(manager.isRecentLog(whitespaceTrace, whitespaceSpan)).toBe(true);
+            });
+
+            it('should handle strings with only special JSON characters', () => {
+                const jsonTrace = '{}[]":,';
+                const jsonSpan = '\\/"';
+                
+                expect(() => manager.isRecentLog(jsonTrace, jsonSpan)).not.toThrow();
+                
+                expect(manager.isRecentLog(jsonTrace, jsonSpan)).toBe(false);
+                
+                expect(() => manager.markLogSeen(jsonTrace, jsonSpan)).not.toThrow();
+                manager.markLogSeen(jsonTrace, jsonSpan);
+                
+                expect(manager.isRecentLog(jsonTrace, jsonSpan)).toBe(true);
+            });
+        });
+
+        describe('Malformed log objects in filterDuplicates', () => {
+
+            it('should handle logs with no trace property', () => {
+                const logs = [
+                    { message: 'test', timestamp: new Date().toISOString() },
+                    createMockLog('valid-trace', 'valid-span'),
+                    { trace: null }
+                ] as any[];
+
+                const filtered = manager.filterDuplicates(logs);
+                expect(filtered).toHaveLength(1);
+                
+                const stats = manager.getStats();
+                expect(stats.totalEntries).toBe(1);
+            });
+
+            it('should handle logs with malformed trace objects', () => {
+                const logs = [
+                    { trace: {} },
+                    { trace: { traceId: 'only-trace' } },
+                    { trace: { spanId: 'only-span' } },
+                    { trace: { traceId: null, spanId: null } },
+                    { trace: { traceId: undefined, spanId: undefined } },
+                    { trace: 'not-an-object' },
+                    createMockLog('valid-trace', 'valid-span')
+                ] as any[];
+
+                const filtered = manager.filterDuplicates(logs);
+                expect(filtered).toHaveLength(1);
+                
+                const stats = manager.getStats();
+                expect(stats.totalEntries).toBe(1);
+            });
+
+            it('should handle null and undefined logs', () => {
+                const logs = [
+                    null,
+                    undefined,
+                    createMockLog('valid-trace', 'valid-span'),
+                    null
+                ] as any[];
+
+                const filtered = manager.filterDuplicates(logs);
+                expect(filtered).toHaveLength(1);
+                
+                const stats = manager.getStats();
+                expect(stats.totalEntries).toBe(1);
+            });
+        });
+
+        describe('Extreme data scenarios', () => {
+            it('should handle very large arrays', () => {
+                const largeBatch = Array.from({ length: 1000 }, (_, i) => 
+                    createMockLog(`trace-${i}`, `span-${i}`)
+                );
+
+                const filtered = manager.filterDuplicates(largeBatch);
+                expect(filtered).toHaveLength(1000);
+                
+                const stats = manager.getStats();
+                expect(stats.totalEntries).toBe(1000);
+            });
+
+            it('should handle array with all duplicate trace/span combinations', () => {
+                const duplicateBatch = Array.from({ length: 1000 }, () => 
+                    createMockLog('same-trace', 'same-span')
+                );
+
+                const filtered = manager.filterDuplicates(duplicateBatch);
+                expect(filtered).toHaveLength(1);
+                
+                const stats = manager.getStats();
+                expect(stats.duplicatesFiltered).toBe(999);
+                expect(stats.totalEntries).toBe(1);
+            });
+
+            it('should handle array with mixed valid and invalid data', () => {
+                const mixedBatch = [
+                    createMockLog('valid-1', 'valid-1'),
+                    null,
+                    createMockLog('', ''),
+                    undefined,
+                    createMockLog('valid-2', 'valid-2'),
+                    { trace: {} },
+                    createMockLog('valid-1', 'valid-1'),
+                    'string',
+                    123,
+                    createMockLog(null as any, null as any),
+                    createMockLog('valid-3', 'valid-3')
+                ] as any[];
+
+                const filtered = manager.filterDuplicates(mixedBatch);
+                expect(filtered.length).toBeGreaterThan(0);
+                
+                const stats = manager.getStats();
+                expect(stats.duplicatesFiltered).toBe(1); // Only valid-1:valid-1 is duplicated
+            });
+
+            it('should handle rapid successive operations', () => {
+                expect(() => {
+                    for (let i = 0; i < 10000; i++) {
+                        manager.markLogSeen(`rapid-trace-${i % 100}`, `rapid-span-${i % 50}`);
+                        manager.isRecentLog(`rapid-trace-${i % 100}`, `rapid-span-${i % 50}`);
+                    }
+                }).not.toThrow();
+            });
+        });
+
+        describe('Memory and performance edge cases', () => {
+            it('should handle maximum entries without crashing', () => {
+                const smallManager = new LogDeduplicator({ maxEntries: 10 });
+                
+                for (let i = 0; i < 100; i++) {
+                    smallManager.markLogSeen(`trace-${i}`, `span-${i}`);
+                }
+                
+                const stats = smallManager.getStats();
+                expect(stats.totalEntries).toBeLessThanOrEqual(10);
+                expect(smallManager.isHealthy()).toBe(true);
+            });
+
+            it('should handle entries with identical string representations but different types', () => {
+                manager.markLogSeen('123', '456');
+                manager.markLogSeen(123 as any, 456 as any);
+                
+                expect(manager.isRecentLog('123', '456')).toBe(true);
+                expect(manager.isRecentLog(123 as any, 456 as any)).toBe(false);
+                
+                const logs = [
+                    createMockLog('123', '456'),
+                    createMockLog(123 as any, 456 as any)
+                ];
+                
+                const filtered = manager.filterDuplicates(logs);
+                expect(filtered).toHaveLength(0);
+            });
+
+            it('should handle keys that could cause hash collisions', () => {
+                const problematicKeys = [
+                    ['a:b', 'c'],
+                    ['a', 'b:c'],
+                    [':', ':'],
+                    ['', ':'],
+                    [':', '']
+                ];
+                
+                problematicKeys.forEach(([traceId, spanId]) => {
+                    expect(() => manager.markLogSeen(traceId, spanId)).not.toThrow();
+                    // Empty strings should be rejected
+                    const shouldBeStored = traceId.length > 0 && spanId.length > 0;
+                    expect(manager.isRecentLog(traceId, spanId)).toBe(shouldBeStored);
+                });
+            });
+
+            it('should handle operations during cleanup', async () => {
+                const cleanupManager = new LogDeduplicator({ 
+                    ttlMs: 50, 
+                    cleanupInterval: 25 
+                });
+                
+                cleanupManager.markLogSeen('before-cleanup', 'before-cleanup');
+                
+                await new Promise(resolve => setTimeout(resolve, 60));
+                
+                cleanupManager.markLogSeen('during-cleanup', 'during-cleanup');
+                expect(cleanupManager.isRecentLog('during-cleanup', 'during-cleanup')).toBe(true);
+                expect(cleanupManager.isRecentLog('before-cleanup', 'before-cleanup')).toBe(false);
+            });
+
+            it('should maintain statistics accuracy under stress', () => {
+                const logs = [];
+                for (let i = 0; i < 100; i++) {
+                    logs.push(createMockLog(`trace-${i % 10}`, `span-${i % 5}`));
+                }
+                
+                const filtered = manager.filterDuplicates(logs);
+                const stats = manager.getStats();
+                
+                expect(filtered.length + stats.duplicatesFiltered).toBe(100);
+                expect(stats.recentChecks).toBeGreaterThan(0);
+                expect(stats.memoryUsageBytes).toBeGreaterThan(0);
+            });
+        });
+
+        describe('Boundary conditions', () => {
+            it('should handle negative TTL', () => {
+                const negativeTTLManager = new LogDeduplicator({ ttlMs: -1000 });
+                
+                negativeTTLManager.markLogSeen('trace-1', 'span-1');
+                expect(negativeTTLManager.isRecentLog('trace-1', 'span-1')).toBe(false);
+            });
+
+            it('should handle extremely small cleanup interval', () => {
+                expect(() => new LogDeduplicator({ cleanupInterval: 1 })).not.toThrow();
+                const fastCleanupManager = new LogDeduplicator({ cleanupInterval: 1 });
+                
+                fastCleanupManager.markLogSeen('trace-1', 'span-1');
+                expect(fastCleanupManager.isRecentLog('trace-1', 'span-1')).toBe(true);
+            });
+
+            it('should handle extremely large values', () => {
+                expect(() => new LogDeduplicator({ 
+                    maxEntries: Number.MAX_SAFE_INTEGER,
+                    ttlMs: Number.MAX_SAFE_INTEGER,
+                    cleanupInterval: Number.MAX_SAFE_INTEGER
+                })).not.toThrow();
+            });
+
+            it('should handle NaN and Infinity values in configuration', () => {
+                expect(() => new LogDeduplicator({ 
+                    maxEntries: NaN,
+                    ttlMs: Infinity,
+                    cleanupInterval: -Infinity
+                })).not.toThrow();
+            });
+        });
+    })
 });

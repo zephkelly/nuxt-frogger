@@ -1,3 +1,4 @@
+import { log } from "console";
 import type { LoggerObject } from "../../shared/types/log";
 import type { ILogDeduplicator, DeduplicationStats } from "./types";
 
@@ -16,9 +17,9 @@ export class LogDeduplicator implements ILogDeduplicator {
         ttlMs?: number;
         cleanupInterval?: number;
     } = {}) {
-        this.maxEntries = options.maxEntries || 10000;
-        this.ttlMs = options.ttlMs || 5 * 60 * 1000;
-        this.cleanupInterval = options.cleanupInterval || 60 * 1000;
+        this.maxEntries = this.sanitiseNumber(options.maxEntries) || 1000;
+        this.ttlMs = this.sanitiseNumber(options.ttlMs) || 5 * 60 * 1000;
+        this.cleanupInterval = this.sanitiseNumber(options.cleanupInterval) || 1 * 60 * 1000;
         this.lastCleanup = Date.now();
         
         this.stats = {
@@ -29,10 +30,29 @@ export class LogDeduplicator implements ILogDeduplicator {
         };
     }
 
+    private sanitiseNumber(value: any): number {
+        if (typeof value === 'number' && !isNaN(value) && isFinite(value)) {
+            return Math.floor(value);
+        }
+        if (typeof value === 'string' && !isNaN(Number(value)) && isFinite(Number(value))) {
+            return Math.floor(Number(value));
+        }
+        return 0;
+    }
+
+    private isValidStringId(id: any): boolean {
+        return typeof id === 'string' && id.length > 0;
+    }
+
+    
     isRecentLog(traceId: string, spanId: string): boolean {
         this.stats.recentChecks++;
 
-        if (!traceId || !spanId) {
+        if (!this.isValidStringId(traceId) || !this.isValidStringId(spanId)) {
+            return false;
+        }
+
+        if (this.maxEntries <= 0) {
             return false;
         }
         
@@ -45,7 +65,7 @@ export class LogDeduplicator implements ILogDeduplicator {
             return false;
         }
         
-        if (Date.now() - timestamp > this.ttlMs) {
+        if (this.ttlMs <= 0 || Date.now() - timestamp > this.ttlMs) {
             this.recentLogs.delete(key);
             this.updateMemoryUsage();
             return false;
@@ -55,7 +75,11 @@ export class LogDeduplicator implements ILogDeduplicator {
     }
 
     markLogSeen(traceId: string, spanId: string): void {
-        if (!traceId || !spanId) {
+        if (!this.isValidStringId(traceId) || !this.isValidStringId(spanId)) {
+            return;
+        }
+
+        if (this.maxEntries <= 0) {
             return;
         }
 
@@ -78,6 +102,7 @@ export class LogDeduplicator implements ILogDeduplicator {
 
     filterDuplicates(logs: LoggerObject[]): LoggerObject[] {
         if (logs.length === 0) {
+            console.log('No logs to filter');
             return logs;
         }
 
@@ -85,11 +110,24 @@ export class LogDeduplicator implements ILogDeduplicator {
         let duplicateCount = 0;
 
         for (const log of logs) {
-            const traceId = log.trace.traceId;
-            const spanId = log.trace.spanId;
+            if (!log || typeof log !== 'object') {
+                continue;
+            }
+
+            let traceId: any = null;
+            let spanId: any = null;
+
+            try {
+                if (log.trace && typeof log.trace === 'object') {
+                    traceId = log.trace.traceId;
+                    spanId = log.trace.spanId;
+                }
+            }
+            catch (error) {
+                continue;
+            }
             
-            if (!traceId || !spanId) {
-                filtered.push(log);
+            if (!this.isValidStringId(traceId) || !this.isValidStringId(spanId)) {
                 continue;
             }
 
@@ -116,7 +154,7 @@ export class LogDeduplicator implements ILogDeduplicator {
         const beforeSize = this.recentLogs.size;
         
         for (const [key, timestamp] of this.recentLogs.entries()) {
-            if (now - timestamp > this.ttlMs) {
+            if (this.ttlMs <= 0 || now - timestamp > this.ttlMs) {
                 this.recentLogs.delete(key);
             }
         }

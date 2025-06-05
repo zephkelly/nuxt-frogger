@@ -18,16 +18,15 @@ startFrogger.error('Hello from the playground!');
 const testing = () => {
     const clickFrogger = useFrogger();
 
-    for (let i = 0; i < 100; i++) {
-        clickFrogger.info(`Click number ${i + 1}`);
-    }
-
-    try {
-        throw new Error('This is a test error');
-    }
-    catch (error) {
-        console.log(' We caught an error!', error);
-    }
+    clickFrogger.info('Button clicked', {
+        my: {
+            deeply: {
+                nested: {
+                    password: 'awdaw'
+                }
+            }
+        }
+    });
 };
 
 const test2 = async () => {

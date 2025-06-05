@@ -11,28 +11,14 @@ import type {
 } from '../rate-limiter/types/index'
 
 import type { RateLimitScope } from '../shared/types/rate-limit'
+import type { ViolationRecord } from '../rate-limiter/types/index'
 
 import { RateLimitKVLayer } from './utils/kv-layer'
 import { RateLimitResponseFactory } from './utils/response-factory';
-import { extractRateLimitIdentifier } from '.';
+import { extractRateLimitIdentifier } from './utils/identifiers'
 
 
 
-interface ViolationRecord {
-    count: number;
-    firstViolation: number;
-    lastViolation: number;
-    currentBackoffTier: number;
-    isBlocked: boolean;
-    blockExpiresAt?: number;
-    lastAction?: 'backoff' | 'block';
-    escalationHistory?: Array<{
-        timestamp: number;
-        action: 'backoff' | 'block';
-        tier?: number;
-        duration?: number;
-    }>;
-}
 
 export class SlidingWindowRateLimiter {
     private static instance: SlidingWindowRateLimiter | null = null
@@ -42,9 +28,9 @@ export class SlidingWindowRateLimiter {
 
     constructor() {
         const runtimeConfig = useRuntimeConfig()
-        const rateLimiterConfig = runtimeConfig.frogger?.rateLimiter
+        const rateLimiterConfig = runtimeConfig.frogger?.rateLimit
 
-        //@ts-ignore
+        //@ts-expect-error
         this.isEnabled = rateLimiterConfig !== false
 
         if (!this.isEnabled) {
@@ -554,14 +540,5 @@ export class SlidingWindowRateLimiter {
 }
 
 export function getFroggerRateLimiter(): SlidingWindowRateLimiter {
-    const rateLimiter = SlidingWindowRateLimiter.getInstance()
-
-    try {
-
-    }
-    finally {
-        return rateLimiter
-    }
+    return SlidingWindowRateLimiter.getInstance()
 }
-
-export { extractRateLimitIdentifier } from './utils/identifiers'

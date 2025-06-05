@@ -22,3 +22,20 @@ export interface PersistedSubscription {
     subscribed_at: number;
     last_activity: number;
 }
+
+
+// Websocket handler
+export interface FroggerWebSocketOptions {
+    upgrade?: (request: Request) => Promise<boolean> | boolean;
+}
+
+export interface LogWebSocketParams {
+    channel?: string;
+    filters?: SubscriptionFilter;
+}
+
+export interface LogWebSocketMessage {
+    type: string;
+    channel?: string;
+    data?: any;
+}

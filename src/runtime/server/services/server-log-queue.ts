@@ -1,5 +1,6 @@
 import { BatchReporter, createBatchReporter } from '../utils/reporters/batch-reporter'
 import { FileReporter } from '../utils/reporters/file-reporter'
+import { WebSocketLogReporter } from '../../websocket/reporter'
 
 import type { IReporter } from '../../shared/types/internal-reporter'
 import type { LoggerObject } from '../../shared/types/log'
@@ -46,17 +47,27 @@ export class ServerLogQueueService {
         
         const fileReporter = new FileReporter();
 
-
+        let websocketReporter: IReporter | undefined;
+        if (config.frogger.websocket) {
+            websocketReporter = WebSocketLogReporter.getInstance();
+        }
         
         if (batchingEnabled) {
             const downstreamReporters: IReporter[] = []
             downstreamReporters.push(fileReporter);
+            if (websocketReporter) {
+                downstreamReporters.push(websocketReporter);
+            }
 
             const batchReporter = createBatchReporter(downstreamReporters);
             this.batchReporter = batchReporter;
         }
         else {
             this.directReporters.push(fileReporter);
+            
+            if (websocketReporter) {
+                this.directReporters.push(websocketReporter);
+            }
         }
     }
 

@@ -21,5 +21,11 @@ export default defineNuxtConfig({
                 includeComponentProps: false,
             }
         }
+    },
+
+    nitro: {
+        experimental: {
+            websocket: true
+        }
     }
 })

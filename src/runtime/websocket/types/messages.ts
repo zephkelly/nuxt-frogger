@@ -1,5 +1,4 @@
 import type { SubscriptionFilter, LogWebSocketMessage } from "../types";
-import type { StorageInterfaceOptions } from "./storage";
 import type { LoggerObject } from "../../shared/types/log";
 
 
@@ -130,29 +129,29 @@ export interface EnhancedSubscriptionConfirmation {
     };
 }
 
+export type AllWebSocketMessages = 
+    | LogWebSocketMessage 
+    | HistoricalLogMessage
+    | QueryCancellationMessage
+    | HistoricalLogResponse
+    | QueryStatusMessage
+    | StorageStatusMessage
+    | EnhancedSubscriptionConfirmation;
 
-export interface FroggerWebSocketOptions {
-    
-    storage?: StorageInterfaceOptions;
-    logDirectory?: string;
-    
-    
-    
-    enableQueryMetrics?: boolean;
-    enablePerformanceLogging?: boolean;
+export type WebSocketMessage = AllWebSocketMessages['type'];
+
+
+
+export function isHistoricalLogMessage(message: any): message is HistoricalLogMessage {
+    return message && typeof message === 'object' && 
+        ['load_historical', 'search_logs', 'get_log_range', 'cancel_query'].includes(message.type);
 }
 
+export function isQueryCancellationMessage(message: any): message is QueryCancellationMessage {
+    return message && typeof message === 'object' && message.type === 'cancel_query';
+}
 
-export type AllWebSocketMessages = 
-  | LogWebSocketMessage 
-  | HistoricalLogMessage
-  | QueryCancellationMessage
-  | HistoricalLogResponse
-  | QueryStatusMessage
-  | StorageStatusMessage
-  | EnhancedSubscriptionConfirmation;
-
-/**
- * Message type discriminator for type-safe message handling
- */
-export type WebSocketMessageType = AllWebSocketMessages['type'];
+export function isHistoricalLogResponse(message: any): message is HistoricalLogResponse {
+    return message && typeof message === 'object' && 
+        ['historical_data', 'historical_chunk', 'historical_complete', 'historical_error'].includes(message.type);
+}

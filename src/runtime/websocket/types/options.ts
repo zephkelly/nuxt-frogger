@@ -1,15 +1,20 @@
-import type { StorageInterfaceOptions } from "./storage";
-
+export interface CacheOptions {
+    maxMemoryMB?: number;
+    ttlSeconds?: number;
+    maxEntries?: number;
+    enabled?: boolean;
+}
 
 
 export interface WebsocketOptions {
+    route: string;
+    defaultChannel?: string;
+
     upgrade?: (request: Request) => boolean | Promise<boolean>;
-    storage?: StorageInterfaceOptions;
 
     maxConcurrentQueries?: number;
     defaultQueryTimeout?: number;
     maxQueryResults?: number;
 
-    route: string;
-    defaultChannel?: string;
+    cache?: CacheOptions;
 }

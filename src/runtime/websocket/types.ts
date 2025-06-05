@@ -55,14 +55,6 @@ export enum WebSocketMessageAuthor {
     Server = 'server'
 }
 
-
-export interface WebSocketMessage<T> {
-    from: WebSocketMessageAuthor,
-    type: T,
-    channel?: string,
-    data?: any
-}
-
 export enum WebSocketStatus {
     Connecting = 'connecting',
     Open = 'open',

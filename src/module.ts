@@ -26,15 +26,6 @@ export default defineNuxtModule<ModuleOptions>({
 
         app: 'nuxt-frogger',
         
-        file: {
-            directory: 'logs',
-            fileNameFormat: 'YYYY-MM-DD.log',
-            maxSize: 10 * 1024 * 1024,
-            flushInterval: 1000,
-            bufferMaxSize: 1 * 1024 * 1024,
-            highWaterMark: 64 * 1024,
-        },
-        
         batch: {
             maxSize: 200,
             maxAge: 15000,
@@ -44,7 +35,21 @@ export default defineNuxtModule<ModuleOptions>({
             sortingWindowMs: 3000,
         },
         
-        rateLimit: {
+        file: {
+            directory: 'logs',
+            fileNameFormat: 'YYYY-MM-DD.log',
+            maxSize: 10 * 1024 * 1024,
+            flushInterval: 1000,
+            bufferMaxSize: 1 * 1024 * 1024,
+            highWaterMark: 64 * 1024,
+        },
+        
+        rateLimit: {      
+            storage: {
+                driver: undefined,
+                options: {}
+            },
+
             limits: {
                 global: 10000,
                 perIp: 100,
@@ -66,11 +71,6 @@ export default defineNuxtModule<ModuleOptions>({
                 violationsBeforeBlock: 3,
                 finalBanHours: 12
             },
-    
-            storage: {
-                driver: undefined,
-                options: {}
-            }
         },
 
         scrub: {
@@ -80,15 +80,18 @@ export default defineNuxtModule<ModuleOptions>({
         },
 
         websocket: {
-            enabled: true,
             route: '/api/_frogger/dev-ws',
             defaultChannel: 'main',
+            maxConcurrentQueries: 10,
+            maxQueryResults: 1000,
+            defaultQueryTimeout: 30000,
         },
 
         // Set in the public runtime config, can be overridden
         // at runtime using 'NUXT_PUBLIC_FROGGER_' environment variables
         public: {
-
+            endpoint: '/api/_frogger/logs',
+            
             globalErrorCapture: {
                 includeComponent: true,
                 includeComponentProps: false,
@@ -96,7 +99,8 @@ export default defineNuxtModule<ModuleOptions>({
                 includeStack: true,
                 includeInfo: true
             },
-            endpoint: '/api/_frogger/logs',
+
+
             batch: {
                 maxAge: 3000,
                 maxSize: 100,
@@ -224,13 +228,8 @@ export default defineNuxtModule<ModuleOptions>({
             if (_options.websocket) {
                 addServerImportsDir(resolver.resolve('./runtime/server/websocket'))
                 
-                // Auto-register WebSocket handler in development mode
                 if (_nuxt.options.dev) {
                     const wsRoute = typeof _options.websocket === 'object' ? _options.websocket.route || '/api/_frogger/dev-ws' : '/api/_frogger/dev-ws';
-                    
-                    const routeParts = wsRoute.split('/').filter(Boolean);
-                    const fileName = routeParts.pop() + '.ws';
-                    const routePath = routeParts.join('/');
                     
                     addServerHandler({
                         route: wsRoute,

@@ -26,7 +26,6 @@ async function testing() {
         console.log('No error this time, try again!');
     }
 
-    //make a fetch to an endpoint that doesnt exist
     await $fetch('/api/test')
 }
 </script>

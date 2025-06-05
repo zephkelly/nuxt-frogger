@@ -52,6 +52,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             level: 3,
             context: {},
             consoleOutput: true,
+            scrub: config.public.frogger.scrub || true,
             ...options
         }
 

@@ -44,7 +44,7 @@ export default defineNuxtModule<ModuleOptions>({
             sortingWindowMs: 3000,
         },
         
-        rateLimiter: {
+        rateLimit: {
             limits: {
                 global: 10000,
                 perIp: 100,
@@ -72,6 +72,8 @@ export default defineNuxtModule<ModuleOptions>({
                 options: {}
             }
         },
+
+        scrub: true,
 
         websocket: {
             enabled: true,
@@ -118,7 +120,8 @@ export default defineNuxtModule<ModuleOptions>({
                     app: _options.app,
                     globalErrorCapture: _options.public?.globalErrorCapture,
                     endpoint: _options.public?.endpoint,
-                    batch: _options.public?.batch
+                    batch: _options.public?.batch,
+                    scrub: _options.scrub,
                 },
 
                 websocket: {
@@ -138,13 +141,15 @@ export default defineNuxtModule<ModuleOptions>({
                 
                 batch: _options.batch,
 
-                rateLimiter: _options.rateLimiter,
+                rateLimit: _options.rateLimit,
 
                 websocket: typeof _options.websocket === 'object' ? _options.websocket : _options.websocket === true ? {
                     enabled: true,
                     route: '/api/_frogger/dev-ws',
                     defaultChannel: 'main'
                 } : false,
+
+                scrub: _options.scrub,
             }
         };
 

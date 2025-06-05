@@ -16,9 +16,11 @@ export interface ModuleOptions {
     
     batch?: BatchOptions | false
 
-    rateLimiter?: RateLimitingOptions | false
+    rateLimit?: RateLimitingOptions | false
 
     websocket?: WebsocketOptions | boolean
+
+    scrub?: boolean
     
     public?: {
         endpoint?: string

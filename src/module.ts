@@ -73,7 +73,11 @@ export default defineNuxtModule<ModuleOptions>({
             }
         },
 
-        scrub: true,
+        scrub: {
+            maxDepth: 10,
+            deepScrub: true,
+            preserveTypes: true,
+        },
 
         websocket: {
             enabled: true,

@@ -12,7 +12,7 @@ import { ConsoleReporter } from "./reporters/console-reporter";
 import type { IFroggerReporter } from "../types/frogger-reporter";
 import { LogScrubber } from "../../scrubber";
 
-
+import { defu } from "defu";
 
 export abstract class BaseFroggerLogger implements IFroggerLogger {
     protected consola: ConsolaInstance;
@@ -37,7 +37,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         //@ts-expect-error
         const config = useRuntimeConfig();
 
-        if (config.public.frogger.scrub && options.scrub) {
+        if (config.public.frogger.scrub || options.scrub) {
             this.scrubber = new LogScrubber(config.public.frogger.scrub);
         }
 
@@ -98,7 +98,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             const loggerObject = await this.createLoggerObject(logObj);
 
             if (this.scrubber) {
-                this.scrubber.scrubLoggerObject(loggerObject);
+                await this.scrubber?.scrubLoggerObject(loggerObject);
             }
             
             await this.emitToReporters(loggerObject);

@@ -113,8 +113,6 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         const env = (import.meta.server) ? 'ssr' :
             (import.meta.client && this.hasMounted.value) ? 'client' : 'csr';
 
-            console.log(this.globalContext)
-
         return {
             time: logObj.date.getTime(),
             lvl: logObj.level,

@@ -2,6 +2,7 @@ import type { LoggerObject } from "../shared/types/log";
 import type { LoggerObjectBatch } from "../shared/types/batch";
 import { type ScrubberConfig, type ScrubRule, type ScrubResult, type ScrubAction, SCRUB_ACTION } from "./types";
 
+import { defu } from "defu";
 
 
 export class LogScrubber {
@@ -11,14 +12,13 @@ export class LogScrubber {
     private scrubStats: { totalProcessed: number; totalScrubbed: number };
 
     constructor(config: Partial<ScrubberConfig> = {}) {
-        this.config = {
+        this.config = defu(config, {
             enabled: true,
             rules: this.getDefaultRules(),
             deepScrub: true,
             preserveTypes: true,
-            maxDepth: 10,
-            ...config
-        };
+            maxDepth: 10
+        }) as ScrubberConfig;
 
         this.fieldRuleMap = new Map();
         this.regexRules = [];
@@ -103,8 +103,26 @@ export class LogScrubber {
         return null;
     }
 
+    private isEmptyValue(value: any): boolean {
+        if (typeof value === 'string') {
+            return value.trim() === '';
+        }
+        
+        if (Array.isArray(value)) {
+            return value.length === 0;
+        }
+        
+        if (typeof value === 'object' && value !== null) {
+            return Object.keys(value).length === 0;
+        }
+        
+        return false;
+    }
+
     private applyScrubAction(value: any, action: ScrubAction): any {
         if (value === null || value === undefined) return value;
+
+        if (this.isEmptyValue(value)) return value;
         
         const strValue = String(value);
         
@@ -172,39 +190,67 @@ export class LogScrubber {
         return `[HASH:${Math.abs(hash).toString(16)}]`;
     }
 
-    private scrubObject(obj: any, depth: number = 0): { modified: boolean; fieldsModified: string[] } {
-        if (!obj || typeof obj !== 'object' || depth > this.config.maxDepth) {
+    private scrubObject(obj: any, depth: number = 0, visited = new WeakSet()): { modified: boolean; fieldsModified: string[] } {
+        if (!obj || depth > this.config.maxDepth) {
             return { modified: false, fieldsModified: [] };
         }
+
+        if (typeof obj !== 'object') {
+            return { modified: false, fieldsModified: [] };
+        }
+
+        if (visited.has(obj)) {
+            return { modified: false, fieldsModified: [] };
+        }
+        
+        visited.add(obj);
 
         let modified = false;
         const fieldsModified: string[] = [];
 
-        for (const [key, value] of Object.entries(obj)) {
-            const rule = this.findRule(key);
-            
-            if (rule) {
-                const scrubbedValue = this.applyScrubAction(value, rule.action);
-                if (scrubbedValue !== value) {
-                    obj[key] = scrubbedValue;
-                    modified = true;
-                    fieldsModified.push(key);
+        try {
+            if (Array.isArray(obj)) {
+                for (let i = 0; i < obj.length; i++) {
+                    const item = obj[i];
+                    if (item && typeof item === 'object') {
+                        const nestedResult = this.scrubObject(item, depth + 1, visited);
+                        if (nestedResult.modified) {
+                            modified = true;
+                            fieldsModified.push(...nestedResult.fieldsModified.map(field => `[${i}].${field}`));
+                        }
+                    }
                 }
             }
-            else if (this.config.deepScrub && value && typeof value === 'object') {
-                const nestedResult = this.scrubObject(value, depth + 1);
-                if (nestedResult.modified) {
-                    modified = true;
-                    fieldsModified.push(...nestedResult.fieldsModified.map(field => `${key}.${field}`));
+            else {
+                for (const [key, value] of Object.entries(obj)) {
+                    const rule = this.findRule(key);
+                    
+                    if (rule) {
+                        const scrubbedValue = this.applyScrubAction(value, rule.action);
+                        if (scrubbedValue !== value) {
+                            obj[key] = scrubbedValue;
+                            modified = true;
+                            fieldsModified.push(key);
+                        }
+                    }
+                    else if (this.config.deepScrub && value && typeof value === 'object') {
+                        const nestedResult = this.scrubObject(value, depth + 1, visited);
+                        if (nestedResult.modified) {
+                            modified = true;
+                            fieldsModified.push(...nestedResult.fieldsModified.map(field => `${key}.${field}`));
+                        }
+                    }
                 }
             }
+        }
+        finally {
+            visited.delete(obj);
         }
 
         return { modified, fieldsModified };
     }
 
 
-    // API
     public scrubLoggerObject(logObj: LoggerObject): ScrubResult {
         if (!this.config.enabled) {
             return {
@@ -217,14 +263,27 @@ export class LogScrubber {
 
         this.scrubStats.totalProcessed++;
 
-        const originalSize = JSON.stringify(logObj).length;
+        let originalSize = 0;
+        try {
+            originalSize = JSON.stringify(logObj).length;
+        }
+        catch (e) {
+            originalSize = JSON.stringify(logObj.msg || '').length + 100;
+        }
+
         const result = this.scrubObject(logObj.ctx);
         
         if (result.modified) {
             this.scrubStats.totalScrubbed++;
         }
 
-        const scrubbedSize = JSON.stringify(logObj).length;
+        let scrubbedSize = 0;
+        try {
+            scrubbedSize = JSON.stringify(logObj).length;
+        }
+        catch (e) {
+            scrubbedSize = originalSize;
+        }
 
         return {
             scrubbed: result.modified,

@@ -55,26 +55,84 @@ export class TestFroggerLogger extends BaseFroggerLogger {
         return new TestFroggerLogger({ stream: dest });
     }
 
-    protected createLoggerObject(logObj: LogObject): LoggerObject {
-        if (!logObj || typeof logObj !== 'object') {
-            throw new Error('Invalid log object provided');
+    private safeClone(obj: any, maxDepth: number = 10, currentDepth: number = 0): any {
+        if (currentDepth > maxDepth) {
+            return '[MAX_DEPTH_EXCEEDED]';
         }
 
-        const currentTraceContext = this.generateTraceContext();
+        if (obj === null || typeof obj !== 'object') {
+            return obj;
+        }
+
+        if (obj instanceof Date) {
+            return new Date(obj.getTime());
+        }
+
+        if (Array.isArray(obj)) {
+            return obj.map(item => this.safeClone(item, maxDepth, currentDepth + 1));
+        }
+
+        const seen = new WeakSet();
+        
+        const cloneWithCircularCheck = (source: any, depth: number): any => {
+            if (depth > maxDepth) {
+                return '[MAX_DEPTH_EXCEEDED]';
+            }
+
+            if (source === null || typeof source !== 'object') {
+                return source;
+            }
+
+            if (seen.has(source)) {
+                return '[CIRCULAR_REFERENCE]';
+            }
+
+            seen.add(source);
+
+            if (Array.isArray(source)) {
+                const result = source.map(item => cloneWithCircularCheck(item, depth + 1));
+                seen.delete(source);
+                return result;
+            }
+
+            const result: any = {};
+            for (const [key, value] of Object.entries(source)) {
+                result[key] = cloneWithCircularCheck(value, depth + 1);
+            }
+            seen.delete(source);
+            return result;
+        };
+
+        return cloneWithCircularCheck(obj, currentDepth);
+    }
+
+    protected createLoggerObject(logObj: LogObject): LoggerObject {
+        const timestamp = new Date().getTime();
+        const traceContext = this.generateTraceContext();
+        
+        let context = {};
+        if (logObj.args && logObj.args.length > 1) {
+            const contextArg = logObj.args[1];
+            if (contextArg && typeof contextArg === 'object') {
+                context = this.safeClone(contextArg);
+            }
+        }
+
+        // Merge with global context
+        const mergedContext = {
+            ...this.globalContext,
+            ...context
+        };
 
         return {
-            time: logObj.date.getTime(),
             lvl: logObj.level,
-            msg: logObj.args?.[0],
-            ctx: {
-                env: 'test',
-                type: logObj.type,
-                ...this.globalContext,
-                ...logObj.args?.slice(1)[0],
-            },
-            trace: currentTraceContext,
+            time: timestamp,
+            msg: logObj.args?.[0] || '',
+            ctx: mergedContext,
+            trace: traceContext
         };
     }
+
 
     protected processLoggerObject(loggerObject: LoggerObject): void {
         const serialized = this.serializeLoggerObject(loggerObject);

@@ -3,7 +3,7 @@ import type { FileOptions } from "./file";
 import type { RateLimitingOptions } from "../../rate-limiter/types";
 import type { AppInfoOptions } from "../../app-info/types";
 import type { WebsocketOptions } from "./../../websocket/options";
-
+import type { ScrubberOptions } from "../../scrubber/options";
 
 
 export interface ModuleOptions {
@@ -20,7 +20,7 @@ export interface ModuleOptions {
 
     websocket?: WebsocketOptions | boolean
 
-    scrub?: boolean
+    scrub?: ScrubberOptions | boolean
     
     public?: {
         endpoint?: string

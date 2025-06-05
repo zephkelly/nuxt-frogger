@@ -1,11 +1,18 @@
 import { Peer } from "crossws";
+
 import type { IReporter } from "../shared/types/internal-reporter";
+import type  { IWebSocketStorage } from "./kv-layer/types";
 import type { LoggerObject } from "../shared/types/log";
 
-import type { SubscriptionFilter, PersistedChannel, PersistedSubscription  } from "./types";
+import type {
+    SubscriptionFilter,
+    PersistedChannel,
+    PersistedSubscription
+} from "./types";
 
-import type  { IWebSocketStorage } from "./kv-layer/types";
 import { WebSocketKVLayer } from "./kv-layer";
+import { LogLevelFilter } from "../shared/utils/log-level-filter";
+
 
 
 export class WebSocketLogReporter implements IReporter {
@@ -48,7 +55,6 @@ export class WebSocketLogReporter implements IReporter {
         }
     }
 
-    // Load persisted channels and subscriptions on startup
     private async loadPersistedData(): Promise<void> {
         try {
             console.log('WebSocketLogReporter: Loading persisted data...');
@@ -58,7 +64,6 @@ export class WebSocketLogReporter implements IReporter {
                 this.storage.getAllSubscriptions()
             ]);
 
-            // Restore channel metadata (but not live connections)
             for (const persistedChannel of persistedChannels) {
                 const channel: PersistedChannel = {
                     channel_uuid: persistedChannel.channel_uuid,
@@ -71,16 +76,14 @@ export class WebSocketLogReporter implements IReporter {
                 this.channels.set(persistedChannel.channel_uuid, channel);
             }
 
-            // Note: We don't restore subscriptions here because they require live Peer connections
-            // Subscriptions will be restored when peers reconnect and provide their peer_id
             
             console.log(`WebSocketLogReporter: Loaded ${persistedChannels.length} channels`);
-        } catch (error) {
+        }
+        catch (error) {
             console.error('WebSocketLogReporter: Error loading persisted data:', error);
         }
     }
 
-    // IReporter implementation
     public log(logObj: LoggerObject): void {
         this.broadcastLog(logObj);
     }
@@ -92,7 +95,6 @@ export class WebSocketLogReporter implements IReporter {
     }
 
     public async flush(): Promise<void> {
-        // WebSocket is real-time, no buffering to flush
         return Promise.resolve();
     }
 
@@ -122,7 +124,8 @@ export class WebSocketLogReporter implements IReporter {
             this.lastMessageTimes.clear();
 
             console.log('WebSocketLogReporter: Shutdown complete');
-        } catch (error) {
+        }
+        catch (error) {
             console.error('WebSocketLogReporter: Error during shutdown:', error);
             throw error;
         }
@@ -132,7 +135,6 @@ export class WebSocketLogReporter implements IReporter {
         try {
             const persistPromises: Promise<void>[] = [];
 
-            // Persist all current channels
             for (const [channelId, channel] of this.channels.entries()) {
                 const persistedChannel: PersistedChannel = {
                     channel_uuid: channel.channel_uuid,
@@ -144,7 +146,6 @@ export class WebSocketLogReporter implements IReporter {
                 persistPromises.push(this.storage.setChannel(channelId, persistedChannel));
             }
 
-            // Persist all current subscriptions
             for (const [peerId, subscription] of this.subscriptions.entries()) {
                 const persistedSubscription: PersistedSubscription = {
                     peer_id: subscription.peer_id,
@@ -159,12 +160,12 @@ export class WebSocketLogReporter implements IReporter {
 
             await Promise.allSettled(persistPromises);
             console.log('WebSocketLogReporter: Current state persisted');
-        } catch (error) {
+        }
+        catch (error) {
             console.error('WebSocketLogReporter: Error persisting current state:', error);
         }
     }
 
-    // Channel management
     public async createChannel(channelId: string, metadata?: Record<string, any>): Promise<PersistedChannel> {
         if (this.channels.has(channelId)) {
             return this.channels.get(channelId)!;
@@ -191,7 +192,8 @@ export class WebSocketLogReporter implements IReporter {
 
         try {
             await this.storage.setChannel(channelId, persistedChannel);
-        } catch (error) {
+        }
+        catch (error) {
             console.error(`WebSocketLogReporter: Failed to persist channel ${channelId}:`, error);
         }
 
@@ -207,20 +209,26 @@ export class WebSocketLogReporter implements IReporter {
         return Array.from(this.channels.values());
     }
 
-    public async subscribeAdminToChannel(
+    public async subscribe(
         peer: Peer, 
         channelId: string, 
         filters?: SubscriptionFilter
     ): Promise<boolean> {
         try {
+            if (filters?.level !== undefined && typeof filters.level === 'number') {
+                if (filters.level < 0 || filters.level > 5) {
+                    console.error(`WebSocketLogReporter: Invalid log level ${filters.level}. Must be between 0-5`);
+                    return false;
+                }
+            }
+
             const channel = await this.createChannel(channelId);
 
-            await this.unsubscribeAdmin(peer.id);
+            await this.removeSubscription(peer.id);
 
             channel.subscribers.set(peer.id, peer);
             channel.last_activity = new Date().getTime();
 
-            // Create subscription record
             const now = new Date();
             const subscription: PersistedSubscription = {
                 peer_id: peer.id,
@@ -231,6 +239,11 @@ export class WebSocketLogReporter implements IReporter {
             };
 
             this.subscriptions.set(peer.id, subscription);
+
+            if (filters?.level !== undefined) {
+                const levelDesc = LogLevelFilter.describeLevelFilter(filters.level);
+                console.log(`WebSocketLogReporter: Admin ${peer.id} subscribed with level filter: ${levelDesc}`);
+            }
 
             try {
                 const persistedSubscription: PersistedSubscription = {
@@ -260,7 +273,7 @@ export class WebSocketLogReporter implements IReporter {
         }
     }
 
-    public async reconnectAdmin(peer: Peer): Promise<boolean> {
+    public async reconnectSubscription(peer: Peer): Promise<boolean> {
         try {
             const persistedSubscription = await this.storage.getSubscription(peer.id);
             
@@ -289,7 +302,6 @@ export class WebSocketLogReporter implements IReporter {
                 channel.last_activity = new Date().getTime();
             }
 
-            // Update storage
             try {
                 await Promise.all([
                     this.storage.updateSubscriptionActivity(peer.id),
@@ -311,7 +323,7 @@ export class WebSocketLogReporter implements IReporter {
         }
     }
 
-    public async unsubscribeAdmin(peerId: string): Promise<boolean> {
+    public async removeSubscription(peerId: string): Promise<boolean> {
         try {
             const subscription = this.subscriptions.get(peerId);
             if (!subscription) {
@@ -358,7 +370,7 @@ export class WebSocketLogReporter implements IReporter {
         }
     }
 
-    public getAdminSubscription(peerId: string): PersistedSubscription | undefined {
+    public getSubscription(peerId: string): PersistedSubscription | undefined {
         return this.subscriptions.get(peerId);
     }
 
@@ -389,13 +401,13 @@ export class WebSocketLogReporter implements IReporter {
                     });
                 }
             }       
-            // Send to all subscribers in this channel
             for (const [peerId, peer] of channel.subscribers) {
                 const subscription = this.subscriptions.get(peerId);
                 if (!peer || !peer.websocket) {
                     channel.subscribers.delete(peerId);
                     continue;
                 }
+                
                 if (subscription?.filters && !this.passesFilter(logObj, subscription.filters)) {
                     continue;
                 }
@@ -417,19 +429,20 @@ export class WebSocketLogReporter implements IReporter {
             };
 
             await peer.send(JSON.stringify(message));
-        } catch (error) {
+        }
+        catch (error) {
             console.error('WebSocketLogReporter: Failed to send message to peer:', error);
             throw error;
         }
     }
 
     private passesFilter(logObj: LoggerObject, filters: SubscriptionFilter): boolean {
-        if (filters.level && filters.level.length > 0) {
+        if (filters.level !== undefined) {
             if (!logObj.ctx || !logObj.ctx.type) {
                 return false;
             }
 
-            if (!filters.level.includes(logObj.ctx.type)) {
+            if (!LogLevelFilter.passesLevelFilter(logObj.ctx.type, filters.level)) {
                 return false;
             }
         }
@@ -533,11 +546,12 @@ export class WebSocketLogReporter implements IReporter {
             if (peer.websocket) {
                 await peer.close(1000, 'Channel cleanup');
             }
-        } catch (error) {
+        }
+        catch (error) {
             console.error('WebSocketLogReporter: Error closing peer connection:', error);
         }
 
-        await this.unsubscribeAdmin(peerId);
+        await this.removeSubscription(peerId);
     }
 
     public async getStatus(): Promise<{
@@ -578,12 +592,33 @@ export class WebSocketLogReporter implements IReporter {
         };
     }
 
-    // Admin API methods
     public async getPersistedChannels(): Promise<PersistedChannel[]> {
         return await this.storage.getAllChannels();
     }
 
     public async getPersistedSubscriptions(): Promise<PersistedSubscription[]> {
         return await this.storage.getAllSubscriptions();
+    }
+
+    public getFilterDescription(filters?: SubscriptionFilter): string {
+        if (!filters) {
+            return 'No filters (all logs)';
+        }
+
+        const parts: string[] = [];
+
+        if (filters.level !== undefined) {
+            parts.push(`Levels: ${LogLevelFilter.describeLevelFilter(filters.level)}`);
+        }
+
+        if (filters.source && filters.source.length > 0) {
+            parts.push(`Sources: ${filters.source.join(', ')}`);
+        }
+
+        if (filters.tags && filters.tags.length > 0) {
+            parts.push(`Tags: ${filters.tags.join(', ')}`);
+        }
+
+        return parts.length > 0 ? parts.join(' | ') : 'No filters (all logs)';
     }
 }

@@ -2,7 +2,7 @@ import type { LoggerObject } from "../../shared/types/log";
 
 
 
-export interface IDeduplicationManager {
+export interface ILogDeduplicator {
     isRecentLog(traceId: string, spanId: string): boolean;
     markLogSeen(traceId: string, spanId: string): void;
     filterDuplicates(logs: LoggerObject[]): LoggerObject[];

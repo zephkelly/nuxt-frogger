@@ -1,9 +1,9 @@
 import type { LoggerObject } from "../../shared/types/log";
-import type { IDeduplicationManager, DeduplicationStats } from "./types";
+import type { ILogDeduplicator, DeduplicationStats } from "./types";
 
 
 
-export class DeduplicationManager implements IDeduplicationManager {
+export class LogDeduplicator implements ILogDeduplicator {
     private recentLogs = new Map<string, number>();
     private readonly maxEntries: number;
     private readonly ttlMs: number;
@@ -31,6 +31,10 @@ export class DeduplicationManager implements IDeduplicationManager {
 
     isRecentLog(traceId: string, spanId: string): boolean {
         this.stats.recentChecks++;
+
+        if (!traceId || !spanId) {
+            return false;
+        }
         
         this.maybeCleanup();
         
@@ -51,11 +55,15 @@ export class DeduplicationManager implements IDeduplicationManager {
     }
 
     markLogSeen(traceId: string, spanId: string): void {
+        if (!traceId || !spanId) {
+            return;
+        }
+
         const key = this.createKey(traceId, spanId);
         const now = Date.now();
         
         if (this.recentLogs.size >= this.maxEntries) {
-            this.evictOldest();
+            this.removeOldest();
         }
         
         const wasNew = !this.recentLogs.has(key);
@@ -70,26 +78,28 @@ export class DeduplicationManager implements IDeduplicationManager {
 
     filterDuplicates(logs: LoggerObject[]): LoggerObject[] {
         if (logs.length === 0) {
-        return logs;
+            return logs;
         }
 
         const filtered: LoggerObject[] = [];
         let duplicateCount = 0;
 
         for (const log of logs) {
-        if (!log.trace.traceId || !log.trace.spanId) {
+            const traceId = log.trace.traceId;
+            const spanId = log.trace.spanId;
+            
+            if (!traceId || !spanId) {
+                filtered.push(log);
+                continue;
+            }
+
+            if (this.isRecentLog(traceId, spanId)) {
+                duplicateCount++;
+                continue;
+            }
+
+            this.markLogSeen(traceId, spanId);
             filtered.push(log);
-            continue;
-        }
-
-        if (this.isRecentLog(log.trace.traceId, log.trace.spanId)) {
-            duplicateCount++;
-            continue;
-        }
-
-        // Mark as seen and include
-        this.markLogSeen(log.trace.traceId, log.trace.spanId);
-        filtered.push(log);
         }
 
         this.stats.duplicatesFiltered += duplicateCount;
@@ -106,15 +116,16 @@ export class DeduplicationManager implements IDeduplicationManager {
         const beforeSize = this.recentLogs.size;
         
         for (const [key, timestamp] of this.recentLogs.entries()) {
-        if (now - timestamp > this.ttlMs) {
-            this.recentLogs.delete(key);
-        }
+            if (now - timestamp > this.ttlMs) {
+                this.recentLogs.delete(key);
+            }
         }
         
         const removed = beforeSize - this.recentLogs.size;
+
         if (removed > 0) {
-        this.stats.totalEntries = Math.max(0, this.stats.totalEntries - removed);
-        this.updateMemoryUsage();
+            this.stats.totalEntries = Math.max(0, this.stats.totalEntries - removed);
+            this.updateMemoryUsage();
         }
         
         this.lastCleanup = now;
@@ -123,10 +134,10 @@ export class DeduplicationManager implements IDeduplicationManager {
     clear(): void {
         this.recentLogs.clear();
         this.stats = {
-        totalEntries: 0,
-        recentChecks: 0,
-        duplicatesFiltered: 0,
-        memoryUsageBytes: 0
+            totalEntries: 0,
+            recentChecks: 0,
+            duplicatesFiltered: 0,
+            memoryUsageBytes: 0
         };
     }
 
@@ -134,18 +145,22 @@ export class DeduplicationManager implements IDeduplicationManager {
         return `${traceId}:${spanId}`;
     }
 
-    private evictOldest(): void {
-        const toRemove = Math.floor(this.maxEntries * 0.1);
+    private removeOldest(): void {
+        let toRemove = Math.floor(this.maxEntries * 0.1);
+        
+        if (toRemove === 0 && this.recentLogs.size >= this.maxEntries) {
+            toRemove = 1;
+        }
         
         if (toRemove === 0) {
             return;
         }
 
         const entries = Array.from(this.recentLogs.entries())
-        .sort((a, b) => a[1] - b[1]);
+            .sort((a, b) => a[1] - b[1]);
         
         for (let i = 0; i < toRemove && i < entries.length; i++) {
-        this.recentLogs.delete(entries[i][0]);
+            this.recentLogs.delete(entries[i][0]);
         }
         
         this.stats.totalEntries = Math.max(0, this.stats.totalEntries - toRemove);
@@ -154,7 +169,7 @@ export class DeduplicationManager implements IDeduplicationManager {
     private maybeCleanup(): void {
         const now = Date.now();
         if (now - this.lastCleanup > this.cleanupInterval) {
-        this.cleanup();
+            this.cleanup();
         }
     }
 
@@ -165,14 +180,14 @@ export class DeduplicationManager implements IDeduplicationManager {
     getDetailedInfo(): {
         stats: DeduplicationStats;
         configuration: {
-        maxEntries: number;
-        ttlMs: number;
-        cleanupInterval: number;
+            maxEntries: number;
+            ttlMs: number;
+            cleanupInterval: number;
         };
         currentState: {
-        activeEntries: number;
-        oldestEntryAge?: number;
-        newestEntryAge?: number;
+            activeEntries: number;
+            oldestEntryAge?: number;
+            newestEntryAge?: number;
         };
     } {
         const now = Date.now();
@@ -180,12 +195,12 @@ export class DeduplicationManager implements IDeduplicationManager {
         let newestTimestamp: number | undefined;
 
         for (const timestamp of this.recentLogs.values()) {
-        if (oldestTimestamp === undefined || timestamp < oldestTimestamp) {
-            oldestTimestamp = timestamp;
-        }
-        if (newestTimestamp === undefined || timestamp > newestTimestamp) {
-            newestTimestamp = timestamp;
-        }
+            if (oldestTimestamp === undefined || timestamp < oldestTimestamp) {
+                oldestTimestamp = timestamp;
+            }
+            if (newestTimestamp === undefined || timestamp > newestTimestamp) {
+                newestTimestamp = timestamp;
+            }
         }
 
         return {
@@ -232,10 +247,10 @@ export class DeduplicationManager implements IDeduplicationManager {
             
             if (toRemove > 0) {
                 const entries = Array.from(this.recentLogs.entries())
-                .sort((a, b) => a[1] - b[1]);
+                    .sort((a, b) => a[1] - b[1]);
                 
                 for (let i = 0; i < toRemove; i++) {
-                this.recentLogs.delete(entries[i][0]);
+                    this.recentLogs.delete(entries[i][0]);
                 }
                 
                 this.stats.totalEntries = Math.max(0, this.stats.totalEntries - toRemove);

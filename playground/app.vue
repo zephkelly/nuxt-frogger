@@ -67,4 +67,18 @@ const test3 = () => {
         highTrafficFrogger.info('High traffic simulation started');
     }
 };
+
+
+const socket = useWebsocket('/api/_frogger/dev-ws', {
+    auto_connect: true,
+    heartbeat: {
+        auto_heartbeat: true,
+    },
+    queryParams: {
+        channel: 'main',
+    },
+    onMessage: async (event, message) => {
+        console.log('WebSocket message received:', message);
+    }
+});
 </script>

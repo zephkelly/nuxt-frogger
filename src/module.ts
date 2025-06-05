@@ -73,6 +73,12 @@ export default defineNuxtModule<ModuleOptions>({
             }
         },
 
+        websocket: {
+            enabled: true,
+            route: '/api/_frogger/dev-ws',
+            defaultChannel: 'main',
+        },
+
         // Set in the public runtime config, can be overridden
         // at runtime using 'NUXT_PUBLIC_FROGGER_' environment variables
         public: {
@@ -113,6 +119,11 @@ export default defineNuxtModule<ModuleOptions>({
                     globalErrorCapture: _options.public?.globalErrorCapture,
                     endpoint: _options.public?.endpoint,
                     batch: _options.public?.batch
+                },
+
+                websocket: {
+                    route: typeof _options.websocket === 'object' ? _options.websocket.route : '/api/_frogger/dev-ws',
+                    defaultChannel: typeof _options.websocket === 'object' ? _options.websocket.defaultChannel : 'main'
                 }
             },
             frogger: {
@@ -127,14 +138,19 @@ export default defineNuxtModule<ModuleOptions>({
                 
                 batch: _options.batch,
 
-                rateLimiter: _options.rateLimiter
+                rateLimiter: _options.rateLimiter,
+
+                websocket: typeof _options.websocket === 'object' ? _options.websocket : _options.websocket === true ? {
+                    enabled: true,
+                    route: '/api/_frogger/dev-ws',
+                    defaultChannel: 'main'
+                } : false,
             }
         };
 
         updateRuntimeConfig(moduleRuntimeConfig)
 
         
-        // Let the user know what they including in their bundle
         _nuxt.hook('nitro:build:before', () => {
             if (_nuxt.options.dev && ( _options.serverModule || _options.clientModule )) {
                 console.log(
@@ -159,6 +175,13 @@ export default defineNuxtModule<ModuleOptions>({
                     `🐸 Registering client module ${clientBatchStatus}`
                 );
             }
+
+            if (_options.websocket) {
+                console.log(
+                    '%cFROGGER', 'color: black; background-color: #9333ea; font-weight: bold; font-size: 1.15rem;',
+                    `🐸 WebSocket logging registered`
+                );
+            }
         })
 
 
@@ -170,6 +193,10 @@ export default defineNuxtModule<ModuleOptions>({
             
             if (_options.public?.globalErrorCapture !== false && _options.public?.globalErrorCapture !== undefined) {
                 addPlugin(resolver.resolve('./runtime/app/plugins/global-vue-errors'))
+            }
+
+            if (_options.websocket) {
+                addImportsDir(resolver.resolve('./runtime/app/composables/useWebsocket'))
             }
         }
 
@@ -184,6 +211,24 @@ export default defineNuxtModule<ModuleOptions>({
                 route: '/api/_frogger/logs',
                 handler: resolver.resolve('./runtime/server/api/logger.post'),
             })
+
+            if (_options.websocket) {
+                addServerImportsDir(resolver.resolve('./runtime/server/websocket'))
+                
+                // Auto-register WebSocket handler in development mode
+                if (_nuxt.options.dev) {
+                    const wsRoute = typeof _options.websocket === 'object' ? _options.websocket.route || '/api/_frogger/dev-ws' : '/api/_frogger/dev-ws';
+                    
+                    const routeParts = wsRoute.split('/').filter(Boolean);
+                    const fileName = routeParts.pop() + '.ws';
+                    const routePath = routeParts.join('/');
+                    
+                    addServerHandler({
+                        route: wsRoute,
+                        handler: resolver.resolve('./runtime/server/api/dev-websocket-handler.ts'),
+                    })
+                }
+            }
         }
     },
 })

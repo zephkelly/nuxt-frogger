@@ -1,8 +1,8 @@
 import type { BatchOptions } from "./batch"
 import type { FileOptions } from "./file";
 import type { RateLimitingOptions } from "../../rate-limiter/types";
-
 import type { AppInfoOptions } from "../../app-info/types";
+import type { WebsocketOptions } from "./../../websocket/options";
 
 
 
@@ -17,6 +17,8 @@ export interface ModuleOptions {
     batch?: BatchOptions | false
 
     rateLimiter?: RateLimitingOptions | false
+
+    websocket?: WebsocketOptions | boolean
     
     public?: {
         endpoint?: string

@@ -9,7 +9,8 @@ import type {
     FroggerWebSocketOptions
 } from "./types";
 
-
+//@ts-ignore
+import { defineWebSocketHandler } from '#imports'
 
 class WebSocketLogHandler {
     private reporter: WebSocketLogReporter;
@@ -19,6 +20,7 @@ class WebSocketLogHandler {
     }
 
     async handleOpen(peer: Peer) {
+        console.log(`[Frogger] Peer ${peer.id} connected with request:`);
         try {
             const params = this.extractParams(peer);
             
@@ -35,9 +37,9 @@ class WebSocketLogHandler {
                 type: 'subscription_confirmed',
                 channel: params.channel,
                 data: {
-                peer_id: peer.id,
-                filters: params.filters,
-                filter_description: this.reporter.getFilterDescription(params.filters)
+                    peer_id: peer.id,
+                    filters: params.filters,
+                    filter_description: this.reporter.getFilterDescription(params.filters)
                 }
             });
             
@@ -257,10 +259,14 @@ class WebSocketLogHandler {
 }
 
 export function defineFroggerWebSocketHandler(options: FroggerWebSocketOptions = {}) {
+
     const handler = new WebSocketLogHandler();
 
-    return {
+    return defineWebSocketHandler({
         upgrade(request: Request) {
+            console.log(
+                '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
+                '🐸 Websocket logging upgrade requested')
             if (options.upgrade) {
                 return options.upgrade(request);
             }
@@ -273,6 +279,7 @@ export function defineFroggerWebSocketHandler(options: FroggerWebSocketOptions =
         },
 
         async open(peer: Peer) {
+            console.log(`[Frogger] Peer ${peer.id} connected`);
             await handler.handleOpen(peer);
         },
 
@@ -287,5 +294,5 @@ export function defineFroggerWebSocketHandler(options: FroggerWebSocketOptions =
         async error(peer: Peer, error: any) {
             await handler.handleError(peer, error);
         }
-    };
+    });
 }

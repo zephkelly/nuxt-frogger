@@ -39,3 +39,33 @@ export interface LogWebSocketMessage {
     channel?: string;
     data?: any;
 }
+
+
+// Websocket communication
+export enum MessageType {
+    Ping = 'ping',
+    Pong = 'pong',
+    Connected = 'connected',
+    Error = 'error',
+}
+
+
+export enum WebSocketMessageAuthor {
+    Client = 'client',
+    Server = 'server'
+}
+
+
+export interface WebSocketMessage<T> {
+    from: WebSocketMessageAuthor,
+    type: T,
+    channel?: string,
+    data?: any
+}
+
+export enum WebSocketStatus {
+    Connecting = 'connecting',
+    Open = 'open',
+    Closed = 'closed',
+    Timeout = 'timeout',
+}

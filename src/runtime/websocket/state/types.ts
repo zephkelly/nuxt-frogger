@@ -2,7 +2,7 @@ import type { PersistedChannel, PersistedSubscription } from "../types";
 
 
 
-export interface IWebSocketStorage {
+export interface IWebSocketStateStorage {
     getChannel(channelId: string): Promise<PersistedChannel | null>;
     setChannel(channelId: string, channel: PersistedChannel, ttl?: number): Promise<void>;
     deleteChannel(channelId: string): Promise<void>;

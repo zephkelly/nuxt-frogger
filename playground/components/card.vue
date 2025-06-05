@@ -16,9 +16,12 @@ type Props = {
 defineProps<Props>();
 
 async function testing() {
+    const clickFrogger = useFrogger();
     const number = Math.random();
     if (number < 0.5) {
-        throw new Error('This is a test error');
+        for (let i = 0; i < 100; i++) {
+            clickFrogger.error(`Click number ${i + 1}`);
+        }
     } else {
         console.log('No error this time, try again!');
     }

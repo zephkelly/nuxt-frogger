@@ -18,7 +18,7 @@ startFrogger.error('Hello from the playground!');
 const testing = () => {
     const clickFrogger = useFrogger();
 
-    for (let i = 0; i < 1; i++) {
+    for (let i = 0; i < 100; i++) {
         clickFrogger.info(`Click number ${i + 1}`);
     }
 
@@ -76,6 +76,7 @@ const socket = useWebsocket('/api/_frogger/dev-ws', {
     },
     queryParams: {
         channel: 'main',
+        level: 'error'
     },
     onMessage: async (event, message) => {
         console.log('WebSocket message received:', message);

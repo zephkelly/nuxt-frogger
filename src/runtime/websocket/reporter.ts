@@ -7,7 +7,8 @@ import type { LoggerObject } from "../shared/types/log";
 import type {
     SubscriptionFilter,
     PersistedChannel,
-    PersistedSubscription
+    PersistedSubscription,
+    LogMessage
 } from "./types";
 
 import { WebSocketKVLayer } from "./kv-layer";
@@ -35,7 +36,6 @@ export class WebSocketLogReporter implements IReporter {
         this.storage = storage || new WebSocketKVLayer();
         this.startCleanupInterval();
         
-        // Load persisted data on startup
         this.loadPersistedData().catch(error => {
             console.error('WebSocketLogReporter: Failed to load persisted data:', error);
         });
@@ -57,8 +57,6 @@ export class WebSocketLogReporter implements IReporter {
 
     private async loadPersistedData(): Promise<void> {
         try {
-            console.log('WebSocketLogReporter: Loading persisted data...');
-            
             const [persistedChannels, persistedSubscriptions] = await Promise.all([
                 this.storage.getAllChannels(),
                 this.storage.getAllSubscriptions()
@@ -75,9 +73,6 @@ export class WebSocketLogReporter implements IReporter {
                 
                 this.channels.set(persistedChannel.channel_uuid, channel);
             }
-
-            
-            console.log(`WebSocketLogReporter: Loaded ${persistedChannels.length} channels`);
         }
         catch (error) {
             console.error('WebSocketLogReporter: Error loading persisted data:', error);
@@ -85,13 +80,19 @@ export class WebSocketLogReporter implements IReporter {
     }
 
     public log(logObj: LoggerObject): void {
-        this.broadcastLog(logObj);
+        this.broadcastLogBatch([logObj]).catch(error => {
+            console.error('WebSocketLogReporter: Error broadcasting log:', error);
+        });
     }
 
     public logBatch(logs: LoggerObject[]): void {
-        for (const log of logs) {
-            this.broadcastLog(log);
+        if (!logs || logs.length === 0) {
+            return;
         }
+
+        this.broadcastLogBatch(logs).catch(error => {
+            console.error('WebSocketLogReporter: Error broadcasting log batch:', error);
+        });
     }
 
     public async flush(): Promise<void> {
@@ -374,7 +375,14 @@ export class WebSocketLogReporter implements IReporter {
         return this.subscriptions.get(peerId);
     }
 
-    private async broadcastLog(logObj: LoggerObject): Promise<void> {
+    private async broadcastLogBatch(logs: LoggerObject[]): Promise<void> {
+        if (!logs || logs.length === 0) {
+            return;
+        }
+
+        const batchId = `batch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const originalLength = logs.length;
+
         for (const [channelId, channel] of this.channels.entries()) {
             if (channel.subscribers.size === 0) {
                 continue;
@@ -391,47 +399,131 @@ export class WebSocketLogReporter implements IReporter {
                     console.error(`WebSocketLogReporter: Failed to update channel activity:`, error);
                 });
             }
-            for (const [peerId, peer] of channel.subscribers) {
-                const subscription = this.subscriptions.get(peerId);
-                if (subscription) {
-                    subscription.last_activity = new Date().getTime();
-                    this.subscriptions.set(peerId, subscription);
-                    this.storage.updateSubscriptionActivity(peerId).catch((error: unknown) => {
-                        console.error(`WebSocketLogReporter: Failed to update subscription activity for ${peerId}:`, error);
-                    });
-                }
-            }       
-            for (const [peerId, peer] of channel.subscribers) {
-                const subscription = this.subscriptions.get(peerId);
-                if (!peer || !peer.websocket) {
-                    channel.subscribers.delete(peerId);
-                    continue;
-                }
+
+            const subscriberGroups = this.groupSubscribersByFilters(channel);
+
+            for (const [filterKey, subscriberGroup] of subscriberGroups.entries()) {
+                const { peers, filters } = subscriberGroup;
                 
-                if (subscription?.filters && !this.passesFilter(logObj, subscription.filters)) {
+                const filteredLogs = this.filterLogBatch(logs, filters);
+                
+                if (filteredLogs.length === 0) {
                     continue;
                 }
 
-                this.sendLogToPeer(peer, logObj, channelId).catch(error => {
-                    console.error(`WebSocketLogReporter: Error sending log to peer ${peerId}:`, error);
+                const sendPromises = peers.map(({ peerId, peer }) => {
+                    const subscription = this.subscriptions.get(peerId);
+                    if (subscription) {
+                        subscription.last_activity = new Date().getTime();
+                        this.subscriptions.set(peerId, subscription);
+                        this.storage.updateSubscriptionActivity(peerId).catch((error: unknown) => {
+                            console.error(`WebSocketLogReporter: Failed to update subscription activity for ${peerId}:`, error);
+                        });
+                    }
+
+                    if (!peer || !peer.websocket) {
+                        channel.subscribers.delete(peerId);
+                        return Promise.resolve();
+                    }
+
+                    return this.sendLogBatchToPeer(peer, filteredLogs, channelId, {
+                        batchId,
+                        originalLength,
+                        filtered: filteredLogs.length < originalLength
+                    }).catch(error => {
+                        console.error(`WebSocketLogReporter: Error sending log batch to peer ${peerId}:`, error);
+                    });
                 });
+
+                await Promise.allSettled(sendPromises);
             }
         }
     }
 
-    private async sendLogToPeer(peer: Peer, logObj: LoggerObject, channelId: string): Promise<void> {
+    private groupSubscribersByFilters(channel: PersistedChannel): Map<string, {
+        peers: Array<{ peerId: string; peer: Peer }>;
+        filters?: SubscriptionFilter;
+    }> {
+        const groups = new Map<string, {
+            peers: Array<{ peerId: string; peer: Peer }>;
+            filters?: SubscriptionFilter;
+        }>();
+
+        for (const [peerId, peer] of channel.subscribers) {
+            const subscription = this.subscriptions.get(peerId);
+            const filters = subscription?.filters;
+            
+            const filterKey = this.createFilterKey(filters);
+            
+            if (!groups.has(filterKey)) {
+                groups.set(filterKey, {
+                    peers: [],
+                    filters
+                });
+            }
+            
+            groups.get(filterKey)!.peers.push({ peerId, peer });
+        }
+
+        return groups;
+    }
+
+    private createFilterKey(filters?: SubscriptionFilter): string {
+        if (!filters) {
+            return 'no-filter';
+        }
+
+        const parts: string[] = [];
+        
+        if (filters.level !== undefined) {
+            parts.push(`level:${filters.level}`);
+        }
+        
+        if (filters.source && filters.source.length > 0) {
+            parts.push(`source:${filters.source.sort().join(',')}`);
+        }
+        
+        if (filters.tags && filters.tags.length > 0) {
+            parts.push(`tags:${filters.tags.sort().join(',')}`);
+        }
+
+        return parts.length > 0 ? parts.join('|') : 'no-filter';
+    }
+
+    private filterLogBatch(logs: LoggerObject[], filters?: SubscriptionFilter): LoggerObject[] {
+        if (!filters) {
+            return logs;
+        }
+
+        return logs.filter(logObj => this.passesFilter(logObj, filters));
+    }
+
+    private async sendLogBatchToPeer(
+        peer: Peer, 
+        logs: LoggerObject[], 
+        channelId: string,
+        meta: {
+            batchId?: string;
+            originalLength?: number;
+            filtered?: boolean;
+        }
+    ): Promise<void> {
         try {
-            const message = {
+            const message: LogMessage = {
                 type: 'log',
                 channel: channelId,
                 timestamp: new Date().toISOString(),
-                data: logObj
+                data: logs,
+                meta: {
+                    length: logs.length,
+                    ...meta
+                }
             };
 
             await peer.send(JSON.stringify(message));
         }
         catch (error) {
-            console.error('WebSocketLogReporter: Failed to send message to peer:', error);
+            console.error('WebSocketLogReporter: Failed to send batch message to peer:', error);
             throw error;
         }
     }

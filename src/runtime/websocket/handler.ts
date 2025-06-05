@@ -264,22 +264,18 @@ export function defineFroggerWebSocketHandler(options: FroggerWebSocketOptions =
 
     return defineWebSocketHandler({
         upgrade(request: Request) {
-            console.log(
-                '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
-                '🐸 Websocket logging upgrade requested')
             if (options.upgrade) {
                 return options.upgrade(request);
             }
             
             console.log(
-                    '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
-                    '🐸 Logging websocket unprotected'
-                );
+                '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
+                '🐸 Logging websocket unprotected'
+            );
             return true;
         },
 
         async open(peer: Peer) {
-            console.log(`[Frogger] Peer ${peer.id} connected`);
             await handler.handleOpen(peer);
         },
 

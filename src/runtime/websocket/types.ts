@@ -1,5 +1,5 @@
 import type { Peer } from 'crossws';
-
+import type { LoggerObject } from '../shared/types/log';
 
 export interface SubscriptionFilter {
     level?: string[];
@@ -68,4 +68,17 @@ export enum WebSocketStatus {
     Open = 'open',
     Closed = 'closed',
     Timeout = 'timeout',
+}
+
+export interface LogMessage {
+    type: 'log';
+    channel: string;
+    timestamp: string;
+    data: LoggerObject[];
+    meta: {
+        length: number;
+        batchId?: string;
+        originalLength?: number;
+        filtered?: boolean;
+    };
 }

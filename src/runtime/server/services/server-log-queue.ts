@@ -1,32 +1,29 @@
-import { BatchReporter } from '../utils/reporters/batch-reporter'
+import { BatchReporter, createBatchReporter } from '../utils/reporters/batch-reporter'
 import { FileReporter } from '../utils/reporters/file-reporter'
+import { WebSocketLogReporter } from '../../websocket/reporter'
 
+import type { IReporter } from '../../shared/types/internal-reporter'
 import type { LoggerObject } from '../../shared/types/log'
-import type { LogBatch } from '../../shared/types/batch'
-import type { ModuleOptions } from '~/src/module'
+import type { LoggerObjectBatch } from '../../shared/types/batch'
 
 import { useRuntimeConfig } from '#imports'
-import { defu } from 'defu'
 
 
-/**
- * Centralized server-side log queue service
- */
+
 export class ServerLogQueueService {
     private static instance: ServerLogQueueService | null = null;
-    private batchReporter?: BatchReporter
-    private fileReporter?: FileReporter
+    
+    private batchReporter?: IReporter;
+    private directReporters: IReporter[] = [];
+
     private initialised: boolean = false
 
 
     /**
-     * Private constructor to prevent direct instantiation
+     * Private to prevent direct instantiation
      */
     private constructor() { }
 
-    /**
-     * Get the singleton instance
-     */
     public static getInstance(): ServerLogQueueService {
         if (!ServerLogQueueService.instance) {
             ServerLogQueueService.instance = new ServerLogQueueService();
@@ -36,9 +33,6 @@ export class ServerLogQueueService {
         return ServerLogQueueService.instance;
     }
 
-    /**
-     * Initialise the queue service with options
-     */
     public initialise(): void {
         if (this.initialised) {
             return
@@ -48,66 +42,47 @@ export class ServerLogQueueService {
 
         const config = useRuntimeConfig()
     
-        const froggerModuleOptions = {
-            file: config.frogger.file,
-            batch: config.public.frogger.batch,
-            endpoint: config.public.frogger.endpoint
+        //@ts-expect-error
+        const batchingEnabled = config.frogger.batch !== false;
+        
+        const fileReporter = new FileReporter();
+
+        let websocketReporter: IReporter | undefined;
+        if (config.frogger.websocket) {
+            websocketReporter = WebSocketLogReporter.getInstance();
         }
         
-        if (froggerModuleOptions.file) {
-            const fileOptions = typeof froggerModuleOptions.file === 'object' ? froggerModuleOptions.file : {}
-            this.fileReporter = new FileReporter()
+        if (batchingEnabled) {
+            const downstreamReporters: IReporter[] = []
+            downstreamReporters.push(fileReporter);
+            if (websocketReporter) {
+                downstreamReporters.push(websocketReporter);
+            }
+
+            const batchReporter = createBatchReporter(downstreamReporters);
+            this.batchReporter = batchReporter;
         }
-        
-        if (froggerModuleOptions.batch) {
-            const batchOptions = typeof froggerModuleOptions.batch === 'object' ? froggerModuleOptions.batch : {}
-
-            this.batchReporter = new BatchReporter({
-                maxSize: froggerModuleOptions.batch.maxSize,
-                maxAge: froggerModuleOptions.batch.maxAge,
-                retryOnFailure: froggerModuleOptions.batch.retryOnFailure,
-                maxRetries: froggerModuleOptions.batch.maxRetries,
-                retryDelay: froggerModuleOptions.batch.retryDelay,
-                sortingWindowMs: froggerModuleOptions.batch.sortingWindowMs,
-                onFlush: async (logs) => {
-                    if (!logs || !logs.length) return
-                    
-                    try {
-                        if (this.fileReporter) {
-                            try {
-                                await this.fileReporter.writeBatch(logs)
-                            }
-                            catch (err) {
-                                console.error('Error writing log to file:', err)
-                            }
-                        }
-
-                        // Add pluggable reporters here and an external endpoint from options config
-
-                    }
-                    catch (error) {
-                        console.error('Failed to send logs:', error)
-                        
-                        if (this.batchReporter && froggerModuleOptions.batch.retryOnFailure) {
-                            console.debug('Retry on failure enabled, will retry later')
-                            throw error
-                        }
-                    }
-                }
-            })
+        else {
+            this.directReporters.push(fileReporter);
+            
+            if (websocketReporter) {
+                this.directReporters.push(websocketReporter);
+            }
         }
     }
 
-    
-    /**
-     * Enqueue a batch of logs efficiently
-     */
-    public enqueueBatch(logBatch: LogBatch): void {
+    private ensureInitialised(): boolean {
         if (!this.initialised) {
-            this.initialise()
+            this.initialise();
         }
+        return true;
+    }
 
-        const logs = logBatch.logs;
+    
+    public enqueueBatch(loggerObjectBatch: LoggerObjectBatch): void {
+        if (!this.ensureInitialised()) return;
+
+        const logs = loggerObjectBatch.logs;
         if (logs.length === 0) {
             return;
         }
@@ -117,77 +92,163 @@ export class ServerLogQueueService {
                 this.batchReporter.logBatch(logs);
             }
             catch (err) {
-                console.error('Error in batch reporter for batch:', err);
-                
-                if (this.fileReporter) {
-                    for (const log of logs) {
-                        this.fileReporter.writeBatch(logs).catch(fileErr => {
-                            console.error('Error in fallback file batch write:', fileErr);
-                        });
-                    }
-                }
+                console.error(`Error in batch reporter:`, err);
             }
         }
-        else if (this.fileReporter) {
-            this.fileReporter.writeBatch(logs).catch(err => {
-                console.error('Error in direct file batch write:', err);
-            });
+        else {
+            this.callDirectReporters('logBatch', logs);
         }
     }
 
-    /**
-     * Enqueue a log to be processed
-     */
     public enqueueLog(logObj: LoggerObject): void {
-        if (!this.initialised) {
-            this.initialise()
-        }
+        if (!this.ensureInitialised()) return;
 
         if (this.batchReporter) {
             try {
-                this.batchReporter.log(logObj)
+                this.batchReporter.log(logObj);
             }
             catch (err) {
-                console.error('Error in batch reporter:', err)
-                
-                if (this.fileReporter) {
-                    try {
-                        this.fileReporter.log(logObj)
-                    }
-                    catch (fileErr) {
-                        console.error('Error in fallback file reporter:', fileErr)
-                    }
-                }
+                console.error(`Error in batch reporter:`, err);
             }
         }
-        else if (this.fileReporter) {
-            try {
-                this.fileReporter.log(logObj)
-            }
-            catch (err) {
-                console.error('Error in file reporter:', err)
-            }
+        else {
+            this.callDirectReporters('log', logObj);
         }
     }
 
-    /**
-     * Force flush any pending logs
-     */
     public async flush(): Promise<void> {
         if (!this.initialised) {
-            return
+            return;
         }
 
-        const promises: Promise<void>[] = []
-        
+        const flushPromises: Promise<void>[] = [];
+
         if (this.batchReporter) {
-            promises.push(this.batchReporter.forceFlush())
+            if (this.batchReporter.forceFlush) {
+                flushPromises.push(this.batchReporter.forceFlush().catch(err => {
+                    console.error(`Error flushing batch reporter:`, err);
+                }));
+            }
         }
-
-        if (this.fileReporter) {
-            promises.push(this.fileReporter.forceFlush());
+        else {
+            for (const reporter of this.directReporters) {
+                if (reporter.forceFlush) {
+                    flushPromises.push(reporter.forceFlush().catch(err => {
+                        console.error(`Error flushing ${reporter.name}:`, err);
+                    }));
+                }
+            }
         }
         
-        await Promise.all(promises)
+        await Promise.allSettled(flushPromises);
+    }
+
+    public async destroy(): Promise<void> {
+        if (!this.initialised) {
+            return;
+        }
+
+        const destroyPromises: Promise<void>[] = [];
+
+        if (this.batchReporter) {
+            if (this.batchReporter.destroy) {
+                destroyPromises.push(this.batchReporter.destroy().catch(err => {
+                    console.error(`Error destroying batch reporter:`, err);
+                }));
+            }
+        }
+        
+        if (this.directReporters.length > 0) {
+            for (const reporter of this.directReporters) {
+                if (reporter.destroy) {
+                    destroyPromises.push(reporter.destroy().catch(err => {
+                        console.error(`Error destroying ${reporter.name}:`, err);
+                    }));
+                }
+            }
+        }
+        
+        await Promise.allSettled(destroyPromises);
+        
+        this.batchReporter = undefined;
+        this.directReporters = [];
+        this.initialised = false;
+    }
+
+    public addReporter(reporter: IReporter): void {
+        if (!this.ensureInitialised()) return;
+        if (this.batchReporter) {
+            if (typeof (this.batchReporter as any).addDownstreamReporter === 'function') {
+                (this.batchReporter as BatchReporter).addDownstreamReporter(reporter);
+            }
+            else {
+                this.directReporters.push(reporter);
+            }
+        }
+        else {
+            this.directReporters.push(reporter);
+        }
+    }
+
+    public removeReporter(reporter: IReporter): void {
+        if (!this.ensureInitialised()) return;
+
+        if (this.batchReporter && typeof (this.batchReporter as any).removeDownstreamReporter === 'function') {
+            (this.batchReporter as BatchReporter).removeDownstreamReporter(reporter);
+        }
+        else {
+            const index = this.directReporters.indexOf(reporter);
+            if (index > -1) {
+                this.directReporters.splice(index, 1);
+            }
+        }
+    }
+
+    public clearReporters(): void {
+        if (!this.ensureInitialised()) return;
+
+        if (this.batchReporter && typeof (this.batchReporter as any).clearDownstreamReporters === 'function') {
+            (this.batchReporter as BatchReporter).clearDownstreamReporters();
+        }
+        else {
+            this.directReporters = [];
+        }
+    }
+
+    public getReporterInfo(): { 
+        mode: 'batched' | 'direct';
+        batchReporter?: string;
+        directReporters: string[];
+        downstreamReporters?: string[];
+    } {
+        const info: any = {
+            mode: this.batchReporter ? 'batched' : 'direct',
+            directReporters: this.directReporters.map(r => r.name)
+        };
+
+        if (this.batchReporter) {
+            info.batchReporter = this.batchReporter.name;
+            if (typeof (this.batchReporter as any).getDownstreamReporters === 'function') {
+                info.downstreamReporters = (this.batchReporter as any).getDownstreamReporters();
+            }
+        }
+
+        return info;
+    }
+
+    private callDirectReporters(method: 'log' | 'logBatch', data: LoggerObject | LoggerObject[]): void {
+        for (const reporter of this.directReporters) {
+            try {
+                if (method === 'log') {
+                    reporter.log(data as LoggerObject);
+                }
+                else {
+                    reporter.logBatch(data as LoggerObject[]);
+                }
+            }
+            catch (err) {
+                console.error(`Error in direct reporter ${reporter.name}:`, err);
+            }
+        }
     }
 }

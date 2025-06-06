@@ -4,10 +4,12 @@ import { useNuxtApp, useState, useRuntimeConfig } from '#app';
 import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
 import { LogQueueService } from '../services/log-queue';
 
+import type { IFroggerLogger } from '../../shared/types/frogger';
 import type { ClientLoggerOptions } from '../types/logger';
 import type { LogObject } from 'consola/browser';
 import type { LoggerObject } from '../../shared/types/log';
-import type { LogBatch } from '../../shared/types/batch';
+import type { LoggerObjectBatch } from '../../shared/types/batch';
+import { parseAppInfoConfig } from '../../app-info/parse';
 
 
 
@@ -21,9 +23,10 @@ interface SSRTraceState {
  * Client-side implementation of Frogger
  * Batches logs and sends them to a server endpoint
  */
-export class ClientFrogger extends BaseFroggerLogger {
+export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
     private options: Required<ClientLoggerOptions>;
     protected hasMounted: Ref<boolean>;
+    private batchingEnabled = true;
 
     private ssrTraceState = useState<SSRTraceState>('frogger-ssr-trace-state');
     
@@ -34,24 +37,29 @@ export class ClientFrogger extends BaseFroggerLogger {
 
 
         const config = useRuntimeConfig();
+        const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
 
         this.options = {
+            appInfo: isSet ? { 
+                name: name || 'unknown', 
+                version 
+            } : { 
+                name: 'unknown',
+                version: 'unknown'
+            },
             endpoint: config.public.frogger.endpoint,
 
             level: 3,
             context: {},
             consoleOutput: true,
+            scrub: config.public.frogger.scrub || true,
             ...options
         }
+
+        //@ts-expect-error
+        this.batchingEnabled = config.public.frogger.batch !== false;
         
         this.setupTraceContext();
-        
-        if (import.meta.client) {
-            const nuxtApp = useNuxtApp();
-            const logQueue = nuxtApp.$logQueue as LogQueueService;
-            
-            logQueue.setAppInfo('unknown', 'unknown');
-        }
     }
 
     /**
@@ -85,14 +93,13 @@ export class ClientFrogger extends BaseFroggerLogger {
             }
 
             // For all other client instances, we keep the new randomly generated trace ID
-            // from the BaseFroggerLogger constructor (no action needed)
         }
     }
-    
+
     /**
-     * Process a log entry from Consola
+     * Create LoggerObject from Consola's LogObject
      */
-    protected async processLog(logObj: LogObject): Promise<void> {
+    protected async createLoggerObject(logObj: LogObject): Promise<LoggerObject> {
         const traceContext = this.generateTraceContext();
 
         if (import.meta.server) {
@@ -106,45 +113,51 @@ export class ClientFrogger extends BaseFroggerLogger {
         const env = (import.meta.server) ? 'ssr' :
             (import.meta.client && this.hasMounted.value) ? 'client' : 'csr';
 
-        const froggerLoggerObject: LoggerObject = {
-            type: logObj.type,
-            level: logObj.level,
-            
-            date: logObj.date,
-
-            trace: traceContext,
-
-            context: {
+        return {
+            time: logObj.date.getTime(),
+            lvl: logObj.level,
+            msg: logObj.args?.[0],
+            ctx: {
                 env: env,
-                message: logObj.args?.[0],
+                type: logObj.type,
                 ...this.globalContext,
                 ...logObj.args?.slice(1)[0],
             },
-            timestamp: logObj.date.getTime(),
+            trace: traceContext,
+        };
+    }
+
+    private async sendLogImmediate(logObj: LoggerObject): Promise<void> {
+        if (!this.options.endpoint) return;
+
+        const batch: LoggerObjectBatch = {
+            logs: [logObj],
+            app: this.options.appInfo
+        };
+
+        return $fetch(this.options.endpoint, {
+            method: 'POST',
+            body: batch,
+            headers: {
+                ...this.getHeaders()
+            }
+        });
+    }
+    
+    protected async processLoggerObject(loggerObject: LoggerObject): Promise<void> {
+        if (import.meta.client) {
+            if (this.batchingEnabled) {
+                const nuxtApp = useNuxtApp();
+
+                const logQueue = nuxtApp.$logQueue as LogQueueService;
+                logQueue.enqueueLog(loggerObject);
+                return;
+            }
+
+            await this.sendLogImmediate(loggerObject);
+            return;
         }
         
-        if (import.meta.client) {
-            const nuxtApp = useNuxtApp();
-            const logQueue = nuxtApp.$logQueue as LogQueueService;
-            logQueue.enqueueLog(froggerLoggerObject);
-        }
-        else {
-            const batch: LogBatch = {
-                logs: [froggerLoggerObject],
-                app: {
-                    name: 'unknown',
-                    version: 'unknown'
-                }
-            };
-
-            // Immediately send the log batch to the server while we are on the server
-            // to prevent any loss of logs
-            if (!this.options.endpoint) return;
-
-            await $fetch(this.options.endpoint, {
-                method: 'POST',
-                body: batch
-            });
-        }
+        await this.sendLogImmediate(loggerObject);
     }
 }

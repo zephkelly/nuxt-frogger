@@ -1,45 +1,65 @@
 import { defu } from 'defu';
 import { useRuntimeConfig } from '#imports';
 
+import { BaseReporter } from './base-reporter';
 import type { BatchReporterOptions } from '../../types/batch-reporter';
 import type { LoggerObject } from '~/src/runtime/shared/types/log';
+import type { IReporter } from '~/src/runtime/shared/types/internal-reporter';
 
-
+import { uuidv7 } from '../../../shared/utils/uuid';
 
 /**
  * Reporter that batches logs before sending them to a destination
  */
-export class BatchReporter {
+export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> {
+    public readonly name = 'FroggerBatchReporter';
+    public readonly reporterId: string;
+
     private logs: LoggerObject[] = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
-    private options: Required<BatchReporterOptions>;
+    protected options: Required<BatchReporterOptions>;
     private lastFlushTime: number = 0;
     private flushing: boolean = false;
     private retries: Map<string, number> = new Map();
     private flushPromise: Promise<void> = Promise.resolve();
-    
+
     constructor(options: BatchReporterOptions) {
+        super();
+        this.reporterId = `frogger-batcher-${uuidv7()}`;
+
         const config = useRuntimeConfig()
-            
-        this.options = defu(options, config.public.frogger.batch) as Required<BatchReporterOptions>;
+
+        const defaultOptions: BatchReporterOptions = {
+            downstreamReporters: [],
+            onFlush: async (logs) => {
+                if (this.options.downstreamReporters.length === 0) {
+                    return;
+                }
+                
+                const promises = this.options.downstreamReporters.map(async (reporter) => {
+                    try {
+                        await reporter.logBatch(logs);
+                    }
+                    catch (err) {
+                        console.error(`Error in downstream reporter ${reporter.name}:`, err);
+                        throw err;
+                    }
+                });
+                
+                await Promise.all(promises);
+            }
+        };
+        
+        this.options = defu(options, defaultOptions, config.public.frogger.batch) as Required<BatchReporterOptions>;
     }
     
-    /**
-     * Handle an incoming log and add it to the batch
-     */
     log(logObj: LoggerObject): void {
         const processedLogs = this.processLogs([logObj]);
-        if (processedLogs.length === 0) {
-            return; // Log was filtered out
-        }
-        
+        if (processedLogs.length === 0) return;
         this.addLogsToBuffer(processedLogs);
     }
 
-    /**
-     * Handle a batch of incoming logs and add them to the batch
-     */
-    logBatch(logs: LoggerObject[]): void {
+    override logBatch(logs: LoggerObject[]): void {
         if (logs.length === 0) {
             return;
         }
@@ -53,30 +73,26 @@ export class BatchReporter {
         this.addLogsToBuffer(processedLogs);
     }
 
-    /**
-     * Process logs by filtering and adding additional fields
-     */
     private processLogs(logs: LoggerObject[]): LoggerObject[] {
         const processedLogs: LoggerObject[] = [];
         
-        for (const logObj of logs) {
+        for (const log of logs) {
             if (this.options.levels && this.options.levels.length > 0) {
 
-                if (!this.options.levels.includes(logObj.level)) {
+                if (!this.options.levels.includes(log.lvl)) {
                     continue;
                 }
             }
 
-            const logCopy = structuredClone(logObj);
-            Object.assign(logCopy, this.options.additionalFields);
-            processedLogs.push(logCopy);
+            processedLogs.push(log);
         }
 
         return processedLogs;
     }
 
     /**
-     * Add processed logs to the buffer and handle flushing
+     * Add logs to the internal buffer, maintaining sorted order
+     * and handling max size and flushing logic
      */
     private addLogsToBuffer(logs: LoggerObject[]): void {
         for (const log of logs) {
@@ -91,36 +107,28 @@ export class BatchReporter {
         this.scheduleFlush();
     }
 
-    /**
-     * Handle the case when maxSize is reached
-     */
     private handleMaxSizeReached(): void {
         const now = Date.now();
         const cutoffTime = now - this.options.sortingWindowMs;
-        const logsToFlush = this.logs.filter(log => log.timestamp <= cutoffTime);
+        const logsToFlush = this.logs.filter(log => log.time <= cutoffTime);
         
         if (logsToFlush.length > 0) {
-            console.debug('Flushing immediately. Buffer full and old logs available');
             this.scheduleFlush(0);
         }
         else {
             const oldestLog = this.logs[0];
-            const waitTime = Math.max(0, (oldestLog.timestamp + this.options.sortingWindowMs) - now);
-            console.debug(`All logs too new, waiting ${waitTime}ms for sorting window`);
+            const waitTime = Math.max(0, (oldestLog.time + this.options.sortingWindowMs) - now);
             this.scheduleFlush(waitTime);
         }
     }
 
-    /**
-     * Insert log in sorted position (by timestamp)
-     */
     private insertSorted(log: LoggerObject): void {
         let left = 0;
         let right = this.logs.length;
         
         while (left < right) {
             const mid = Math.floor((left + right) / 2);
-            if (this.logs[mid].timestamp <= log.timestamp) {
+            if (this.logs[mid].time <= log.time) {
                 left = mid + 1;
             }
             else {
@@ -130,88 +138,28 @@ export class BatchReporter {
         
         this.logs.splice(left, 0, log);
     }
-    
-    /**
-     * Schedule a flush operation
-     */
-    private scheduleFlush(delay: number = this.options.maxAge): void {
-        if (this.flushing || (this.timer !== null && delay === this.options.maxAge)) {
-            return;
-        }
-        
-        if (this.timer !== null) {
-            clearTimeout(this.timer);
-            this.timer = null;
-        }
-        
-        this.timer = setTimeout(() => {
-            this.timer = null;
-            this.flushPromise = this.flushPromise.then(() => this.flush());
-        }, delay);
+
+
+
+    // Downstream reporters ------------------------------------------------
+    public addDownstreamReporter(reporter: IReporter): void {
+        this.options.downstreamReporters.push(reporter);
     }
-    
-    /**
-     * Manually flush logs
-     */
-    async flush(): Promise<void> {
-        if (this.flushing) {
-            return;
-        }
-        
-        if (this.timer) {
-            clearTimeout(this.timer);
-            this.timer = null;
-        }
-        
-        if (this.logs.length === 0) {
-            return;
-        }
-        
-        this.flushing = true;
-        
-        try {
-            const cutoffTime = Date.now() - this.options.sortingWindowMs;
-            const logsToFlush = this.logs.filter(log => log.timestamp <= cutoffTime);
-            
-            if (logsToFlush.length === 0) {
-                if (this.logs.length > 0) {
-                    this.scheduleFlush(this.options.sortingWindowMs);
-                }
-                return;
-            }
-            
-            this.logs = this.logs.filter(log => log.timestamp > cutoffTime);
-            
-            const batchId = `batch-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-            
-            try {
-                await this.options.onFlush(logsToFlush);
-                this.retries.delete(batchId);
-                this.lastFlushTime = Date.now();
-            }
-            catch (error) {
-                console.error(`Failed to flush logs (batch ${batchId}):`, error);
-                
-                if (this.options.retryOnFailure) {
-                    this.handleFlushFailure(batchId, logsToFlush);
-                }
-                else {
-                    console.error(`Dropped ${logsToFlush.length} logs due to flush failure`);
-                }
-            }
-        }
-        finally {
-            this.flushing = false;
-            
-            if (this.logs.length > 0) {
-                this.scheduleFlush(Math.min(this.options.maxAge, this.options.sortingWindowMs));
-            }
-        }
+
+    public removeDownstreamReporter(reporter: IReporter): void {
+        this.options.downstreamReporters = this.options.downstreamReporters.filter(r => r !== reporter);
     }
-    
-    /**
-     * Handle a failed flush attempt with retry logic
-     */
+
+    public getDownstreamReporters(): IReporter[] {
+        return this.options.downstreamReporters;
+    }
+
+    public clearDownstreamReporters(): void {
+        this.options.downstreamReporters = [];
+    }
+
+    // Flush handling ------------------------------------------------------
+
     private handleFlushFailure(batchId: string, logs: LoggerObject[]): void {
         const retryCount = this.retries.get(batchId) || 0;
         
@@ -243,52 +191,91 @@ export class BatchReporter {
         }
         }, backoffDelay);
     }
+
+    private scheduleFlush(delay: number = this.options.maxAge): void {
+        if (this.flushing || (this.timer !== null && delay === this.options.maxAge)) {
+            return;
+        }
+        
+        if (this.timer !== null) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+        
+        this.timer = setTimeout(() => {
+            this.timer = null;
+            this.flushPromise = this.flushPromise.then(() => this.flush());
+        }, delay);
+    }
+    
+    override async flush(): Promise<void> {
+        if (this.flushing) {
+            return;
+        }
+        
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+        
+        if (this.logs.length === 0) {
+            return;
+        }
+        
+        this.flushing = true;
+        
+        try {
+            const cutoffTime = Date.now() - this.options.sortingWindowMs;
+            const logsToFlush = this.logs.filter(log => log.time <= cutoffTime);
+            
+            if (logsToFlush.length === 0) {
+                if (this.logs.length > 0) {
+                    this.scheduleFlush(this.options.sortingWindowMs);
+                }
+                return;
+            }
+            
+            this.logs = this.logs.filter(log => log.time > cutoffTime);
+            
+            const batchId = `batch-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+            
+            try {
+                await this.options.onFlush(logsToFlush);
+                this.retries.delete(batchId);
+                this.lastFlushTime = Date.now();
+            }
+            catch (error) {
+                console.error(`Failed to flush logs (batch ${batchId}):`, error);
+                
+                if (this.options.retryOnFailure) {
+                    this.handleFlushFailure(batchId, logsToFlush);
+                }
+                else {
+                    console.error(`Dropped ${logsToFlush.length} logs due to flush failure`);
+                }
+            }
+        }
+        finally {
+            this.flushing = false;
+            
+            if (this.logs.length > 0) {
+                this.scheduleFlush(Math.min(this.options.maxAge, this.options.sortingWindowMs));
+            }
+        }
+    }
   
-    /**
-     * Force immediate flush and wait for completion
-     */
-    async forceFlush(): Promise<void> {
+    override async forceFlush(): Promise<void> {
         await this.flushPromise;
         return this.flush();
     }
 }
 
-/**
- * Create a batch reporter for sending logs to a REST API endpoint
- */
-export function createHttpBatchReporter(
-    url: string, 
-    options: Omit<BatchReporterOptions, 'onFlush'> & {
-        headers?: Record<string, string>;
-        method?: string;
-        timeout?: number;
-    } = {}
+export function createBatchReporter(
+    downstreamReporters: IReporter[], 
+    options: Omit<BatchReporterOptions, 'onFlush' | 'downstreamReporters' | 'addDownstreamReporter' | 'removeDownstreamReporter' | 'getDownstreamReporters'> = {}
 ): BatchReporter {
     return new BatchReporter({
         ...options,
-        async onFlush(logs) {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => {
-                controller.abort();
-            }, options.timeout || 10000);
-            
-            try {
-                const response = await $fetch(url, {
-                    method: 'POST',
-                    body: { logs },
-                    signal: controller.signal
-                });
-            }
-            catch (error: any) {
-                if (error.name === 'AbortError') {
-                    console.error('Request timed out');
-                } else {
-                    console.error('Failed to send logs:', error);
-                }
-            }
-            finally {
-                clearTimeout(timeoutId);
-            }
-        }
+        downstreamReporters
     });
 }

@@ -4,16 +4,21 @@ import { existsSync, createWriteStream, WriteStream } from 'node:fs';
 import { join } from 'node:path';
 
 import type { FileReporterOptions } from '../../types/file-reporter';
-
 import type { LoggerObject } from '~/src/runtime/shared/types/log';
+import { BaseReporter } from './base-reporter';
+
+import { uuidv7 } from '../../../shared/utils/uuid';
 
 
 
 /**
  * Reporter that writes logs to local files
  */
-export class FileReporter {
-    private options: Required<FileReporterOptions>;
+export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
+    public readonly name = 'FroggerFileReporter';
+    public readonly reporterId: string;
+
+    protected options: Required<FileReporterOptions>;
     private currentFileName: string = '';
     private currentFileSize: number = 0;
     private logBuffer: string[] = [];
@@ -24,6 +29,8 @@ export class FileReporter {
     private bufferSize: number = 0;
     
     constructor() {
+        super();
+        this.reporterId = `frogger-file-${uuidv7()}`;
         const config = useRuntimeConfig()
 
         this.options = config.frogger.file
@@ -33,10 +40,7 @@ export class FileReporter {
         });
     }
 
-    /**
-     * Handle a log object and add it to the buffer
-     */
-    log(logObj: LoggerObject): void {
+    async log(logObj: LoggerObject): Promise<void> {
         try {
             const logEntry = this.formatLogEntry(logObj);
             const entrySize = Buffer.byteLength(logEntry) + 1;
@@ -47,9 +51,7 @@ export class FileReporter {
             this.scheduleFlush();
             
             if (this.bufferSize >= this.options.bufferMaxSize) {
-                this.flush().catch(err => {
-                    console.error('Error during immediate flush:', err);
-                });
+                await this.flush();
             }
         }
         catch (err) {
@@ -61,7 +63,7 @@ export class FileReporter {
      * Write a batch of logs directly to file (bypasses internal buffer)
      * Used by BatchReporter to write pre-sorted logs
      */
-    async writeBatch(logs: LoggerObject[]): Promise<void> {
+    override async logBatch(logs: LoggerObject[]): Promise<void> {
         if (logs.length === 0) {
             return;
         }
@@ -94,9 +96,116 @@ export class FileReporter {
         return this.writePromise;
     }
 
-    /**
-     * Schedule a buffer flush
-     */
+    private async writeToFile(content: string, contentSize: number): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (!this.writeStream) {
+                return reject(new Error('No write stream available'));
+            }
+            const canContinue = this.writeStream.write(content, err => {
+                if (err) {
+                    return reject(err);
+                }
+                
+                this.currentFileSize += contentSize;
+            });
+            
+            if (canContinue) {
+                resolve();
+            }
+            else {
+                this.writeStream.once('drain', () => {
+                    resolve();
+                });
+            }
+        });
+    }
+
+    private async openNewStream(fileName: string): Promise<void> {
+        await this.closeCurrentStream();
+        
+        await this.ensureDirectoryExists();
+        
+        const filePath = join(this.options.directory, fileName);
+        this.currentFileSize = await this.getFileSize(fileName);
+        
+        this.writeStream = createWriteStream(filePath, { 
+            flags: 'a', 
+            highWaterMark: this.options.highWaterMark
+        });
+        
+        return new Promise((resolve, reject) => {
+            if (!this.writeStream) {
+                return reject(new Error('Failed to create write stream'));
+            }
+            
+            this.writeStream.on('error', (err) => {
+                console.error('Write stream error:', err);
+            });
+            
+            this.writeStream.on('open', () => {
+                resolve();
+            });
+        });
+    }
+    
+    private async closeCurrentStream(): Promise<void> {
+        if (this.writeStream) {
+            const stream = this.writeStream;
+            this.writeStream = null;
+            
+            return new Promise((resolve) => {
+                stream.end(() => {
+                    resolve();
+                });
+            });
+        }
+        return Promise.resolve();
+    }
+
+
+    private formatLogEntry(logObj: LoggerObject): string {
+        const enrichedLog = {
+            ...logObj,
+        };
+        
+
+        return JSON.stringify(enrichedLog);
+    }
+
+    private getLogFileName(): string {
+        const now = new Date();
+        let fileName = this.options.fileNameFormat;
+        
+        fileName = fileName
+            .replace('YYYY', now.getFullYear().toString())
+            .replace('MM', (now.getMonth() + 1).toString().padStart(2, '0'))
+            .replace('DD', now.getDate().toString().padStart(2, '0'))
+            .replace('HH', now.getHours().toString().padStart(2, '0'));
+        
+        return fileName;
+    }
+
+    private async getFileSize(fileName: string): Promise<number> {
+        const filePath = join(this.options.directory, fileName);
+        if (existsSync(filePath)) {
+            const stats = await stat(filePath);
+            return stats.size;
+        }
+        return 0;
+    }
+
+    private async rotateLogFile(fileName: string): Promise<void> {
+        const filePath = join(this.options.directory, fileName);
+        if (existsSync(filePath)) {
+            const timestamp = Date.now();
+            const rotatedFileName = fileName.replace(/\.log$/, `-${timestamp}.log`);
+            const rotatedFilePath = join(this.options.directory, rotatedFileName);
+            
+            const fs = require('node:fs');
+            fs.renameSync(filePath, rotatedFilePath);
+        }
+    }
+
     private scheduleFlush(): void {
         if (this.flushTimer === null) {
             this.flushTimer = setTimeout(() => {
@@ -108,10 +217,7 @@ export class FileReporter {
         }
     }
 
-    /**
-     * Flush the log buffer to disk
-     */
-    async flush(): Promise<void> {
+    override async flush(): Promise<void> {
         if (this.logBuffer.length === 0) {
             return;
         }
@@ -150,142 +256,7 @@ export class FileReporter {
         return this.writePromise;
     }
 
-    /**
-     * Write content to the current write stream
-     */
-    private async writeToFile(content: string, contentSize: number): Promise<void> {
-        return new Promise((resolve, reject) => {
-            if (!this.writeStream) {
-                return reject(new Error('No write stream available'));
-            }
-            
-            const canContinue = this.writeStream.write(content, err => {
-                if (err) {
-                    return reject(err);
-                }
-                
-                this.currentFileSize += contentSize;
-            });
-            
-            if (canContinue) {
-                resolve();
-            }
-            else {
-                this.writeStream.once('drain', () => {
-                    resolve();
-                });
-            }
-        });
-    }
-
-    /**
-     * Open a new write stream
-     */
-    private async openNewStream(fileName: string): Promise<void> {
-        await this.closeCurrentStream();
-        
-        await this.ensureDirectoryExists();
-        
-        const filePath = join(this.options.directory, fileName);
-        this.currentFileSize = await this.getFileSize(fileName);
-        
-        this.writeStream = createWriteStream(filePath, { 
-            flags: 'a', 
-            highWaterMark: this.options.highWaterMark
-        });
-        
-        return new Promise((resolve, reject) => {
-            if (!this.writeStream) {
-                return reject(new Error('Failed to create write stream'));
-            }
-            
-            this.writeStream.on('error', (err) => {
-                console.error('Write stream error:', err);
-            });
-            
-            this.writeStream.on('open', () => {
-                resolve();
-            });
-        });
-    }
-    
-    /**
-     * Close the current write stream if open
-     */
-    private async closeCurrentStream(): Promise<void> {
-        if (this.writeStream) {
-            const stream = this.writeStream;
-            this.writeStream = null;
-            
-            return new Promise((resolve) => {
-                stream.end(() => {
-                    resolve();
-                });
-            });
-        }
-        return Promise.resolve();
-    }
-
-
-    /**
-     * Format a log entry based on configuration
-     */
-    private formatLogEntry(logObj: LoggerObject): string {
-        const enrichedLog = {
-            ...logObj,
-        };
-        
-
-        return JSON.stringify(enrichedLog);
-    }
-
-    /**
-     * Get the current log file name based on the format
-     */
-    private getLogFileName(): string {
-        const now = new Date();
-        let fileName = this.options.fileNameFormat;
-        
-        fileName = fileName
-            .replace('YYYY', now.getFullYear().toString())
-            .replace('MM', (now.getMonth() + 1).toString().padStart(2, '0'))
-            .replace('DD', now.getDate().toString().padStart(2, '0'))
-            .replace('HH', now.getHours().toString().padStart(2, '0'));
-        
-        return fileName;
-    }
-
-    /**
-     * Get the size of a file if it exists
-     */
-    private async getFileSize(fileName: string): Promise<number> {
-        const filePath = join(this.options.directory, fileName);
-        if (existsSync(filePath)) {
-            const stats = await stat(filePath);
-            return stats.size;
-        }
-        return 0;
-    }
-
-    /**
-     * Rotate the log file when it exceeds the maximum size
-     */
-    private async rotateLogFile(fileName: string): Promise<void> {
-        const filePath = join(this.options.directory, fileName);
-        if (existsSync(filePath)) {
-            const timestamp = Date.now();
-            const rotatedFileName = fileName.replace(/\.log$/, `-${timestamp}.log`);
-            const rotatedFilePath = join(this.options.directory, rotatedFileName);
-            
-            const fs = require('node:fs');
-            fs.renameSync(filePath, rotatedFilePath);
-        }
-    }
-
-    /**
-     * Force flush any pending operations and close streams
-     */
-    async forceFlush(): Promise<void> {
+    override async forceFlush(): Promise<void> {
         if (this.flushTimer) {
             clearTimeout(this.flushTimer);
             this.flushTimer = null;
@@ -295,9 +266,6 @@ export class FileReporter {
         await this.closeCurrentStream();
     }
 
-    /**
-     * Ensure the log directory exists
-     */
     private async ensureDirectoryExists(): Promise<void> {
         if (!existsSync(this.options.directory)) {
             try {

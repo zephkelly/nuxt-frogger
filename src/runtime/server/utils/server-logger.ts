@@ -2,74 +2,100 @@ import type { LogObject } from 'consola/basic';
 import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
 import type { ServerLoggerOptions } from '../types/logger';
 import type { LoggerObject } from '../../shared/types/log';
-
 import { ServerLogQueueService } from '../services/server-log-queue';
 
-import type { TraceContext } from '../../shared/types/trace';
+import type { TraceContext } from '../../shared/types/trace-headers';
 
 
 
 export class ServerFroggerLogger extends BaseFroggerLogger {
     private options: ServerLoggerOptions;
     private logQueue: ServerLogQueueService;
-
     private madeFirstLog: boolean = false;
     private traceContext: TraceContext | null = null;
     
+    private testCaptureCallback: ((loggerObject: LoggerObject) => void) | null = null;
+   
+   
     constructor(options: ServerLoggerOptions, traceContext: TraceContext | null = null) {
         super(options);
         this.options = options;
-
         this.logQueue = ServerLogQueueService.getInstance();
-
         this.traceContext = traceContext;
     }
 
+
+    // Capture any loggerObjects created during tests
+    setTestCaptureCallback(callback: (loggerObject: LoggerObject) => void | null): void {
+        this.testCaptureCallback = callback;
+    }
+
+    clearTestCaptureCallback(): void {
+        this.testCaptureCallback = null;
+    }
+
     /**
-     * Process a log entry from Consola
+     * Test-only method to directly create a LoggerObject without processing
+     * This bypasses the queue system for benchmarking
      */
-    protected processLog(logObj: LogObject): void {
+    createLoggerObjectForTest(message: string, context?: any, level: string = 'info', logLevel: number = 3): LoggerObject {
+        const mockLogObject: LogObject = {
+            date: new Date(),
+            level: logLevel,
+            //@ts-ignore
+            type: level,
+            args: context ? [message, context] : [message]
+        };
+
+        return this.createLoggerObject(mockLogObject);
+    }
+    
+    protected createLoggerObject(logObj: LogObject): LoggerObject {
         if (!logObj || typeof logObj !== 'object') {
             console.warn('Invalid log object:', logObj);
-            return;
+            throw new Error('Invalid log object provided');
         }
-
+        
         let currentTraceContext: TraceContext | null = null;
-
         if (this.madeFirstLog || this.traceContext === null) {
             currentTraceContext = this.generateTraceContext();
         }
-        // This will only be called once on first initialisation so long as a
-        // trace context is provided. This is used to link traces from the client
-        // to the server.
         else {
+            // This will only be called once on first initialisation so long as a
+            // trace context is provided. This is used to link traces from the client
+            // to the server.
             currentTraceContext = this.generateTraceContext(this.traceContext);
         }
-
-        const froggerLoggerObject: LoggerObject = {
-            type: logObj.type,
-            level: logObj.level,
-            date: logObj.date,
-            trace: currentTraceContext,
-            context: {
+        
+        const loggerObject: LoggerObject = {
+            time: logObj.date.getTime(),
+            lvl: logObj.level,
+            msg: logObj.args?.[0],
+            ctx: {
                 env: 'server',
-                message: logObj.args?.[0],
+                type: logObj.type,
                 ...this.globalContext,
                 ...logObj.args?.slice(1)[0],
             },
-            timestamp: Date.now()
+            trace: currentTraceContext,
         };
-        
-        this.logQueue.enqueueLog(froggerLoggerObject);
 
+        // Call test capture callback if set
+        if (this.testCaptureCallback) {
+            this.testCaptureCallback(loggerObject);
+        }
+
+        return loggerObject;
+    }
+    
+    protected processLoggerObject(loggerObject: LoggerObject): void {
+        this.logQueue.enqueueLog(loggerObject);
+       
         if (!this.madeFirstLog) {
             this.madeFirstLog = true;
         }
     }
-
-    /**
-     * Flush any pending logs
-     */
+    
     async flush(): Promise<void> {
         await this.logQueue.flush();
     }

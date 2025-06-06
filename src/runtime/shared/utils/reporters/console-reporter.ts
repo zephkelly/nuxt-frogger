@@ -1,42 +1,34 @@
 import type { LogObject } from 'consola';
-import type { LoggerObject } from "../../types/log";
+// import type { IFroggerReporter } from '../../types/frogger-reporter';
 
 
 
-/**
- * Custom console formatter that works in both Node.js and browser environments
- */
-export class ConsoleReporter {
+export class ConsoleReporter /*implements IFroggerReporter*/ {
     private isServer: boolean;
     
     constructor() {
         this.isServer = typeof window === 'undefined';
     }
     
-    /**
-     * Format and output a log to the appropriate console
-     */
     log(logObj: LogObject): void {
         const message = logObj.args?.[0] || '';
         const context = logObj.args?.slice(1);
-        const timestamp = new Date().toISOString();
-        
+        const timestamp = logObj.date.toISOString();
+
         if (this.isServer) {
-            this.logToNodeConsole(logObj.type, message, context, timestamp);
-        } else {
-            this.logToBrowserConsole(logObj.type, message, context, timestamp);
+            this.logToNodeConsole(logObj.type, message, timestamp);
+        }
+        else {
+            this.logToBrowserConsole(logObj.type, message, timestamp);
         }
     }
 
-    
+
     private hasContext(context: any[]): boolean {
         return context && context.length > 0 && context[0] !== undefined;
     }
     
-    /**
-     * Log to Node.js console with colors and formatting
-     */
-    private logToNodeConsole(type: string, message: string, context: any[], timestamp: string): void {
+    private logToNodeConsole(type: string, message: string, timestamp: string): void {
         const colors = {
             reset: '\x1b[0m',
             bright: '\x1b[1m',
@@ -47,7 +39,9 @@ export class ConsoleReporter {
             magenta: '\x1b[35m',
             cyan: '\x1b[36m',
             white: '\x1b[37m',
-            gray: '\x1b[90m'
+            gray: '\x1b[90m',
+            bgRed: '\x1b[41m',
+            bgBrightRed: '\x1b[101m'
         };
         
         const typeColors = {
@@ -81,27 +75,21 @@ export class ConsoleReporter {
         switch (type) {
             case 'error':
             case 'fatal':
-                this.hasContext(context) ? console.log(formattedMessage, ...context) : console.log(formattedMessage);
+                console.log(formattedMessage);
                 break;
             case 'warn':
-                this.hasContext(context) ? console.log(formattedMessage, ...context) : console.log(formattedMessage);
+                console.log(formattedMessage);
                 break;
             case 'debug':
             case 'trace':
-                this.hasContext(context) ? console.log(formattedMessage, ...context) : console.log(formattedMessage);
+                console.log(formattedMessage);
                 break;
             default:
-                this.hasContext(context)
-                    ? console.log(`${colors.gray}[${timestamp}]${colors.reset}  ${color}${icon} ${typeLabel}${colors.reset} ${message}`, ...context) 
-                    : console.log(`${colors.gray}[${timestamp}]${colors.reset}  ${color}${icon} ${typeLabel}${colors.reset} ${message}`);
+                console.log(`${colors.gray}[${timestamp}]${colors.reset}  ${color}${icon} ${typeLabel}${colors.reset} ${message}`);
         }
     }
 
-    
-    /**
-     * Log to browser console with colors and formatting
-     */
-    private logToBrowserConsole(type: string, message: string, context: any[], timestamp: string): void {
+    private logToBrowserConsole(type: string, message: string, timestamp: string): void {
         const typeStyles = {
             error: 'color: #ff6b6b; font-weight: bold;',
             warn: 'color: #feca57; font-weight: bold;',
@@ -131,25 +119,25 @@ export class ConsoleReporter {
         const messageTypeStyling = `${icon} %c[${typeLabel}]`.padEnd(12);
         const timestampStyle = 'color: #a4b0be; font-size: 0.8em;';
 
-        
-        switch (type) {
-            case 'error':
-            case 'fatal':
-                this.hasContext(context) ? console.log(messageTypeStyling, style, message, ...context) : console.log(messageTypeStyling, style, message);
-                console.log(`%c${timestamp}`, timestampStyle);
-                break;
-            case 'warn':
-                this.hasContext(context) ? console.log(messageTypeStyling, style, message, ...context) : console.log(messageTypeStyling, style, message);
-                console.log(`%c${timestamp}`, timestampStyle);
-                break;
-            case 'debug':
-            case 'trace':
-                this.hasContext(context) ? console.log(messageTypeStyling, style, message, ...context) : console.log(messageTypeStyling, style, message);
-                console.log(`%c${timestamp}`, timestampStyle);
-                break;
-            default:
-                this.hasContext(context) ? console.log(messageTypeStyling, style, message, ...context) : console.log(messageTypeStyling, style, message);
-                console.log(`%c${timestamp}`, timestampStyle);
+        if (type === 'error' || type === 'fatal') {
+            const fullMessage = `${icon} [${typeLabel}] ${message}`;
+            console.error(fullMessage);
+        }
+        else {
+            switch (type) {
+                case 'warn':
+                    console.log(messageTypeStyling, style, message);
+                    console.log(`%c${timestamp}`, timestampStyle);
+                    break;
+                case 'debug':
+                case 'trace':
+                    console.log(messageTypeStyling, style, message);
+                    console.log(`%c${timestamp}`, timestampStyle);
+                    break;
+                default:
+                    console.log(messageTypeStyling, style, message);
+                    console.log(`%c${timestamp}`, timestampStyle);
+            }
         }
     }
 }

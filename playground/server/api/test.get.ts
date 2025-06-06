@@ -1,13 +1,9 @@
 export default defineEventHandler((event) => {
-    const frogger = getFrogger(event);
-    
-    frogger.warn('Hello world');
-
-    frogger.error('Hello world');
-
-    frogger.info('Hello world');
-
-    return {
-        message: 'Hello world'
-    }
+    return createError({
+        statusCode: 404,
+        statusMessage: 'Not Found',
+        data: {
+            message: 'This endpoint does not exist. Please check the URL or contact support if you believe this is an error.'
+        }
+    })
 });

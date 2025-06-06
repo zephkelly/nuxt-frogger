@@ -12,19 +12,19 @@ hero:
       link: /installation
 
 features:
-  - title: ✨ Zero-Config
-    details: Sit back and relax. Frogger works out of the box with sensible defaults. Need to change something? It's all configurable
+  - title: ✨ Zero Config
+    details: Sit back and relax. With sensible defaults, Frogger works out of the box. Need to make changes? It's all configurable
   - title: ⚡ Websocket + Dashboard
-    details: Built-in dashboard and auto-registered websocket handling. Add your own auth later. View logs in real-time, real fast!
+    details: Built-in dashboard and auto-registered websocket pipeline. Add your own auth anytime. Squash bugs real-time, real fast!
   - title: 🌐 Universal Logging
-    details: Auto-imported utilities for the client and server. SSR, CSR, SPA, or static sites. Frogger has you covered
+    details: Auto-imported utilities for the client and server. SSR, CSR, SPA, even static sites. Unhandled errors? Already logged them
   - title: 🏷️ Batched Operations
-    details: Handle usage spikes by automatically batching logs on the server and client. Improve performance, reduce load
+    details: Handle usage spikes with ease. Automated batching strategies on the server and client mean more performance, less stress
   - title: 🧹 PII Scrubbing
-    details: Basic strategies to scrub English PII from logs out of the box. Need something more robust? Add your own scrubbing strategies
+    details: Basic strategies to scrub PII from your logs configured by default. Need something more robust? Add your own custom strategies
   - title: 🔎 W3C Trace Context
-    details: Trace requests like a pro. Follow from client to server, across distributed systems, external services, and back again
+    details: Trace requests wherever they go. From the client to server, across distributed systems, external services, and back again
   - title: 🚦 Rate Limiting
-    details: Worried about excessive logs or malicious actors? Frogger has an in-built rate limiter to prevent abuse and keep your logs clean
+    details: Worried about excessive logs or targeted attacks? Frogger rate-limits by default, reducing abuse and keeping the pond clean
   - title: 🔌 Extensible
-    details: Global context, child loggers, pluggable client and server side reporters, and more. Frogger's fully flexible
+    details: Hooks, child loggers, reactive context, client and server side pluggable reporters. Everything production-grade apps need

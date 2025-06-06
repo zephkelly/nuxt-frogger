@@ -1,62 +1,26 @@
-import type { LoggerObject } from '../../shared/types/log';
+ import type { LoggerObject } from '../../shared/types/log';
+import type { BatchOptions } from '../../shared/types/batch';
+import type { IReporter } from '~/src/runtime/shared/types/internal-reporter';
 
 
 
-export interface BatchReporterOptions {
-    /**
-     * Maximum number of logs to keep before flushing
-     * @default 100
-     */
-    maxSize?: number;
-    
-    /**
-     * Maximum time in milliseconds before flushing logs
-     * @default 5000 (5 seconds)
-     */
-    maxAge?: number;
-    
+export interface BatchReporterOptions extends BatchOptions {
+    downstreamReporters?: IReporter[];
+
     /**
      * Function to call when flushing logs
      */
-    onFlush: (logs: LoggerObject[]) => Promise<void>;
-    
-    /**
-     * Whether to include trace context in flushed logs
-     * @default true
-     */
-    includeTraceContext?: boolean;
-    
-    /**
-     * Additional fields to include in all logs
-     */
-    additionalFields?: Record<string, any>;
-    
+    onFlush?: (logs: LoggerObject[]) => Promise<void>;
+
     /**
      * Log levels to include (undefined means all levels)
      */
     levels?: number[];
-    
-    /**
-     * Whether to retry failed flush operations
-     * @default true
-     */
-    retryOnFailure?: boolean;
-    
-    /**
-     * Maximum number of retry attempts
-     * @default 3
-     */
-    maxRetries?: number;
-    
-    /**
-     * Base delay between retries in milliseconds (will use exponential backoff)
-     * @default 1000 (1 second)
-     */
-    retryDelay?: number;
 
-    /**
-     * Time window in milliseconds to sort logs before flushing
-     * @default 2000 (2 seconds)
-     */
-    sortingWindowMs?: number;
+    addDownstreamReporter?: (reporter: IReporter) => void;
+    removeDownstreamReporter?: (reporter: IReporter) => void;
+    getDownstreamReporters?: () => IReporter[];
+    clearDownstreamReporters?: () => void;
+
+    getDownstreamReporterIds?: () => string[];
 }

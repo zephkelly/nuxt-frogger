@@ -4,25 +4,29 @@
     <button @click="testing()">Test</button>
     <button @click="test2()">Test2</button>
     <button @click="test3()">Start High traffic</button>
+
+    <Card :myProp="'Hello from the card!'" />
   </div>
 </template>
 
 <script setup>
 const startFrogger = useFrogger();
 startFrogger.error('Hello from the playground!');
-startFrogger.info('Testing to see if we move from to csr');
 
 
 
 const testing = () => {
     const clickFrogger = useFrogger();
-    clickFrogger.info('Test button clicked!');
-    clickFrogger.error('This is an error message');
-    clickFrogger.warn('This is a warning message');
-    clickFrogger.debug('This is a debug message');
-    clickFrogger.fatal('This is an fatal message');
-    clickFrogger.success('This is a success message');
-    clickFrogger.log('This is a log message');
+
+    clickFrogger.info('Button clicked', {
+        my: {
+            deeply: {
+                nested: {
+                    password: 'awdaw'
+                }
+            }
+        }
+    });
 };
 
 const test2 = async () => {
@@ -62,4 +66,19 @@ const test3 = () => {
         highTrafficFrogger.info('High traffic simulation started');
     }
 };
+
+
+const socket = useWebsocket('/api/_frogger/dev-ws', {
+    auto_connect: true,
+    heartbeat: {
+        auto_heartbeat: true,
+    },
+    queryParams: {
+        channel: 'main',
+        level: 'error'
+    },
+    onMessage: async (event, message) => {
+        console.log('WebSocket message received:', message);
+    }
+});
 </script>

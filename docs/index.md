@@ -10,9 +10,6 @@ hero:
     - theme: brand
       text: Install Frogger
       link: /installation
-    - theme: alt
-      text: Getting Started
-      link: /getting-started
 
 features:
 #   - title: Websocket + Dashboard

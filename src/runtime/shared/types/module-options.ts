@@ -2,7 +2,7 @@ import type { BatchOptions } from "./batch"
 import type { FileOptions } from "./file";
 import type { RateLimitingOptions } from "../../rate-limiter/types";
 import type { AppInfoOptions } from "../../app-info/types";
-import type { WebsocketOptions } from "./../../websocket/options";
+import type { WebsocketOptions } from "../../websocket/types/options";
 import type { ScrubberOptions } from "../../scrubber/options";
 
 

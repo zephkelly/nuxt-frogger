@@ -170,7 +170,6 @@ export default defineNuxtModule<ModuleOptions>({
                     '%cFROGGER', 'color: black; background-color: rgb(9, 195, 81) font-weight: bold; font-size: 1.15rem;',
                     `🐸 Ready to log`
                 );
-                return;
             }
 
             if (_options.serverModule) {

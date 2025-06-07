@@ -7,7 +7,7 @@ import { LogQueueService } from '../../app/services/log-queue';
 import type { IFroggerLogger } from '../types';
 import type { ClientLoggerOptions, SSRTraceState } from './types';
 import type { LogObject } from 'consola/browser';
-import type { LoggerObject } from '../../shared/types/log';
+import type { LoggerObject, LogContext } from '../../shared/types/log';
 import type { LoggerObjectBatch } from '../../shared/types/batch';
 import { parseAppInfoConfig } from '../../app-info/parse';
 
@@ -112,7 +112,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             lvl: logObj.level,
             msg: logObj.args?.[0],
             ctx: {
-                ...this.globalContext.value,
+                ...this.mergedGlobalContext.value,
                 ...logObj.args?.slice(1)[0],
             },
             env: env,
@@ -153,5 +153,30 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         }
         
         await this.sendLogImmediate(loggerObject);
+    }
+
+
+    /**
+     * Create a child logger that shares the same trace ID
+     * @param reactive - If true, child will reactively reference parent's context. If false, child gets a copy of current context.
+     */
+    public child(reactive: boolean = false): ClientFrogger {
+        const { traceId, parentSpanId } = this.createChildTraceContext();
+        const childContext = this.createChildContext(reactive);
+
+        const childOptions: ClientLoggerOptions = {
+            ...this.options,
+            context: reactive ? {} : (childContext as LogContext)
+        };
+
+        const child = new ClientFrogger(this.hasMounted, childOptions);
+        
+        child.setTraceContext(traceId, parentSpanId);
+
+        if (reactive) {
+            child.parentGlobalContext = this.mergedGlobalContext;
+        }
+
+        return child;
     }
 }

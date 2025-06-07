@@ -1,4 +1,4 @@
-import { type Ref, ref } from "vue";
+import { type ComputedRef, computed, type Ref, ref } from "vue";
 import { type ConsolaInstance, createConsola } from "consola/core";
 import { generateTraceId, generateSpanId, generateW3CTraceHeaders } from "../shared/utils/trace-headers";
 
@@ -18,6 +18,15 @@ import { LogScrubber } from "../scrubber";
 export abstract class BaseFroggerLogger implements IFroggerLogger {
     protected consola: ConsolaInstance;
     protected globalContext: Ref<LogContext> = ref({});
+    protected parentGlobalContext: ComputedRef<LogContext> | null = null;
+
+    protected readonly mergedGlobalContext: ComputedRef<LogContext> = computed(() => {
+        return {
+            ...this.globalContext.value,
+            ...(this.parentGlobalContext ? this.parentGlobalContext.value : {})
+        };
+    });
+
     protected traceId: string;
     protected lastSpanId: string | null = null;
     protected level: number;
@@ -119,6 +128,26 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
     protected abstract processLoggerObject(loggerObject: LoggerObject): void | Promise<void>;
 
 
+    // Child loggers
+    public abstract child(reactive?: boolean): IFroggerLogger;
+
+    protected createChildTraceContext(): { traceId: string; parentSpanId: string | null } {
+        return {
+            traceId: this.traceId,
+            parentSpanId: this.lastSpanId
+        };
+    }
+
+    protected createChildContext(reactive: boolean = false): ComputedRef<LogContext> | LogContext {
+        if (reactive) {
+            return this.mergedGlobalContext;
+        }
+        else {
+            return { ...this.mergedGlobalContext.value };
+        }
+    }
+
+    // Trace context
     protected generateTraceContext(suppliedTraceContext?: TraceContext): TraceContext {
         if (suppliedTraceContext) {
             if (suppliedTraceContext.traceId) {

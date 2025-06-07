@@ -110,4 +110,14 @@ export interface IFroggerLogger {
      * Clear all custom reporters
      */
     clearReporters(): void;
+
+
+    //child
+
+    /**
+     * Create a child logger with additional context
+     * @param reactive Whether the child logger should be reactive to changes in the parent's global context
+     * @returns A new logger instance with the specified context
+     */
+    child(reactive: boolean): IFroggerLogger;
 }

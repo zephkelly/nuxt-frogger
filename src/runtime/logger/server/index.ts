@@ -1,10 +1,9 @@
 import type { LogObject, LogType } from 'consola/basic';
 
 
-
 import { BaseFroggerLogger } from '../base-frogger';
 import type { ServerLoggerOptions } from '../../server/types/logger';
-import type { LoggerObject } from '../../shared/types/log';
+import type { LoggerObject, LogContext } from '../../shared/types/log';
 import { ServerLogQueueService } from '../../server/services/server-log-queue';
 
 import type { TraceContext } from '../../shared/types/trace-headers';
@@ -67,5 +66,34 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
     
     async flush(): Promise<void> {
         await this.logQueue.flush();
+    }
+
+
+    /**
+     * Create a child logger that shares the same trace ID
+     * @param reactive - If true, child will reactively reference parent's context. If false, child gets a copy of current context.
+     */
+    public child(reactive: boolean = false): ServerFroggerLogger {
+        const { traceId, parentSpanId } = this.createChildTraceContext();
+        const childContext = this.createChildContext(reactive);
+
+        const childOptions: ServerLoggerOptions = {
+            ...this.options,
+            context: reactive ? {} : (childContext as LogContext)
+        };
+
+        const childTraceContext: TraceContext = {
+            traceId: traceId,
+            parentId: parentSpanId || undefined,
+            spanId: parentSpanId  as string
+        };
+
+        const child = new ServerFroggerLogger(childOptions, childTraceContext);
+
+        if (reactive) {
+            child.globalContext = this.globalContext;
+        }
+
+        return child;
     }
 }

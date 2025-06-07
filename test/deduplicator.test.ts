@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { LogDeduplicator } from '../src/runtime/websocket/deduplicator';
+import { LogDeduplicator } from '~/src/runtime/websocket/deduplicator';
 import type { LoggerObject } from '../src/runtime/shared/types/log';
 
 

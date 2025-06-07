@@ -1,26 +1,25 @@
+
+
 import { defu } from 'defu';
 import type { H3Event } from "h3";
-import { useRuntimeConfig } from '#imports';
 
-import { ServerFroggerLogger } from "./server-logger";
-import { ServerLogQueueService } from '../services/server-log-queue';
+//@ts-ignore
+import { useRuntimeConfig, useEvent } from '#imports';
+import { ServerFroggerLogger } from "../../logger/server";
 
-import { HttpReporter, defaultHttpReporterOptions } from "./reporters/http-reporter";
-import type { HttpReporterOptions } from "../types/http-reporter";
-
-import type { IFroggerLogger } from "../../shared/types/frogger";
-import type { IReporter } from '../../shared/types/internal-reporter';
+import type { IFroggerLogger } from '../../logger/types';
 import type { TraceContext } from "../../shared/types/trace-headers";
 import type { ServerLoggerOptions } from "../types/logger";
 
 
 
-
 /**
  * Get a Frogger logger instance
- * @param event H3Event context for tracing
- */
-export function getFrogger(event: H3Event, options?: ServerLoggerOptions): IFroggerLogger;
+ * @param event H3Event use to propagate trace context automatically. To avoid passing the event,
+ * set 'frogger.serverModule.autoCaptureContext' to false in your module options / runtime config.
+ * @param options Optional logger options to override runtime config
+*/
+export function getFrogger(event?: H3Event, options?: ServerLoggerOptions): IFroggerLogger;
 
 /**
  * @deprecated Using getFrogger without an event parameter prevents proper trace context propagation.
@@ -34,7 +33,13 @@ export function getFrogger(
 ): IFroggerLogger {
     const isEvent = eventOrOptions && 'context' in eventOrOptions;
     
-    const event = isEvent ? eventOrOptions as H3Event : undefined;
+    let event = isEvent ? eventOrOptions as H3Event : undefined;
+
+    if (!event) {
+        event = useEvent();
+    }
+
+
     const options = isEvent ? maybeOptions : eventOrOptions as ServerLoggerOptions;
 
     const config = useRuntimeConfig();
@@ -62,33 +67,4 @@ export function getFrogger(
     
 
     return new ServerFroggerLogger(mergedOptions);
-}
-
-
-
-
-// Add reporter 
-export function addGlobalReporter(reporter: IReporter): void {
-    const logQueue = ServerLogQueueService.getInstance();
-
-    logQueue.addReporter(reporter);
-}
-
-
-export function createHttpReporter(endpoint: string): HttpReporter;
-
-export function createHttpReporter(options: HttpReporterOptions): HttpReporter;
-
-export function createHttpReporter(endpointOrOptions: string | HttpReporterOptions): HttpReporter {
-    if (typeof endpointOrOptions === 'string') {
-        const options: HttpReporterOptions = {
-            ...defaultHttpReporterOptions,
-            endpoint: endpointOrOptions,
-        };
-
-        return new HttpReporter(options);
-    }
-    else {
-        return new HttpReporter(endpointOrOptions);
-    }
 }

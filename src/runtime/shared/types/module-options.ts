@@ -37,3 +37,5 @@ export interface ModuleOptions {
         } | boolean
     }
 }
+
+export const APP_MOUNTED_STATE_KEY = 'frogger-app-mounted-state';

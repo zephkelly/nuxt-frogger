@@ -1,22 +1,24 @@
+//@ts-ignore
+import { defineWebSocketHandler } from '#imports'
 import { Peer } from "crossws";
-import { WebSocketLogReporter } from "./reporter";
+
+import { WebSocketTransport } from "../logger/_transports/websocket-transport";
 import { LogLevelFilter } from "../shared/utils/log-level-filter";
-import type { SubscriptionFilter } from "./types";
 
 import type {
     LogWebSocketMessage,
     LogWebSocketParams,
     FroggerWebSocketOptions
 } from "./types";
+import type { SubscriptionFilter } from "./types";
 
-//@ts-ignore
-import { defineWebSocketHandler } from '#imports'
+
 
 class WebSocketLogHandler {
-    private reporter: WebSocketLogReporter;
+    private transport: WebSocketTransport;
 
     constructor() {
-        this.reporter = WebSocketLogReporter.getInstance();
+        this.transport = WebSocketTransport.getInstance();
     }
 
     async handleOpen(peer: Peer) {
@@ -27,7 +29,7 @@ class WebSocketLogHandler {
                 throw new Error('Channel parameter is required');
             }
 
-            const success = await this.reporter.subscribe(peer, params.channel, params.filters);
+            const success = await this.transport.subscribe(peer, params.channel, params.filters);
             if (!success) {
                 throw new Error('Failed to subscribe to log channel');
             }
@@ -38,7 +40,7 @@ class WebSocketLogHandler {
                 data: {
                     peer_id: peer.id,
                     filters: params.filters,
-                    filter_description: this.reporter.getFilterDescription(params.filters)
+                    filter_description: this.transport.getFilterDescription(params.filters)
                 }
             });
         }
@@ -80,7 +82,7 @@ class WebSocketLogHandler {
 
     async handleClose(peer: Peer) {
         try {
-            await this.reporter.removeSubscription(peer.id);
+            await this.transport.removeSubscription(peer.id);
         }
         catch (error) {
             console.error('[Frogger] Close error:', error);
@@ -90,7 +92,7 @@ class WebSocketLogHandler {
     async handleError(peer: Peer, error: any) {
         console.error('[Frogger] WebSocket error:', error);
         try {
-            await this.reporter.removeSubscription(peer.id);
+            await this.transport.removeSubscription(peer.id);
         }
         catch (cleanupError) {
             console.error('[Frogger] Cleanup error:', cleanupError);
@@ -170,7 +172,7 @@ class WebSocketLogHandler {
                 throw new Error('Channel required for filter update');
             }
 
-            const success = await this.reporter.subscribe(peer, channel, filters);
+            const success = await this.transport.subscribe(peer, channel, filters);
             
             if (success) {
                 await this.sendMessage(peer, {
@@ -178,7 +180,7 @@ class WebSocketLogHandler {
                 channel,
                 data: {
                     filters,
-                    filter_description: this.reporter.getFilterDescription(filters)
+                    filter_description: this.transport.getFilterDescription(filters)
                 }
                 });
             }
@@ -196,8 +198,8 @@ class WebSocketLogHandler {
 
     private async sendStatus(peer: Peer) {
         try {
-            const subscription = this.reporter.getSubscription(peer.id);
-            const status = await this.reporter.getStatus();
+            const subscription = this.transport.getSubscription(peer.id);
+            const status = await this.transport.getStatus();
             
             await this.sendMessage(peer, {
                 type: 'status',
@@ -205,7 +207,7 @@ class WebSocketLogHandler {
                 peer_subscription: subscription ? {
                     channels: subscription.channels,
                     filters: subscription.filters,
-                    filter_description: this.reporter.getFilterDescription(subscription.filters),
+                    filter_description: this.transport.getFilterDescription(subscription.filters),
                     subscribed_at: new Date(subscription.subscribed_at),
                     last_activity: new Date(subscription.last_activity)
                 } : null,
@@ -229,7 +231,7 @@ class WebSocketLogHandler {
                 throw new Error('Channel required for channel change');
             }
 
-            const success = await this.reporter.subscribe(peer, channel, filters);
+            const success = await this.transport.subscribe(peer, channel, filters);
             
             if (success) {
                 await this.sendMessage(peer, {
@@ -237,7 +239,7 @@ class WebSocketLogHandler {
                     channel,
                     data: {
                         filters,
-                        filter_description: this.reporter.getFilterDescription(filters)
+                        filter_description: this.transport.getFilterDescription(filters)
                     }
                 });
             }

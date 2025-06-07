@@ -1,8 +1,9 @@
-import { SimpleConsoleLogger } from '../../shared/utils/console-frogger';
-import type { IFroggerLogger } from "../../shared/types/frogger";
-
 import { useState } from '#app';
 import { onMounted } from 'vue';
+
+import { SimpleConsoleLogger } from '../../logger/other/console-frogger';
+import type { IFroggerLogger } from '../../logger/types';
+
 
 
 /**

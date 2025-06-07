@@ -1,17 +1,19 @@
 import { type ConsolaInstance, createConsola } from "consola/core";
-import { ConsoleReporter } from "./reporters/console-reporter";
+import { ConsoleReporter } from "../_reporters/console-reporter";
 
 import type { LogObject } from 'consola';
-import type { LoggerObject } from "../types/log";
-import type { IFroggerLogger } from "../types/frogger";
-import type { IFroggerReporter } from "../types/frogger-reporter";
-import type { LogContext } from "../types/log";
+import type { LoggerObject } from "../../shared/types/log";
+import type { IFroggerLogger } from "../types";
+import type { IFroggerReporter } from "../_reporters/types";
+import type { LogContext } from "../../shared/types/log";
 
 export interface SimpleLoggerOptions {
     level?: number;
     context?: LogContext;
     consoleOutput?: boolean;
 }
+
+
 
 /**
  * Simple console-only logger

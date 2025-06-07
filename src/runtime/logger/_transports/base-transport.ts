@@ -1,11 +1,11 @@
-import type { IReporter } from "~/src/runtime/shared/types/internal-reporter"
+import type { IFroggerTransport } from "./types";
 import type { LoggerObject } from "~/src/runtime/shared/types/log"
 
 
 
-export abstract class BaseReporter<TOptions extends Record<string, any> = Record<string, any>> implements IReporter {
+export abstract class BaseTransport<TOptions extends Record<string, any> = Record<string, any>> implements IFroggerTransport {
     abstract name: string
-    abstract reporterId: string;
+    abstract transportId: string;
 
     protected abstract options: TOptions;
     

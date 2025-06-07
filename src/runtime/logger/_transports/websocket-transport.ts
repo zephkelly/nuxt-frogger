@@ -1,26 +1,26 @@
 import { Peer } from "crossws";
 
-import type { IReporter } from "../shared/types/internal-reporter";
-import type  { IWebSocketStorage } from "./kv-layer/types";
-import type { LoggerObject } from "../shared/types/log";
+import type { IFroggerTransport } from "./types";
+import type  { IWebSocketStorage } from "../../websocket/kv-layer/types";
+import type { LoggerObject } from "../../shared/types/log";
 
 import type {
     SubscriptionFilter,
     PersistedChannel,
     PersistedSubscription,
     LogMessage
-} from "./types";
+} from "../../websocket/types";
 
-import { WebSocketKVLayer } from "./kv-layer";
-import { LogLevelFilter } from "../shared/utils/log-level-filter";
+import { WebSocketKVLayer } from "../../websocket/kv-layer";
+import { LogLevelFilter } from "../../shared/utils/log-level-filter";
 
 
 
-export class WebSocketLogReporter implements IReporter {
-    public readonly name = 'WebSocketLogReporter';
-    public readonly reporterId: string;
+export class WebSocketTransport implements IFroggerTransport {
+    public readonly name = 'WebSocketTransport';
+    public readonly transportId: string;
 
-    private static instance: WebSocketLogReporter | null = null;
+    private static instance: WebSocketTransport | null = null;
     private channels: Map<string, PersistedChannel> = new Map();
     private subscriptions: Map<string, PersistedSubscription> = new Map();
     private storage: IWebSocketStorage;
@@ -32,26 +32,26 @@ export class WebSocketLogReporter implements IReporter {
     private lastMessageTimes: Map<string, number> = new Map();
 
     private constructor(storage?: IWebSocketStorage) {
-        this.reporterId = `websocket-reporter-${Date.now()}`;
+        this.transportId = `websocket-reporter-${Date.now()}`;
         this.storage = storage || new WebSocketKVLayer();
         this.startCleanupInterval();
         
         this.loadPersistedData().catch(error => {
-            console.error('WebSocketLogReporter: Failed to load persisted data:', error);
+            console.error('WebSocketTransport: Failed to load persisted data:', error);
         });
     }
 
-    public static getInstance(storage?: IWebSocketStorage): WebSocketLogReporter {
-        if (!WebSocketLogReporter.instance) {
-            WebSocketLogReporter.instance = new WebSocketLogReporter(storage);
+    public static getInstance(storage?: IWebSocketStorage): WebSocketTransport {
+        if (!WebSocketTransport.instance) {
+            WebSocketTransport.instance = new WebSocketTransport(storage);
         }
-        return WebSocketLogReporter.instance;
+        return WebSocketTransport.instance;
     }
 
     public static async destroyInstance(): Promise<void> {
-        if (WebSocketLogReporter.instance) {
-            await WebSocketLogReporter.instance.destroy();
-            WebSocketLogReporter.instance = null;
+        if (WebSocketTransport.instance) {
+            await WebSocketTransport.instance.destroy();
+            WebSocketTransport.instance = null;
         }
     }
 
@@ -75,13 +75,13 @@ export class WebSocketLogReporter implements IReporter {
             }
         }
         catch (error) {
-            console.error('WebSocketLogReporter: Error loading persisted data:', error);
+            console.error('WebSocketTransport: Error loading persisted data:', error);
         }
     }
 
     public log(logObj: LoggerObject): void {
         this.broadcastLogBatch([logObj]).catch(error => {
-            console.error('WebSocketLogReporter: Error broadcasting log:', error);
+            console.error('WebSocketTransport: Error broadcasting log:', error);
         });
     }
 
@@ -91,7 +91,7 @@ export class WebSocketLogReporter implements IReporter {
         }
 
         this.broadcastLogBatch(logs).catch(error => {
-            console.error('WebSocketLogReporter: Error broadcasting log batch:', error);
+            console.error('WebSocketTransport: Error broadcasting log batch:', error);
         });
     }
 
@@ -123,7 +123,7 @@ export class WebSocketLogReporter implements IReporter {
             this.lastMessageTimes.clear();
         }
         catch (error) {
-            console.error('WebSocketLogReporter: Error during shutdown:', error);
+            console.error('WebSocketTransport: Error during shutdown:', error);
             throw error;
         }
     }
@@ -158,7 +158,7 @@ export class WebSocketLogReporter implements IReporter {
             await Promise.allSettled(persistPromises);
         }
         catch (error) {
-            console.error('WebSocketLogReporter: Error persisting current state:', error);
+            console.error('WebSocketTransport: Error persisting current state:', error);
         }
     }
 
@@ -190,7 +190,7 @@ export class WebSocketLogReporter implements IReporter {
             await this.storage.setChannel(channelId, persistedChannel);
         }
         catch (error) {
-            console.error(`WebSocketLogReporter: Failed to persist channel ${channelId}:`, error);
+            console.error(`WebSocketTransport: Failed to persist channel ${channelId}:`, error);
         }
 
         console.log(
@@ -216,7 +216,7 @@ export class WebSocketLogReporter implements IReporter {
         try {
             if (filters?.level !== undefined && typeof filters.level === 'number') {
                 if (filters.level < 0 || filters.level > 5) {
-                    console.error(`WebSocketLogReporter: Invalid log level ${filters.level}. Must be between 0-5`);
+                    console.error(`WebSocketTransport: Invalid log level ${filters.level}. Must be between 0-5`);
                     return false;
                 }
             }
@@ -259,13 +259,13 @@ export class WebSocketLogReporter implements IReporter {
                 ]);
             }
             catch (error) {
-                console.error(`WebSocketLogReporter: Failed to persist subscription for ${peer.id}:`, error);
+                console.error(`WebSocketTransport: Failed to persist subscription for ${peer.id}:`, error);
             }
 
             return true;
         }
         catch (error) {
-            console.error('WebSocketLogReporter: Error subscribing admin to channel:', error);
+            console.error('WebSocketTransport: Error subscribing admin to channel:', error);
             return false;
         }
     }
@@ -308,13 +308,13 @@ export class WebSocketLogReporter implements IReporter {
                 ]);
             }
             catch (error) {
-                console.error(`WebSocketLogReporter: Failed to update activities for reconnected admin ${peer.id}:`, error);
+                console.error(`WebSocketTransport: Failed to update activities for reconnected admin ${peer.id}:`, error);
             }
 
             return true;
         }
         catch (error) {
-            console.error('WebSocketLogReporter: Error reconnecting admin:', error);
+            console.error('WebSocketTransport: Error reconnecting admin:', error);
             return false;
         }
     }
@@ -340,7 +340,7 @@ export class WebSocketLogReporter implements IReporter {
                     await this.storage.removePeerFromChannel(channelId, peerId);
                 }
                 catch (error) {
-                    console.error(`WebSocketLogReporter: Failed to remove peer from channel storage:`, error);
+                    console.error(`WebSocketTransport: Failed to remove peer from channel storage:`, error);
                 }
             }
 
@@ -354,13 +354,13 @@ export class WebSocketLogReporter implements IReporter {
                 await this.storage.deleteSubscription(peerId);
             }
             catch (error) {
-                console.error(`WebSocketLogReporter: Failed to delete subscription from storage:`, error);
+                console.error(`WebSocketTransport: Failed to delete subscription from storage:`, error);
             }
 
             return true;
         }
         catch (error) {
-            console.error('WebSocketLogReporter: Error unsubscribing admin:', error);
+            console.error('WebSocketTransport: Error unsubscribing admin:', error);
             return false;
         }
     }
@@ -390,7 +390,7 @@ export class WebSocketLogReporter implements IReporter {
 
             if (Math.random() < 0.1) {
                 this.storage.updateChannelActivity(channelId).catch((error: unknown) => {
-                    console.error(`WebSocketLogReporter: Failed to update channel activity:`, error);
+                    console.error(`WebSocketTransport: Failed to update channel activity:`, error);
                 });
             }
 
@@ -411,7 +411,7 @@ export class WebSocketLogReporter implements IReporter {
                         subscription.last_activity = new Date().getTime();
                         this.subscriptions.set(peerId, subscription);
                         this.storage.updateSubscriptionActivity(peerId).catch((error: unknown) => {
-                            console.error(`WebSocketLogReporter: Failed to update subscription activity for ${peerId}:`, error);
+                            console.error(`WebSocketTransport: Failed to update subscription activity for ${peerId}:`, error);
                         });
                     }
 
@@ -425,7 +425,7 @@ export class WebSocketLogReporter implements IReporter {
                         originalLength,
                         filtered: filteredLogs.length < originalLength
                     }).catch(error => {
-                        console.error(`WebSocketLogReporter: Error sending log batch to peer ${peerId}:`, error);
+                        console.error(`WebSocketTransport: Error sending log batch to peer ${peerId}:`, error);
                     });
                 });
 
@@ -517,7 +517,7 @@ export class WebSocketLogReporter implements IReporter {
             await peer.send(JSON.stringify(message));
         }
         catch (error) {
-            console.error('WebSocketLogReporter: Failed to send batch message to peer:', error);
+            console.error('WebSocketTransport: Failed to send batch message to peer:', error);
             throw error;
         }
     }
@@ -571,7 +571,7 @@ export class WebSocketLogReporter implements IReporter {
         
         this.cleanupInterval = setInterval(() => {
             this.cleanupStaleChannels().catch(err => 
-                console.error('WebSocketLogReporter: Error in cleanup interval:', err)
+                console.error('WebSocketTransport: Error in cleanup interval:', err)
             );
         }, this.CLEANUP_INTERVAL);
     }
@@ -591,7 +591,7 @@ export class WebSocketLogReporter implements IReporter {
         await Promise.allSettled(cleanupPromises);
 
         this.storage.cleanup().catch((error: unknown) => {
-            console.error('WebSocketLogReporter: Storage cleanup failed:', error);
+            console.error('WebSocketTransport: Storage cleanup failed:', error);
         });
     }
 
@@ -615,7 +615,7 @@ export class WebSocketLogReporter implements IReporter {
                 try {
                     await this.storage.deleteChannel(channelId);
                 } catch (error) {
-                    console.error(`WebSocketLogReporter: Failed to delete channel from storage:`, error);
+                    console.error(`WebSocketTransport: Failed to delete channel from storage:`, error);
                 }
             }
 
@@ -625,7 +625,7 @@ export class WebSocketLogReporter implements IReporter {
             ); 
         }
         catch (error) {
-            console.error(`WebSocketLogReporter: Error cleaning up channel ${channelId}:`, error);
+            console.error(`WebSocketTransport: Error cleaning up channel ${channelId}:`, error);
             this.channels.delete(channelId);
         }
     }
@@ -637,7 +637,7 @@ export class WebSocketLogReporter implements IReporter {
             }
         }
         catch (error) {
-            console.error('WebSocketLogReporter: Error closing peer connection:', error);
+            console.error('WebSocketTransport: Error closing peer connection:', error);
         }
 
         await this.removeSubscription(peerId);

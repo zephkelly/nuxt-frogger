@@ -1,42 +1,59 @@
 import { defu } from 'defu';
 import { useRuntimeConfig } from '#imports';
 
-import { BaseReporter } from './base-reporter';
-import type { BatchReporterOptions } from '../../types/batch-reporter';
+import { BaseTransport } from './base-transport';
+import type { BatchOptions } from '../../shared/types/batch';
 import type { LoggerObject } from '~/src/runtime/shared/types/log';
-import type { IReporter } from '~/src/runtime/shared/types/internal-reporter';
+import type { IFroggerTransport } from './types';
 
-import { uuidv7 } from '../../../shared/utils/uuid';
+import { uuidv7 } from '../../shared/utils/uuid';
+
+
+
+export interface BatchTransportOptions extends BatchOptions {
+    downstreamTransporters?: IFroggerTransport[];
+
+    levels?: number[];
+
+    onFlush?: (logs: LoggerObject[]) => Promise<void>;
+
+    addTransport?: (reporter: IFroggerTransport) => void;
+    removeTransport?: (reporter: IFroggerTransport) => void;
+    getTransporters?: () => IFroggerTransport[];
+    clearTransporters?: () => void;
+
+    getTransporterIds?: () => string[];
+}
 
 /**
- * Reporter that batches logs before sending them to a destination
+ * Transport that batches logs before passing them downstream
  */
-export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> {
+export class BatchTransport extends BaseTransport<Required<BatchTransportOptions>> {
     public readonly name = 'FroggerBatchReporter';
-    public readonly reporterId: string;
+    public readonly transportId: string;
 
     private logs: LoggerObject[] = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
-    protected options: Required<BatchReporterOptions>;
+    protected options: Required<BatchTransportOptions>;
     private lastFlushTime: number = 0;
     private flushing: boolean = false;
     private retries: Map<string, number> = new Map();
     private flushPromise: Promise<void> = Promise.resolve();
 
-    constructor(options: BatchReporterOptions) {
+    constructor(options: BatchTransportOptions) {
         super();
-        this.reporterId = `frogger-batcher-${uuidv7()}`;
+        this.transportId = `frogger-batcher-${uuidv7()}`;
 
         const config = useRuntimeConfig()
 
-        const defaultOptions: BatchReporterOptions = {
-            downstreamReporters: [],
+        const defaultOptions: BatchTransportOptions = {
+            downstreamTransporters: [],
             onFlush: async (logs) => {
-                if (this.options.downstreamReporters.length === 0) {
+                if (this.options.downstreamTransporters.length === 0) {
                     return;
                 }
                 
-                const promises = this.options.downstreamReporters.map(async (reporter) => {
+                const promises = this.options.downstreamTransporters.map(async (reporter) => {
                     try {
                         await reporter.logBatch(logs);
                     }
@@ -50,7 +67,7 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
             }
         };
         
-        this.options = defu(options, defaultOptions, config.public.frogger.batch) as Required<BatchReporterOptions>;
+        this.options = defu(options, defaultOptions, config.public.frogger.batch) as Required<BatchTransportOptions>;
     }
     
     log(logObj: LoggerObject): void {
@@ -90,10 +107,6 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
         return processedLogs;
     }
 
-    /**
-     * Add logs to the internal buffer, maintaining sorted order
-     * and handling max size and flushing logic
-     */
     private addLogsToBuffer(logs: LoggerObject[]): void {
         for (const log of logs) {
             this.insertSorted(log);
@@ -141,25 +154,24 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
 
 
 
-    // Downstream reporters ------------------------------------------------
-    public addDownstreamReporter(reporter: IReporter): void {
-        this.options.downstreamReporters.push(reporter);
+    // Downstream transporters ------------------------------------------------
+    public addDownstreamTransporter(reporter: IFroggerTransport): void {
+        this.options.downstreamTransporters.push(reporter);
     }
 
-    public removeDownstreamReporter(reporter: IReporter): void {
-        this.options.downstreamReporters = this.options.downstreamReporters.filter(r => r !== reporter);
+    public removeDownstreamTransporter(reporter: IFroggerTransport): void {
+        this.options.downstreamTransporters = this.options.downstreamTransporters.filter(r => r !== reporter);
     }
 
-    public getDownstreamReporters(): IReporter[] {
-        return this.options.downstreamReporters;
+    public getDownstreamTransporters(): IFroggerTransport[] {
+        return this.options.downstreamTransporters;
     }
 
-    public clearDownstreamReporters(): void {
-        this.options.downstreamReporters = [];
+    public clearDownstreamTransporters(): void {
+        this.options.downstreamTransporters = [];
     }
 
     // Flush handling ------------------------------------------------------
-
     private handleFlushFailure(batchId: string, logs: LoggerObject[]): void {
         const retryCount = this.retries.get(batchId) || 0;
         
@@ -270,12 +282,12 @@ export class BatchReporter extends BaseReporter<Required<BatchReporterOptions>> 
     }
 }
 
-export function createBatchReporter(
-    downstreamReporters: IReporter[], 
-    options: Omit<BatchReporterOptions, 'onFlush' | 'downstreamReporters' | 'addDownstreamReporter' | 'removeDownstreamReporter' | 'getDownstreamReporters'> = {}
-): BatchReporter {
-    return new BatchReporter({
+export function createBatchTransport(
+    downstreamTransporters: IFroggerTransport[], 
+    options: Omit<BatchTransportOptions, 'onFlush' | 'downstreamTransporters' | 'addDownstreamReporter' | 'removeDownstreamReporter' | 'getDownstreamReporters'> = {}
+): BatchTransport {
+    return new BatchTransport({
         ...options,
-        downstreamReporters
+        downstreamTransporters
     });
 }

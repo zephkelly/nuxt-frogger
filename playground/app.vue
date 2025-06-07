@@ -22,7 +22,7 @@ const testing = () => {
         my: {
             deeply: {
                 nested: {
-                    password: 'awdaw'
+                    object: 'awdaw'
                 }
             }
         }

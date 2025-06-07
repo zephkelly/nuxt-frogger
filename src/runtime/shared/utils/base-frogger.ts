@@ -1,3 +1,4 @@
+import { type Ref, ref } from "vue";
 import { type ConsolaInstance, createConsola } from "consola/core";
 import { generateTraceId, generateSpanId, generateW3CTraceHeaders } from "./trace-headers";
 
@@ -12,11 +13,11 @@ import { ConsoleReporter } from "./reporters/console-reporter";
 import type { IFroggerReporter } from "../types/frogger-reporter";
 import { LogScrubber } from "../../scrubber";
 
-import { defu } from "defu";
+
 
 export abstract class BaseFroggerLogger implements IFroggerLogger {
     protected consola: ConsolaInstance;
-    protected globalContext: LogContext = {};
+    protected globalContext: Ref<LogContext> = ref({});
     protected traceId: string;
     protected lastSpanId: string | null = null;
     protected level: number;
@@ -70,7 +71,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
 
         
         if (options.context) {
-            this.globalContext = { ...options.context };
+            this.globalContext.value = { ...options.context };
         }
     }
 

@@ -1,5 +1,5 @@
 import type { LogObject } from 'consola/basic';
-import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
+import { BaseFroggerLogger } from '../../logger/base-frogger';
 import type { LoggerObject } from '../../shared/types/log';
 import type { TraceContext } from '../../shared/types/trace-headers';
 import { Writable } from 'node:stream';

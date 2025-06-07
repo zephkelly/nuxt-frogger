@@ -108,7 +108,9 @@ describe('LogDeduplicator', () => {
             },
             source: 'test-source',
             tags: [],
-            ctx: { type: 'info' }
+            type: 'info',
+            env: 'client',
+            ctx: {  }
         });
 
         it('should filter out duplicate logs from batch', () => {
@@ -356,7 +358,9 @@ describe('LogDeduplicator', () => {
             trace: { traceId: traceId, spanId: spanId },
             source: 'test',
             tags: [],
-            ctx: { type: 'info' }
+            env: 'client',
+            type: 'info',
+            ctx: {  }
         });
 
         describe('Non-string trace/span IDs (should be rejected as UUIDs must be strings)', () => {

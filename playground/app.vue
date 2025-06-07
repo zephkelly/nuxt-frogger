@@ -1,71 +1,42 @@
 <template>
   <div>
     Nuxt module playground!
-    <button @click="testing()">Test</button>
-    <button @click="test2()">Test2</button>
-    <button @click="test3()">Start High traffic</button>
+    <button @click="test()">Test</button>
+
 
     <Card :myProp="'Hello from the card!'" />
   </div>
 </template>
 
 <script setup>
-const startFrogger = useFrogger();
-startFrogger.error('Hello from the playground!');
+const ssrFrogger = useFrogger()
+ssrFrogger.info('SSR Frogger initialized!')
 
 
-
-const testing = () => {
-    const clickFrogger = useFrogger();
-
-    clickFrogger.info('Button clicked', {
-        my: {
-            deeply: {
-                nested: {
-                    password: 'awdaw'
-                }
-            }
-        }
-    });
-};
-
-const test2 = async () => {
+const test = async () => {
     const testFrogger = useFrogger();
-  try {
-    testFrogger.error('Fetching /api/test');
-    const response = await $fetch('/api/test', {
-        headers: testFrogger.getHeaders(),
-    });
-    
-    testFrogger.error('Response received', {
-        response: response.status,
-    });
-
-    testFrogger.info('Carrying on');
-  }
-    catch (error) {
-        testFrogger.error('Error fetching /api/test', {
-            error: error.message,
+    try {
+        testFrogger.error('Fetching /api/test');
+        const response = await $fetch('/api/test', {
+            headers: testFrogger.getHeaders(),
         });
+        
+        testFrogger.error('Response received', {
+            response: response.status,
+        });
+
+        testFrogger.info('Carrying on');
+    }
+    catch (error) {
+            testFrogger.error('Error fetching /api/test', {
+                error: error.message,
+            });
     }
 };
 
-
-const test3 = () => {
-    const highTrafficFrogger = useFrogger();
-    let intervalId;
-
-    if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
-        highTrafficFrogger.info('High traffic simulation stopped');
-    } else {
-        intervalId = setInterval(() => {
-            highTrafficFrogger.info('High traffic simulation log');
-        }, 1000);
-        highTrafficFrogger.info('High traffic simulation started');
-    }
-};
+onMounted(() => {
+    console.log('Mounted!');
+})
 
 
 const socket = useWebsocket('/api/_frogger/dev-ws', {
@@ -75,7 +46,7 @@ const socket = useWebsocket('/api/_frogger/dev-ws', {
     },
     queryParams: {
         channel: 'main',
-        level: 'error'
+        level: 0,
     },
     onMessage: async (event, message) => {
         console.log('WebSocket message received:', message);

@@ -1,23 +1,17 @@
 import { type Ref } from 'vue';
 import { useNuxtApp, useState, useRuntimeConfig } from '#app';
 
-import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
-import { LogQueueService } from '../services/log-queue';
+import { BaseFroggerLogger } from '../base-frogger';
+import { LogQueueService } from '../../app/services/log-queue';
 
-import type { IFroggerLogger } from '../../shared/types/frogger';
-import type { ClientLoggerOptions } from '../types/logger';
+import type { IFroggerLogger } from '../types';
+import type { ClientLoggerOptions, SSRTraceState } from './types';
 import type { LogObject } from 'consola/browser';
 import type { LoggerObject } from '../../shared/types/log';
 import type { LoggerObjectBatch } from '../../shared/types/batch';
 import { parseAppInfoConfig } from '../../app-info/parse';
 
 
-
-interface SSRTraceState {
-    traceId: string;
-    lastServerSpanId: string | null;
-    isClientHydrated: boolean;
-}
 
 /**
  * Client-side implementation of Frogger
@@ -118,11 +112,11 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             lvl: logObj.level,
             msg: logObj.args?.[0],
             ctx: {
-                env: env,
-                type: logObj.type,
-                ...this.globalContext,
+                ...this.globalContext.value,
                 ...logObj.args?.slice(1)[0],
             },
+            env: env,
+            type: logObj.type,
             trace: traceContext,
         };
     }

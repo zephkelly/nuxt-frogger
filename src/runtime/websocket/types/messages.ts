@@ -1,4 +1,4 @@
-import type { SubscriptionFilter, LogWebSocketMessage } from "../types";
+import type { SubscriptionFilter, LogWebSocketMessage } from "../state/types";
 import type { LoggerObject } from "../../shared/types/log";
 
 

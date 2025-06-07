@@ -1,17 +1,32 @@
 import { H3Error } from "h3";
 import { useRuntimeConfig } from '#imports';
-import { parseAppInfoConfig } from "../../../app-info/parse";
+import { parseAppInfoConfig } from "../../app-info/parse";
 
-import { generateW3CTraceHeaders } from "./../../../shared/utils/trace-headers";
+import { generateW3CTraceHeaders } from "../../shared/utils/trace-headers";
 
-import type { IReporter } from "~/src/runtime/shared/types/internal-reporter";
-import type { HttpReporterOptions } from "../../types/http-reporter";
+import type { IFroggerTransport } from "./types";
 import type { LoggerObject } from "~/src/runtime/shared/types/log";
 import type { LoggerObjectBatch } from "~/src/runtime/shared/types/batch";
 
-import { uuidv7 } from '../../../shared/utils/uuid';
+import { uuidv7 } from '../../shared/utils/uuid';
 
-export const defaultHttpReporterOptions: HttpReporterOptions = {
+
+
+export interface HttpTransportOptions {
+    endpoint: string;
+    vendor?: string;
+    headers?: Record<string, string>;
+    timeout?: number;
+    retryOnFailure?: boolean;
+    maxRetries?: number;
+    retryDelay?: number;
+    appInfo?: {
+        name: string;
+        version?: string;
+    };
+}
+
+export const defaultHttpTransportOptions: HttpTransportOptions = {
     endpoint: '',
     vendor: 'frogger',
     headers: {},
@@ -24,19 +39,18 @@ export const defaultHttpReporterOptions: HttpReporterOptions = {
 };
 
 
-
 /**
- * HTTP Reporter that logs directly to an endpoint
+ * Transport that posts logs directly to an endpoint
  */
-export class HttpReporter implements IReporter {
-    public readonly name = 'FroggerHttpReporter';
-    public readonly reporterId: string;
+export class HttpTransport implements IFroggerTransport {
+    public readonly name = 'FroggerHttpTransport';
+    public readonly transportId: string;
     
-    private options: Required<HttpReporterOptions>;
+    private options: Required<HttpTransportOptions>;
     private retries: Map<string, number> = new Map();
 
-    constructor(options: HttpReporterOptions) {
-        this.reporterId = `frogger-http-${uuidv7()}`;
+    constructor(options: HttpTransportOptions) {
+        this.transportId = `frogger-http-${uuidv7()}`;
 
         const config = useRuntimeConfig()
         const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
@@ -79,7 +93,7 @@ export class HttpReporter implements IReporter {
             ...logBatch,
             meta: {
                 processed: true,
-                processChain: [this.reporterId],
+                processChain: [this.transportId],
                 source: this.options.appInfo.name,
                 time: Date.now()
             }
@@ -128,11 +142,11 @@ export class HttpReporter implements IReporter {
         const w3cHeaders = generateW3CTraceHeaders({
             traceId: traceContext?.traceId,
             parentSpanId: traceContext?.spanId,
-            vendorData: { frogger: this.reporterId }
+            vendorData: { frogger: this.transportId }
         });
 
         const headers: Headers = new Headers({
-            'x-frogger-reporter-id': this.reporterId,
+            'x-frogger-reporter-id': this.transportId,
             'x-frogger-processed': 'true',
 
             'traceparent': w3cHeaders.traceparent,

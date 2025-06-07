@@ -1,0 +1,63 @@
+import { defu } from 'defu';
+import type { H3Event } from "h3";
+
+//@ts-ignore
+import { useRuntimeConfig, useEvent } from '#imports';
+import { ServerFroggerLogger } from "../../logger/server";
+
+import type { IFroggerLogger } from '../../logger/types';
+import type { TraceContext } from "../../shared/types/trace-headers";
+import type { ServerLoggerOptions } from "../types/logger";
+
+
+
+/**
+ * Get a Frogger logger instance
+ * @param event Event context is captured automatically via 'useEvent()', pass it in manually
+ * if you want to override this, or set 'frogger.serverModule.autoCaptureContext' to false in
+ * your module options / runtime config.
+ * @param options Optional logger options to override runtime config
+ */
+export function getFrogger(event?: H3Event, options?: ServerLoggerOptions): IFroggerLogger;
+
+export function getFrogger(
+    eventOrOptions?: H3Event | ServerLoggerOptions,
+    maybeOptions?: ServerLoggerOptions
+): IFroggerLogger {
+    const isEvent = eventOrOptions && 'context' in eventOrOptions;
+    
+    let event = isEvent ? eventOrOptions as H3Event : undefined;
+
+    if (!event) {
+        event = useEvent();
+    }
+
+
+    const options = isEvent ? maybeOptions : eventOrOptions as ServerLoggerOptions;
+
+    const config = useRuntimeConfig();
+
+    const runtimeFileOptions = config.frogger.file;
+    const runtimeBatchOptions = config.public.frogger.batch;
+    const runtimeEndpoint = config.public.frogger.endpoint;
+
+    const froggerOptions = {
+        file: runtimeFileOptions,
+        batch: runtimeBatchOptions,
+        endpoint: runtimeEndpoint,
+    }
+
+    const mergedOptions = defu(froggerOptions, options) as ServerLoggerOptions;
+    
+    let traceContext: TraceContext | undefined;
+    if (event?.context?.frogger) {
+        traceContext = event.context.frogger;
+    }
+    
+    if (traceContext) {
+        return new ServerFroggerLogger(mergedOptions, traceContext);
+    }
+    
+
+    return new ServerFroggerLogger(mergedOptions);
+}

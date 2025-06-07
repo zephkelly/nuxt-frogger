@@ -250,8 +250,6 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
     
     async cleanup(): Promise<void> {
         try {
-            console.log('WebSocketKVLayer: Starting cleanup...');
-            
             const prefixes = [
                 this.channelPrefix,
                 this.subscriptionPrefix,
@@ -263,7 +261,6 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
                 const cleanupPromises = keys.map(async (key: string) => {
                     if (await this.isExpired(key)) {
                         await useStorage().removeItem(key);
-                        console.log(`WebSocketKVLayer: Cleaned up expired key: ${key}`);
                     }
                 });
                 
@@ -271,8 +268,6 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             }
             
             await this.cleanupEmptyChannels();
-            
-            console.log('WebSocketKVLayer: Cleanup completed');
         }
         catch (error) {
             console.error('Failed to cleanup WebSocket storage:', error);
@@ -293,7 +288,6 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
                     
                     if (hoursSinceActivity > 24) {
                         await this.deleteChannel(channel.channel_uuid);
-                        console.log(`WebSocketKVLayer: Cleaned up stale empty channel: ${channel.channel_uuid}`);
                     }
                 }
             }

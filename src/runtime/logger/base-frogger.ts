@@ -1,22 +1,23 @@
+import { type Ref, ref } from "vue";
 import { type ConsolaInstance, createConsola } from "consola/core";
-import { generateTraceId, generateSpanId, generateW3CTraceHeaders } from "./trace-headers";
+import { generateTraceId, generateSpanId, generateW3CTraceHeaders } from "../shared/utils/trace-headers";
 
 import type { LogObject } from 'consola';
-import type { LoggerObject } from "../types/log";
-import type { IFroggerLogger } from "../types/frogger";
-import type { FroggerOptions } from "../types/options";
-import type { LogContext } from "../types/log";
-import type { TraceContext } from "../types/trace-headers";
-import { ConsoleReporter } from "./reporters/console-reporter";
+import type { LoggerObject } from "../shared/types/log";
+import type { IFroggerLogger } from "./types";
+import type { FroggerOptions } from "../shared/types/options";
+import type { LogContext } from "../shared/types/log";
+import type { TraceContext } from "../shared/types/trace-headers";
+import { ConsoleReporter } from "./_reporters/console-reporter";
 
-import type { IFroggerReporter } from "../types/frogger-reporter";
-import { LogScrubber } from "../../scrubber";
+import type { IFroggerReporter } from "./_reporters/types";
+import { LogScrubber } from "../scrubber";
 
-import { defu } from "defu";
+
 
 export abstract class BaseFroggerLogger implements IFroggerLogger {
     protected consola: ConsolaInstance;
-    protected globalContext: LogContext = {};
+    protected globalContext: Ref<LogContext> = ref({});
     protected traceId: string;
     protected lastSpanId: string | null = null;
     protected level: number;
@@ -55,22 +56,13 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             }
         });
 
-        if (this.consoleReporter !== undefined) {
-            this.consola.addReporter({
-                log: (logObj: LogObject) => {
-                    try {
-                        this.consoleReporter?.log(logObj);
-                    }
-                    catch (err) {
-                        console.log(`[${logObj.type.toUpperCase()}]`, logObj.args?.[0] || '', ...logObj.args?.slice(1) || []);
-                    }
-                }
-            });
+        if (this.consoleReporter !== null) {
+            this.addReporter(this.consoleReporter);
         }
 
         
         if (options.context) {
-            this.globalContext = { ...options.context };
+            this.globalContext.value = { ...options.context };
         }
     }
 
@@ -208,7 +200,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             parentSpanId: this.lastSpanId || undefined,
             vendorData
         });
-        
+
         return {
             traceparent: headers.traceparent,
             ...(headers.tracestate && { tracestate: headers.tracestate })

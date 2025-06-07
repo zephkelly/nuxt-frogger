@@ -1,8 +1,11 @@
-import type { LogObject } from 'consola/basic';
-import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
-import type { ServerLoggerOptions } from '../types/logger';
+import type { LogObject, LogType } from 'consola/basic';
+
+
+
+import { BaseFroggerLogger } from '../base-frogger';
+import type { ServerLoggerOptions } from '../../server/types/logger';
 import type { LoggerObject } from '../../shared/types/log';
-import { ServerLogQueueService } from '../services/server-log-queue';
+import { ServerLogQueueService } from '../../server/services/server-log-queue';
 
 import type { TraceContext } from '../../shared/types/trace-headers';
 
@@ -14,9 +17,6 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
     private madeFirstLog: boolean = false;
     private traceContext: TraceContext | null = null;
     
-    private testCaptureCallback: ((loggerObject: LoggerObject) => void) | null = null;
-   
-   
     constructor(options: ServerLoggerOptions, traceContext: TraceContext | null = null) {
         super(options);
         this.options = options;
@@ -24,32 +24,6 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         this.traceContext = traceContext;
     }
 
-
-    // Capture any loggerObjects created during tests
-    setTestCaptureCallback(callback: (loggerObject: LoggerObject) => void | null): void {
-        this.testCaptureCallback = callback;
-    }
-
-    clearTestCaptureCallback(): void {
-        this.testCaptureCallback = null;
-    }
-
-    /**
-     * Test-only method to directly create a LoggerObject without processing
-     * This bypasses the queue system for benchmarking
-     */
-    createLoggerObjectForTest(message: string, context?: any, level: string = 'info', logLevel: number = 3): LoggerObject {
-        const mockLogObject: LogObject = {
-            date: new Date(),
-            level: logLevel,
-            //@ts-ignore
-            type: level,
-            args: context ? [message, context] : [message]
-        };
-
-        return this.createLoggerObject(mockLogObject);
-    }
-    
     protected createLoggerObject(logObj: LogObject): LoggerObject {
         if (!logObj || typeof logObj !== 'object') {
             console.warn('Invalid log object:', logObj);
@@ -72,18 +46,13 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             lvl: logObj.level,
             msg: logObj.args?.[0],
             ctx: {
-                env: 'server',
-                type: logObj.type,
-                ...this.globalContext,
+                ...this.globalContext.value,
                 ...logObj.args?.slice(1)[0],
             },
+            env: 'server',
+            type: logObj.type,
             trace: currentTraceContext,
         };
-
-        // Call test capture callback if set
-        if (this.testCaptureCallback) {
-            this.testCaptureCallback(loggerObject);
-        }
 
         return loggerObject;
     }

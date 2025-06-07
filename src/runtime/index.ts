@@ -1,2 +1,2 @@
-export { addGlobalReporter } from "./server/utils";
-export { ServerFroggerLogger } from "./server/utils/server-logger";
+export { addGlobalReporter } from "./server/utils/manual";
+export { ServerFroggerLogger } from "./logger/server";

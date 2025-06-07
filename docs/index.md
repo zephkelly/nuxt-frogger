@@ -5,25 +5,26 @@ layout: home
 hero:
   name: "Frogger"
   text: "The zero-setup logger for Nuxt"
-  tagline: "Log and trace anywhere from anywhere in your apps. SSR, CSR, SPA, SSG, it just works."
+  tagline: "A self-hosted logging solution that just works. Install and setup with one command, make your first log in minutes."
   actions:
     - theme: brand
       text: Install Frogger
       link: /installation
-    - theme: alt
-      text: Getting Started
-      link: /getting-started
 
 features:
-#   - title: Websocket + Dashboard
-#     details: A native websocket handler, and built-in dashboard components let you view logs in real-time, real fast!
-  - title: Universal Logging
-    details: Call useFrogger() in your app code, or getFrogger() in your server routes. Log anywhere, anytime.
-  - title: Tracing Utils
-    details: Fogger follows the W3C Trace Context standard. Follow requests from client to server, or even to external services. 
-  - title: Batched Operations
-    details: Logs on the client are batched before posting. Logs on the server are batched before being written or posted externally.
-  - title: Auto-Registration
-    details: Let Frogger handle the setup. Endpoints, plugins, composables, and middleware. Don't want a feature? Just disable it.
----
-
+  - title: ✨ Zero Config
+    details: Sit back and relax. With sensible defaults, Frogger works out of the box. Need to make changes? It's all configurable
+  - title: ⚡ Websocket + Dashboard
+    details: Built-in dashboard and auto-registered websocket pipeline. Add your own auth anytime. Squash bugs real-time, real fast!
+  - title: 🌐 Universal Logging
+    details: Auto-imported utilities for the client and server. SSR, CSR, SPA, even static sites. Unhandled errors? Already logged them
+  - title: 🏷️ Batched Operations
+    details: Handle usage spikes with ease. Automated batching strategies on the server and client mean more performance, less stress
+  - title: 🧹 PII Scrubbing
+    details: Basic strategies to scrub PII from your logs configured by default. Need something more robust? Add your own custom strategies
+  - title: 🔎 W3C Trace Context
+    details: Trace requests wherever they go. From the client to server, across distributed systems, external services, and back again
+  - title: 🚦 Rate Limiting
+    details: Worried about excessive logs or targeted attacks? Frogger rate-limits by default, reducing abuse and keeping the pond clean
+  - title: 🔌 Extensible
+    details: Hooks, child loggers, reactive context, client and server side pluggable reporters. Everything production-grade apps need

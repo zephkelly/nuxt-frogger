@@ -1,19 +1,19 @@
 import type { LogObject } from 'consola';
-// import type { IFroggerReporter } from '../../types/frogger-reporter';
+import type { IFroggerReporter } from './types';
+import type { LoggerObject } from '../../shared/types/log';
 
 
 
-export class ConsoleReporter /*implements IFroggerReporter*/ {
+export class ConsoleReporter implements IFroggerReporter {
     private isServer: boolean;
     
     constructor() {
         this.isServer = typeof window === 'undefined';
     }
     
-    log(logObj: LogObject): void {
-        const message = logObj.args?.[0] || '';
-        const context = logObj.args?.slice(1);
-        const timestamp = logObj.date.toISOString();
+    log(logObj: LoggerObject): void {
+        const message = logObj.msg
+        const timestamp = logObj.time
 
         if (this.isServer) {
             this.logToNodeConsole(logObj.type, message, timestamp);
@@ -23,12 +23,7 @@ export class ConsoleReporter /*implements IFroggerReporter*/ {
         }
     }
 
-
-    private hasContext(context: any[]): boolean {
-        return context && context.length > 0 && context[0] !== undefined;
-    }
-    
-    private logToNodeConsole(type: string, message: string, timestamp: string): void {
+    private logToNodeConsole(type: string, message: string | undefined, timestamp: number): void {
         const colors = {
             reset: '\x1b[0m',
             bright: '\x1b[1m',
@@ -69,9 +64,11 @@ export class ConsoleReporter /*implements IFroggerReporter*/ {
         const color = typeColors[type as keyof typeof typeColors] || colors.white;
         const icon = typeIcons[type as keyof typeof typeIcons] || '•';
         const typeLabel = type.toUpperCase().padEnd(5);
-        
-        const formattedMessage = `${colors.gray}[${timestamp}]${colors.reset} ${color}${icon}  ${typeLabel}${colors.reset} ${message}`;
-        
+
+        const timestampIso = new Date(timestamp).toISOString();
+
+        const formattedMessage = `${colors.gray}[${timestampIso}]${colors.reset} ${color}${icon}  ${typeLabel}${colors.reset} ${message}`;
+
         switch (type) {
             case 'error':
             case 'fatal':
@@ -85,11 +82,11 @@ export class ConsoleReporter /*implements IFroggerReporter*/ {
                 console.log(formattedMessage);
                 break;
             default:
-                console.log(`${colors.gray}[${timestamp}]${colors.reset}  ${color}${icon} ${typeLabel}${colors.reset} ${message}`);
+                console.log(`${colors.gray}[${timestampIso}]${colors.reset}  ${color}${icon} ${typeLabel}${colors.reset} ${message}`);
         }
     }
 
-    private logToBrowserConsole(type: string, message: string, timestamp: string): void {
+    private logToBrowserConsole(type: string, message: string | undefined, timestamp: number): void {
         const typeStyles = {
             error: 'color: #ff6b6b; font-weight: bold;',
             warn: 'color: #feca57; font-weight: bold;',
@@ -119,25 +116,26 @@ export class ConsoleReporter /*implements IFroggerReporter*/ {
         const messageTypeStyling = `${icon} %c[${typeLabel}]`.padEnd(12);
         const timestampStyle = 'color: #a4b0be; font-size: 0.8em;';
 
-        if (type === 'error' || type === 'fatal') {
-            const fullMessage = `${icon} [${typeLabel}] ${message}`;
-            console.error(fullMessage);
-        }
-        else {
-            switch (type) {
-                case 'warn':
-                    console.log(messageTypeStyling, style, message);
-                    console.log(`%c${timestamp}`, timestampStyle);
-                    break;
-                case 'debug':
-                case 'trace':
-                    console.log(messageTypeStyling, style, message);
-                    console.log(`%c${timestamp}`, timestampStyle);
-                    break;
-                default:
-                    console.log(messageTypeStyling, style, message);
-                    console.log(`%c${timestamp}`, timestampStyle);
-            }
+        const timestampIso = new Date(timestamp).toISOString();
+
+        switch (type) {
+            case 'error':
+            case 'fatal':
+                console.error(messageTypeStyling, style, message);
+                console.error(`%c${timestampIso}`, timestampStyle);
+                break;
+            case 'warn':
+                console.log(messageTypeStyling, style, message);
+                console.log(`%c${timestampIso}`, timestampStyle);
+                break;
+            case 'debug':
+            case 'trace':
+                console.log(messageTypeStyling, style, message);
+                console.log(`%c${timestampIso}`, timestampStyle);
+                break;
+            default:
+                console.log(messageTypeStyling, style, message);
+                console.log(`%c${timestampIso}`, timestampStyle);
         }
     }
 }

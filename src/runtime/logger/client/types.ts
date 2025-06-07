@@ -1,7 +1,7 @@
 import type { FroggerOptions } from "../../shared/types/options";
 
 import type { LogContext } from "../../shared/types/log";
-import type { AppInfoOptions, ExtractedAppInfo } from "../../app-info/types";
+// import type { AppInfoOptions, ExtractedAppInfo } from "../../app-info/types";
 
 
 
@@ -36,4 +36,10 @@ export interface QueuedLog {
         spanId: string;
     }
     context: LogContext;
+}
+
+export interface SSRTraceState {
+    traceId: string;
+    lastServerSpanId: string | null;
+    isClientHydrated: boolean;
 }

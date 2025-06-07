@@ -1,10 +1,10 @@
-import type { LoggerObject } from './log'
+import type { LoggerObject } from "../../shared/types/log";
 
 
 
-export interface IReporter {
+export interface IFroggerTransport {
     name: string
-    reporterId: string
+    transportId: string
     
     log(logObj: LoggerObject): Promise<void> | void
     logBatch(logs: LoggerObject[]): Promise<void> | void

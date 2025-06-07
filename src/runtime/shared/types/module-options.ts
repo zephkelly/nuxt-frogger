@@ -8,7 +8,9 @@ import type { ScrubberOptions } from "../../scrubber/options";
 
 export interface ModuleOptions {
     clientModule?: boolean
-    serverModule?: boolean
+    serverModule?: {
+        autoEventCapture?: boolean
+    } | boolean
     
     app: AppInfoOptions,
 
@@ -35,3 +37,5 @@ export interface ModuleOptions {
         } | boolean
     }
 }
+
+export const APP_MOUNTED_STATE_KEY = 'frogger-app-mounted-state';

@@ -102,7 +102,6 @@ export class LogDeduplicator implements ILogDeduplicator {
 
     filterDuplicates(logs: LoggerObject[]): LoggerObject[] {
         if (logs.length === 0) {
-            console.log('No logs to filter');
             return logs;
         }
 

@@ -1,7 +1,7 @@
 //@ts-ignore
 import { useStorage } from '#imports'
 
-import type { IWebSocketStorage } from './types';
+import type { IWebSocketStateStorage } from './types';
 import type { PersistedChannel, PersistedSubscription } from '../types';
 
 
@@ -9,7 +9,7 @@ import type { PersistedChannel, PersistedSubscription } from '../types';
 /**
  * Nitro KV Storage adapter for WebSocket log reporter
  */
-export class WebSocketKVLayer implements IWebSocketStorage {
+export class WebSocketStateKVLayer implements IWebSocketStateStorage {
     private readonly storageKey: string;
     private readonly channelPrefix: string;
     private readonly subscriptionPrefix: string;

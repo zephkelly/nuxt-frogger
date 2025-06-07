@@ -1,7 +1,7 @@
 import { Peer } from "crossws";
 
 import type { IFroggerTransport } from "./types";
-import type  { IWebSocketStorage } from "../../websocket/kv-layer/types";
+import type  { IWebSocketStateStorage } from "../../websocket/state/types";
 import type { LoggerObject } from "../../shared/types/log";
 
 import type {
@@ -11,7 +11,7 @@ import type {
     LogMessage
 } from "../../websocket/types";
 
-import { WebSocketKVLayer } from "../../websocket/kv-layer";
+import { WebSocketStateKVLayer } from "../../websocket/state";
 import { LogLevelFilter } from "../../shared/utils/log-level-filter";
 
 
@@ -23,7 +23,7 @@ export class WebSocketTransport implements IFroggerTransport {
     private static instance: WebSocketTransport | null = null;
     private channels: Map<string, PersistedChannel> = new Map();
     private subscriptions: Map<string, PersistedSubscription> = new Map();
-    private storage: IWebSocketStorage;
+    private state: IWebSocketStateStorage;
     private cleanupInterval: NodeJS.Timeout | null = null;
 
     private readonly CLEANUP_INTERVAL = 1000 * 60 * 5;
@@ -31,9 +31,9 @@ export class WebSocketTransport implements IFroggerTransport {
     private readonly MESSAGE_RATE_LIMIT = 100;
     private lastMessageTimes: Map<string, number> = new Map();
 
-    private constructor(storage?: IWebSocketStorage) {
+    private constructor(storage?: IWebSocketStateStorage) {
         this.transportId = `websocket-reporter-${Date.now()}`;
-        this.storage = storage || new WebSocketKVLayer();
+        this.state = storage || new WebSocketStateKVLayer();
         this.startCleanupInterval();
         
         this.loadPersistedData().catch(error => {
@@ -41,9 +41,9 @@ export class WebSocketTransport implements IFroggerTransport {
         });
     }
 
-    public static getInstance(storage?: IWebSocketStorage): WebSocketTransport {
+    public static getInstance(state?: IWebSocketStateStorage): WebSocketTransport {
         if (!WebSocketTransport.instance) {
-            WebSocketTransport.instance = new WebSocketTransport(storage);
+            WebSocketTransport.instance = new WebSocketTransport(state);
         }
         return WebSocketTransport.instance;
     }
@@ -58,8 +58,8 @@ export class WebSocketTransport implements IFroggerTransport {
     private async loadPersistedData(): Promise<void> {
         try {
             const [persistedChannels, persistedSubscriptions] = await Promise.all([
-                this.storage.getAllChannels(),
-                this.storage.getAllSubscriptions()
+                this.state.getAllChannels(),
+                this.state.getAllSubscriptions()
             ]);
 
             for (const persistedChannel of persistedChannels) {
@@ -140,7 +140,7 @@ export class WebSocketTransport implements IFroggerTransport {
                     subscribers: channel.subscribers
                 };
 
-                persistPromises.push(this.storage.setChannel(channelId, persistedChannel));
+                persistPromises.push(this.state.setChannel(channelId, persistedChannel));
             }
 
             for (const [peerId, subscription] of this.subscriptions.entries()) {
@@ -152,7 +152,7 @@ export class WebSocketTransport implements IFroggerTransport {
                     last_activity: subscription.last_activity
                 };
                 
-                persistPromises.push(this.storage.setSubscription(peerId, persistedSubscription));
+                persistPromises.push(this.state.setSubscription(peerId, persistedSubscription));
             }
 
             await Promise.allSettled(persistPromises);
@@ -187,7 +187,7 @@ export class WebSocketTransport implements IFroggerTransport {
         };
 
         try {
-            await this.storage.setChannel(channelId, persistedChannel);
+            await this.state.setChannel(channelId, persistedChannel);
         }
         catch (error) {
             console.error(`WebSocketTransport: Failed to persist channel ${channelId}:`, error);
@@ -253,9 +253,9 @@ export class WebSocketTransport implements IFroggerTransport {
                 };
 
                 await Promise.all([
-                    this.storage.setSubscription(peer.id, persistedSubscription),
-                    this.storage.addPeerToChannel(channelId, peer.id),
-                    this.storage.updateChannelActivity(channelId)
+                    this.state.setSubscription(peer.id, persistedSubscription),
+                    this.state.addPeerToChannel(channelId, peer.id),
+                    this.state.updateChannelActivity(channelId)
                 ]);
             }
             catch (error) {
@@ -272,7 +272,7 @@ export class WebSocketTransport implements IFroggerTransport {
 
     public async reconnectSubscription(peer: Peer): Promise<boolean> {
         try {
-            const persistedSubscription = await this.storage.getSubscription(peer.id);
+            const persistedSubscription = await this.state.getSubscription(peer.id);
             
             if (!persistedSubscription) {
                 return false;
@@ -301,9 +301,9 @@ export class WebSocketTransport implements IFroggerTransport {
 
             try {
                 await Promise.all([
-                    this.storage.updateSubscriptionActivity(peer.id),
+                    this.state.updateSubscriptionActivity(peer.id),
                     ...subscription.channels.map(channelId => 
-                        this.storage.updateChannelActivity(channelId)
+                        this.state.updateChannelActivity(channelId)
                     )
                 ]);
             }
@@ -337,7 +337,7 @@ export class WebSocketTransport implements IFroggerTransport {
                 }
 
                 try {
-                    await this.storage.removePeerFromChannel(channelId, peerId);
+                    await this.state.removePeerFromChannel(channelId, peerId);
                 }
                 catch (error) {
                     console.error(`WebSocketTransport: Failed to remove peer from channel storage:`, error);
@@ -351,7 +351,7 @@ export class WebSocketTransport implements IFroggerTransport {
             peerKeys.forEach(key => this.lastMessageTimes.delete(key));
 
             try {
-                await this.storage.deleteSubscription(peerId);
+                await this.state.deleteSubscription(peerId);
             }
             catch (error) {
                 console.error(`WebSocketTransport: Failed to delete subscription from storage:`, error);
@@ -389,7 +389,7 @@ export class WebSocketTransport implements IFroggerTransport {
             channel.last_activity = new Date().getTime();
 
             if (Math.random() < 0.1) {
-                this.storage.updateChannelActivity(channelId).catch((error: unknown) => {
+                this.state.updateChannelActivity(channelId).catch((error: unknown) => {
                     console.error(`WebSocketTransport: Failed to update channel activity:`, error);
                 });
             }
@@ -410,7 +410,7 @@ export class WebSocketTransport implements IFroggerTransport {
                     if (subscription) {
                         subscription.last_activity = new Date().getTime();
                         this.subscriptions.set(peerId, subscription);
-                        this.storage.updateSubscriptionActivity(peerId).catch((error: unknown) => {
+                        this.state.updateSubscriptionActivity(peerId).catch((error: unknown) => {
                             console.error(`WebSocketTransport: Failed to update subscription activity for ${peerId}:`, error);
                         });
                     }
@@ -590,7 +590,7 @@ export class WebSocketTransport implements IFroggerTransport {
 
         await Promise.allSettled(cleanupPromises);
 
-        this.storage.cleanup().catch((error: unknown) => {
+        this.state.cleanup().catch((error: unknown) => {
             console.error('WebSocketTransport: Storage cleanup failed:', error);
         });
     }
@@ -613,9 +613,9 @@ export class WebSocketTransport implements IFroggerTransport {
 
             if (deleteFromStorage) {
                 try {
-                    await this.storage.deleteChannel(channelId);
+                    await this.state.deleteChannel(channelId);
                 } catch (error) {
-                    console.error(`WebSocketTransport: Failed to delete channel from storage:`, error);
+                    console.error(`WebSocketLogReporter: Failed to delete channel from state:`, error);
                 }
             }
 
@@ -647,7 +647,7 @@ export class WebSocketTransport implements IFroggerTransport {
         channels: number;
         totalSubscribers: number;
         activeSubscriptions: number;
-        storage: any;
+        state: any;
         channelDetails: Array<{
             uuid: string;
             subscribers: number;
@@ -665,7 +665,7 @@ export class WebSocketTransport implements IFroggerTransport {
         const totalSubscribers = Array.from(this.channels.values())
             .reduce((sum, channel) => sum + channel.subscribers.size, 0);
 
-        const storageStats = await this.storage.getStorageStats().catch(() => ({
+        const stateStats = await this.state.getStorageStats().catch(() => ({
             totalChannels: 0,
             totalSubscriptions: 0,
             channelsWithPeers: 0,
@@ -676,17 +676,17 @@ export class WebSocketTransport implements IFroggerTransport {
             channels: this.channels.size,
             totalSubscribers,
             activeSubscriptions: this.subscriptions.size,
-            storage: storageStats,
+            state: stateStats,
             channelDetails
         };
     }
 
     public async getPersistedChannels(): Promise<PersistedChannel[]> {
-        return await this.storage.getAllChannels();
+        return await this.state.getAllChannels();
     }
 
     public async getPersistedSubscriptions(): Promise<PersistedSubscription[]> {
-        return await this.storage.getAllSubscriptions();
+        return await this.state.getAllSubscriptions();
     }
 
     public getFilterDescription(filters?: SubscriptionFilter): string {

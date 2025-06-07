@@ -1,4 +1,4 @@
-import type { IFroggerReporter } from "./frogger-reporter";
+import type { IFroggerReporter } from "./_reporters/types";
 
 
 

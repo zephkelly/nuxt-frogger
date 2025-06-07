@@ -1,25 +1,21 @@
 import { defu } from 'defu';
 import type { H3Event } from "h3";
+
 //@ts-ignore
 import { useRuntimeConfig, useEvent } from '#imports';
+import { ServerFroggerLogger } from "../../logger/server";
 
-import { ServerFroggerLogger } from "./server-logger";
-import { ServerLogQueueService } from '../services/server-log-queue';
-
-import { HttpReporter, defaultHttpReporterOptions } from "./reporters/http-reporter";
-import type { HttpReporterOptions } from "../types/http-reporter";
-
-import type { IFroggerLogger } from "../../shared/types/frogger";
-import type { IReporter } from '../../shared/types/internal-reporter';
+import type { IFroggerLogger } from '../../logger/types';
 import type { TraceContext } from "../../shared/types/trace-headers";
 import type { ServerLoggerOptions } from "../types/logger";
 
 
 
-
 /**
  * Get a Frogger logger instance
- * @param event Event context is captured automatically, buit you can pass it manually if needed
+ * @param event Event context is captured automatically via 'useEvent()', pass it in manually
+ * if you want to override this, or set 'frogger.serverModule.autoCaptureContext' to false in
+ * your module options / runtime config.
  * @param options Optional logger options to override runtime config
  */
 export function getFrogger(event?: H3Event, options?: ServerLoggerOptions): IFroggerLogger;
@@ -64,33 +60,4 @@ export function getFrogger(
     
 
     return new ServerFroggerLogger(mergedOptions);
-}
-
-
-
-
-// Add reporter 
-export function addGlobalReporter(reporter: IReporter): void {
-    const logQueue = ServerLogQueueService.getInstance();
-
-    logQueue.addReporter(reporter);
-}
-
-
-export function createHttpReporter(endpoint: string): HttpReporter;
-
-export function createHttpReporter(options: HttpReporterOptions): HttpReporter;
-
-export function createHttpReporter(endpointOrOptions: string | HttpReporterOptions): HttpReporter {
-    if (typeof endpointOrOptions === 'string') {
-        const options: HttpReporterOptions = {
-            ...defaultHttpReporterOptions,
-            endpoint: endpointOrOptions,
-        };
-
-        return new HttpReporter(options);
-    }
-    else {
-        return new HttpReporter(endpointOrOptions);
-    }
 }

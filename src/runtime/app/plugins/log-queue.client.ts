@@ -1,10 +1,18 @@
-import { defineNuxtPlugin } from "#app";
+import { useState, onMounted } from '#imports';
+import { defineNuxtPlugin } from '#app';
 import { LogQueueService } from "../services/log-queue";
 
+import { APP_MOUNTED_STATE_KEY } from '../../shared/types/module-options';
 
 
 
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin((nuxtApp) => {
+    const isAppMounted = useState<boolean>(APP_MOUNTED_STATE_KEY, () => false);
+
+    nuxtApp.hook('app:mounted', () => {
+        isAppMounted.value = true;
+    });
+
     const logQueueService = new LogQueueService();
     return {
         provide: {

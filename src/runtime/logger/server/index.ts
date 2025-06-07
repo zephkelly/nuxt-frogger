@@ -2,10 +2,10 @@ import type { LogObject, LogType } from 'consola/basic';
 
 
 
-import { BaseFroggerLogger } from '../../shared/utils/base-frogger';
-import type { ServerLoggerOptions } from '../types/logger';
+import { BaseFroggerLogger } from '../base-frogger';
+import type { ServerLoggerOptions } from '../../server/types/logger';
 import type { LoggerObject } from '../../shared/types/log';
-import { ServerLogQueueService } from '../services/server-log-queue';
+import { ServerLogQueueService } from '../../server/services/server-log-queue';
 
 import type { TraceContext } from '../../shared/types/trace-headers';
 
@@ -17,9 +17,6 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
     private madeFirstLog: boolean = false;
     private traceContext: TraceContext | null = null;
     
-    private testCaptureCallback: ((loggerObject: LoggerObject) => void) | null = null;
-   
-   
     constructor(options: ServerLoggerOptions, traceContext: TraceContext | null = null) {
         super(options);
         this.options = options;
@@ -51,16 +48,11 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             ctx: {
                 env: 'server',
                 type: logObj.type,
-                ...this.globalContext,
+                ...this.globalContext.value,
                 ...logObj.args?.slice(1)[0],
             },
             trace: currentTraceContext,
         };
-
-        // Call test capture callback if set
-        if (this.testCaptureCallback) {
-            this.testCaptureCallback(loggerObject);
-        }
 
         return loggerObject;
     }

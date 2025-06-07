@@ -205,9 +205,9 @@ export function generateW3CTraceHeaders(options: {
     
     const newSpanId = generateSpanId();
     const flags = sampled ? '01' : '00';
-    
-    const traceparent = `00-${traceId}-${newSpanId}-${flags}`;
-    
+
+    const traceparent = `00-${traceId}-${parentSpanId ? parentSpanId : newSpanId}-${flags}`;
+
     const tracestate = createTracestate(vendorData);
     
     return {

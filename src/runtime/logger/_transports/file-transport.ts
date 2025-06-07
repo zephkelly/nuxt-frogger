@@ -1,24 +1,27 @@
-import { useRuntimeConfig } from '#imports';
+import { join } from 'node:path';
 import { mkdir, stat } from 'node:fs/promises';
 import { existsSync, createWriteStream, WriteStream } from 'node:fs';
-import { join } from 'node:path';
 
-import type { FileReporterOptions } from '../../types/file-reporter';
+import { useRuntimeConfig } from '#imports';
+import { uuidv7 } from '../../shared/utils/uuid';
+
+import { BaseTransport } from './base-transport';
+
 import type { LoggerObject } from '~/src/runtime/shared/types/log';
-import { BaseReporter } from './base-reporter';
-
-import { uuidv7 } from '../../../shared/utils/uuid';
+import type { FileOptions } from "../../shared/types/file";
 
 
+
+export interface FileTransportOptions extends FileOptions { }
 
 /**
- * Reporter that writes logs to local files
+ * Transport that writes logs to local files
  */
-export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
-    public readonly name = 'FroggerFileReporter';
-    public readonly reporterId: string;
+export class FileTransport extends BaseTransport<Required<FileTransportOptions>> {
+    public readonly name = 'FroggerFileTransport';
+    public readonly transportId: string;
 
-    protected options: Required<FileReporterOptions>;
+    protected options: Required<FileTransportOptions>;
     private currentFileName: string = '';
     private currentFileSize: number = 0;
     private logBuffer: string[] = [];
@@ -30,7 +33,7 @@ export class FileReporter extends BaseReporter<Required<FileReporterOptions>> {
     
     constructor() {
         super();
-        this.reporterId = `frogger-file-${uuidv7()}`;
+        this.transportId = `frogger-file-${uuidv7()}`;
         const config = useRuntimeConfig()
 
         this.options = config.frogger.file

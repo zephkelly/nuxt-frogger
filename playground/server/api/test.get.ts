@@ -1,13 +1,7 @@
 export default defineEventHandler((event) => {
     const logger = getFrogger();
 
-    logger.error('This endpoint does not exist', { event });
+    logger.error('This endpoint checks to see if the trace context propagates properly');
 
-    return createError({
-        statusCode: 404,
-        statusMessage: 'Not Found',
-        data: {
-            message: 'This endpoint does not exist. Please check the URL or contact support if you believe this is an error.'
-        }
-    })
+    return 'request received and logged successfully';
 });

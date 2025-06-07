@@ -7,7 +7,7 @@ import { useRuntimeConfig } from '#app';
 import { uuidv7 } from '../../shared/utils/uuid';
 
 import { handleRateLimit } from '../../rate-limiter/utils/limit-handler';
-import { SimpleConsoleLogger } from '../../shared/utils/console-frogger';
+import { SimpleConsoleLogger } from '../../logger/other/console-frogger';
 
 import { parseAppInfoConfig } from '../../app-info/parse';
 

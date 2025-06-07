@@ -1,8 +1,8 @@
 import { ref, onMounted, onBeforeUnmount, nextTick, watch } from "vue"
 import { navigateTo } from "#imports"
 
-// Connection message types
 import { MessageType, type WebSocketMessage, WebSocketMessageAuthor, WebSocketStatus } from "../../websocket/types"
+
 
 
 interface WebSocketOptions {

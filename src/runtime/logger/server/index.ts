@@ -8,7 +8,7 @@ import { ServerLogQueueService } from '../../server/services/server-log-queue';
 
 import type { TraceContext } from '../../shared/types/trace-headers';
 
-
+import { defu } from 'defu';
 
 export class ServerFroggerLogger extends BaseFroggerLogger {
     private options: ServerLoggerOptions;
@@ -45,6 +45,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             lvl: logObj.level,
             msg: logObj.args?.[0],
             ctx: {
+                ...this.mergedGlobalContext.value,
                 ...this.globalContext.value,
                 ...logObj.args?.slice(1)[0],
             },
@@ -73,13 +74,15 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
      * Create a child logger that shares the same trace ID
      * @param reactive - If true, child will reactively reference parent's context. If false, child gets a copy of current context.
      */
-    public child(reactive: boolean = false): ServerFroggerLogger {
+    public child(options: ServerLoggerOptions, reactive: boolean = false): ServerFroggerLogger {
         const { traceId, parentSpanId } = this.createChildTraceContext();
         const childContext = this.createChildContext(reactive);
 
         const childOptions: ServerLoggerOptions = {
-            ...this.options,
-            context: reactive ? {} : (childContext as LogContext)
+            ...defu(this.options, options),
+            context: reactive 
+                ? options.context
+                : (defu(childContext, options.context) as LogContext),
         };
 
         const childTraceContext: TraceContext = {
@@ -91,9 +94,9 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         const child = new ServerFroggerLogger(childOptions, childTraceContext);
 
         if (reactive) {
-            child.globalContext = this.globalContext;
+            child.parentGlobalContext = this.globalContext;
         }
 
         return child;
-    }
+    }   
 }

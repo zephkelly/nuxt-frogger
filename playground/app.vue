@@ -34,6 +34,10 @@ const test = async () => {
     }
 };
 
+function test2 () {
+
+}
+
 onMounted(() => {
     console.log('Mounted!');
 })

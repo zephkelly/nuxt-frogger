@@ -1,4 +1,5 @@
 import type { IFroggerReporter } from "./_reporters/types";
+import type { FroggerOptions } from "../shared/types/options";
 
 
 
@@ -111,13 +112,15 @@ export interface IFroggerLogger {
      */
     clearReporters(): void;
 
+    //global context
+    addContext(context: Object): void;
+
 
     //child
-
     /**
      * Create a child logger with additional context
      * @param reactive Whether the child logger should be reactive to changes in the parent's global context
      * @returns A new logger instance with the specified context
      */
-    child(reactive: boolean): IFroggerLogger;
+    child(options: FroggerOptions, reactive?: boolean): IFroggerLogger;
 }

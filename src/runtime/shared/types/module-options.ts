@@ -8,7 +8,9 @@ import type { ScrubberOptions } from "../../scrubber/options";
 
 export interface ModuleOptions {
     clientModule?: boolean
-    serverModule?: boolean
+    serverModule?: {
+        autoEventCapture?: boolean
+    } | boolean
     
     app: AppInfoOptions,
 

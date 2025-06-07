@@ -37,7 +37,7 @@
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:types": "vue-tsc --noEmit && cd playground && vue-tsc --noEmit",
-    "dev:docs": "vitepress dev docs",
+    "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
   },

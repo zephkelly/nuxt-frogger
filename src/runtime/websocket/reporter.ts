@@ -105,8 +105,6 @@ export class WebSocketLogReporter implements IReporter {
 
     public async destroy(): Promise<void> {
         try {
-            console.log('WebSocketLogReporter: Starting shutdown...');
-            
             if (this.cleanupInterval) {
                 clearInterval(this.cleanupInterval);
                 this.cleanupInterval = null;
@@ -123,8 +121,6 @@ export class WebSocketLogReporter implements IReporter {
             this.channels.clear();
             this.subscriptions.clear();
             this.lastMessageTimes.clear();
-
-            console.log('WebSocketLogReporter: Shutdown complete');
         }
         catch (error) {
             console.error('WebSocketLogReporter: Error during shutdown:', error);
@@ -160,7 +156,6 @@ export class WebSocketLogReporter implements IReporter {
             }
 
             await Promise.allSettled(persistPromises);
-            console.log('WebSocketLogReporter: Current state persisted');
         }
         catch (error) {
             console.error('WebSocketLogReporter: Error persisting current state:', error);
@@ -198,7 +193,10 @@ export class WebSocketLogReporter implements IReporter {
             console.error(`WebSocketLogReporter: Failed to persist channel ${channelId}:`, error);
         }
 
-        console.log(`WebSocketLogReporter: Channel ${channelId} created`);
+        console.log(
+            '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
+            `🐸 Websocket channel '${channelId}' has been created`
+        );  
         return channel;
     }
 
@@ -241,10 +239,9 @@ export class WebSocketLogReporter implements IReporter {
 
             this.subscriptions.set(peer.id, subscription);
 
-            if (filters?.level !== undefined) {
-                const levelDesc = LogLevelFilter.describeLevelFilter(filters.level);
-                console.log(`WebSocketLogReporter: Admin ${peer.id} subscribed with level filter: ${levelDesc}`);
-            }
+            // if (filters?.level !== undefined) {
+            //     const levelDesc = LogLevelFilter.describeLevelFilter(filters.level);
+            // }
 
             try {
                 const persistedSubscription: PersistedSubscription = {
@@ -265,7 +262,6 @@ export class WebSocketLogReporter implements IReporter {
                 console.error(`WebSocketLogReporter: Failed to persist subscription for ${peer.id}:`, error);
             }
 
-            console.log(`WebSocketLogReporter: Admin ${peer.id} subscribed to channel ${channelId}`);
             return true;
         }
         catch (error) {
@@ -315,7 +311,6 @@ export class WebSocketLogReporter implements IReporter {
                 console.error(`WebSocketLogReporter: Failed to update activities for reconnected admin ${peer.id}:`, error);
             }
 
-            console.log(`WebSocketLogReporter: Admin ${peer.id} reconnected to ${subscription.channels.length} channels`);
             return true;
         }
         catch (error) {
@@ -362,7 +357,6 @@ export class WebSocketLogReporter implements IReporter {
                 console.error(`WebSocketLogReporter: Failed to delete subscription from storage:`, error);
             }
 
-            console.log(`WebSocketLogReporter: Admin ${peerId} unsubscribed`);
             return true;
         }
         catch (error) {
@@ -625,7 +619,10 @@ export class WebSocketLogReporter implements IReporter {
                 }
             }
 
-            console.log(`WebSocketLogReporter: Channel ${channelId} cleaned up`);
+            console.log(
+                '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
+                `🐸 Websocket channel '${channelId}' has been cleaned up`
+            ); 
         }
         catch (error) {
             console.error(`WebSocketLogReporter: Error cleaning up channel ${channelId}:`, error);

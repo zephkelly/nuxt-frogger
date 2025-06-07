@@ -57,6 +57,10 @@ export const useWebsocket = (
     socket_options: WebSocketOptions = {},
     channel?: string
 ) => {
+    if (import.meta.server) {
+        return
+    }
+
     const options = {
         ...DEFAULT_OPTIONS,
         ...socket_options,

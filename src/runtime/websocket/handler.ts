@@ -20,7 +20,6 @@ class WebSocketLogHandler {
     }
 
     async handleOpen(peer: Peer) {
-        console.log(`[Frogger] Peer ${peer.id} connected with request:`);
         try {
             const params = this.extractParams(peer);
             
@@ -42,8 +41,6 @@ class WebSocketLogHandler {
                     filter_description: this.reporter.getFilterDescription(params.filters)
                 }
             });
-            
-            console.log(`[Frogger] Peer ${peer.id} connected to channel ${params.channel}`);
         }
         catch (error: any) {
             console.error('[Frogger] Connection error:', error);
@@ -84,7 +81,6 @@ class WebSocketLogHandler {
     async handleClose(peer: Peer) {
         try {
             await this.reporter.removeSubscription(peer.id);
-            console.log(`[Frogger] Peer ${peer.id} disconnected`);
         }
         catch (error) {
             console.error('[Frogger] Close error:', error);
@@ -267,11 +263,13 @@ export function defineFroggerWebSocketHandler(options: FroggerWebSocketOptions =
             if (options.upgrade) {
                 return options.upgrade(request);
             }
-            
-            console.log(
-                '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
-                '🐸 Logging websocket unprotected'
-            );
+
+            if (!import.meta.dev) {
+                console.log(
+                    '%cFROGGER WARNING', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
+                    '🐸 Logging websocket unprotected! Please provide your own upgrade handler to verify authentication.'
+                );
+            }
             return true;
         },
 

@@ -22,7 +22,7 @@ $ bunx nuxi@latest module add nuxt-frogger
 ```
 :::
 
-And that's it! A default configuration of Frogger is now installed in your Nuxt project. Take a look at the [Getting Started](./getting-started.md) guide to learn how to make your first log.
+And that's it! A default configuration of Frogger is now installed in your Nuxt project. Take a look at the getting started guide to learn how to make your first log.
 
 Want to make some changes to Frogger's configuration? Check out the [Configuration](./configuration.md) guide.
 

@@ -1,4 +1,5 @@
 import type { IFroggerReporter } from "./_reporters/types";
+import type { FroggerOptions } from "../shared/types/options";
 
 
 
@@ -110,4 +111,23 @@ export interface IFroggerLogger {
      * Clear all custom reporters
      */
     clearReporters(): void;
+
+    /**
+     * Add additional context to all requests made by the logger
+     * @param context Additional context to add to the logger
+     */
+    addContext(context: Object): void;
+
+
+    /**
+     * Create a non-reactive child logger instance
+     * @param options Options for creating a child logger instance
+     */
+    child(options: FroggerOptions): IFroggerLogger;
+
+    /**
+     * Create a reactive child logger instance
+     * @param options Options for creating a reactive child logger instance
+     */
+    reactiveChild(options: FroggerOptions): IFroggerLogger;
 }

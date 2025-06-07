@@ -7,11 +7,11 @@ import { LogQueueService } from '../../app/services/log-queue';
 import type { IFroggerLogger } from '../types';
 import type { ClientLoggerOptions, SSRTraceState } from './types';
 import type { LogObject } from 'consola/browser';
-import type { LoggerObject } from '../../shared/types/log';
+import type { LoggerObject, LogContext } from '../../shared/types/log';
 import type { LoggerObjectBatch } from '../../shared/types/batch';
 import { parseAppInfoConfig } from '../../app-info/parse';
 
-
+import { defu } from 'defu';
 
 /**
  * Client-side implementation of Frogger
@@ -112,6 +112,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             lvl: logObj.level,
             msg: logObj.args?.[0],
             ctx: {
+                ...this.mergedGlobalContext,
                 ...this.globalContext.value,
                 ...logObj.args?.slice(1)[0],
             },
@@ -153,5 +154,36 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         }
         
         await this.sendLogImmediate(loggerObject);
+    }
+
+
+    public createChild(options: ClientLoggerOptions, reactive: boolean): ClientFrogger {
+        const { traceId, parentSpanId } = this.createChildTraceContext();
+        const childContext = this.createChildContext(reactive);
+
+        const childOptions: ClientLoggerOptions = {
+            ...defu(this.options, options),
+            context: reactive 
+                ? options.context
+                : (defu(childContext, options.context) as LogContext),
+        };
+
+        const child = new ClientFrogger(this.hasMounted, childOptions);
+        
+        child.setTraceContext(traceId, parentSpanId);
+
+        if (reactive) {
+            child.parentGlobalContext = this.mergedGlobalContext;
+        }
+
+        return child;
+    }
+
+    public child(options: ClientLoggerOptions): ClientFrogger {
+        return this.createChild(options, false);
+    }
+
+    public reactiveChild(options: ClientLoggerOptions): ClientFrogger {
+        return this.createChild(options, true);
     }
 }

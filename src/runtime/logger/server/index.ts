@@ -1,15 +1,14 @@
 import type { LogObject, LogType } from 'consola/basic';
 
 
-
 import { BaseFroggerLogger } from '../base-frogger';
 import type { ServerLoggerOptions } from '../../server/types/logger';
-import type { LoggerObject } from '../../shared/types/log';
+import type { LoggerObject, LogContext } from '../../shared/types/log';
 import { ServerLogQueueService } from '../../server/services/server-log-queue';
 
 import type { TraceContext } from '../../shared/types/trace-headers';
 
-
+import { defu } from 'defu';
 
 export class ServerFroggerLogger extends BaseFroggerLogger {
     private options: ServerLoggerOptions;
@@ -46,6 +45,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             lvl: logObj.level,
             msg: logObj.args?.[0],
             ctx: {
+                ...this.mergedGlobalContext.value,
                 ...this.globalContext.value,
                 ...logObj.args?.slice(1)[0],
             },
@@ -67,5 +67,44 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
     
     async flush(): Promise<void> {
         await this.logQueue.flush();
+    }
+
+
+    private createChild(options: ServerLoggerOptions, reactive: boolean): ServerFroggerLogger {
+        const { traceId, parentSpanId } = this.createChildTraceContext();
+        const childContext = this.createChildContext(reactive);
+
+        const childOptions: ServerLoggerOptions = {
+            ...defu(this.options, options),
+            context: reactive 
+                ? options.context
+                : (defu(childContext, options.context) as LogContext),
+        };
+
+        const childTraceContext: TraceContext = {
+            traceId: traceId,
+            parentId: parentSpanId || undefined,
+            spanId: parentSpanId  as string
+        };
+
+        const child = new ServerFroggerLogger(childOptions, childTraceContext);
+
+        if (reactive) {
+            child.parentGlobalContext = this.globalContext;
+        }
+
+        return child;
+    }
+
+    /**
+     * Create a child logger that shares the same trace ID
+     * @param options - Logger options for the child logger
+     */
+    public child(options: ServerLoggerOptions): ServerFroggerLogger {
+        return this.createChild(options, false);
+    }
+
+    public reactiveChild(options: ServerLoggerOptions): ServerFroggerLogger {
+        return this.createChild(options, true);
     }
 }

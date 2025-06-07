@@ -1,4 +1,4 @@
-import { type Ref, ref } from "vue";
+import { watch, type Ref, ref, computed } from "vue";
 import { type ConsolaInstance, createConsola } from "consola/core";
 import { generateTraceId, generateSpanId, generateW3CTraceHeaders } from "../shared/utils/trace-headers";
 
@@ -13,11 +13,19 @@ import { ConsoleReporter } from "./_reporters/console-reporter";
 import type { IFroggerReporter } from "./_reporters/types";
 import { LogScrubber } from "../scrubber";
 
+import { defu } from 'defu';
+
 
 
 export abstract class BaseFroggerLogger implements IFroggerLogger {
     protected consola: ConsolaInstance;
     protected globalContext: Ref<LogContext> = ref({});
+    protected parentGlobalContext: Ref<LogContext> | null = null;
+
+    protected readonly mergedGlobalContext: Ref<LogContext> = computed(() => {
+        return defu(this.globalContext.value, this.parentGlobalContext?.value || {});
+    });
+
     protected traceId: string;
     protected lastSpanId: string | null = null;
     protected level: number;
@@ -64,6 +72,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         if (options.context) {
             this.globalContext.value = { ...options.context };
         }
+
     }
 
     public addReporter(reporter: IFroggerReporter): void {
@@ -83,6 +92,11 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
 
     public getReporters(): readonly IFroggerReporter[] {
         return [...this.customReporters];
+    }
+
+    // Global context
+    public addContext(context: LogContext): void {
+        this.globalContext.value = defu(this.globalContext.value, context);
     }
     
     private async handleLog(logObj: LogObject): Promise<void> {
@@ -119,6 +133,28 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
     protected abstract processLoggerObject(loggerObject: LoggerObject): void | Promise<void>;
 
 
+    // Child loggers
+    public abstract child(options: FroggerOptions): IFroggerLogger;
+
+    public abstract reactiveChild(options: FroggerOptions): IFroggerLogger;
+
+    protected createChildTraceContext(): { traceId: string; parentSpanId: string | null } {
+        return {
+            traceId: this.traceId,
+            parentSpanId: this.lastSpanId
+        };
+    }
+
+    protected createChildContext(reactive: boolean = false): Ref<LogContext> | LogContext {
+        if (reactive) {
+            return this.mergedGlobalContext;
+        }
+        else {
+            return { ...this.mergedGlobalContext.value };
+        }
+    }
+
+    // Trace context
     protected generateTraceContext(suppliedTraceContext?: TraceContext): TraceContext {
         if (suppliedTraceContext) {
             if (suppliedTraceContext.traceId) {

@@ -13,12 +13,12 @@ import type { ServerLoggerOptions } from "../types/logger";
 
 /**
  * Get a Frogger logger instance
+ * @param options Optional logger options to override runtime config
  * @param event Event context is captured automatically via 'useEvent()', pass it in manually
  * if you want to override this, or set 'frogger.serverModule.autoCaptureContext' to false in
  * your module options / runtime config.
- * @param options Optional logger options to override runtime config
  */
-export function getFrogger(event?: H3Event, options?: ServerLoggerOptions): IFroggerLogger;
+export function getFrogger(options?: ServerLoggerOptions, event?: H3Event): IFroggerLogger;
 
 export function getFrogger(
     eventOrOptions?: H3Event | ServerLoggerOptions,

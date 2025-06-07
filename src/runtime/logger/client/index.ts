@@ -104,8 +104,6 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             };
         }
 
-        console.log(import.meta.client, this.hasMounted.value);
-
         const env = (import.meta.server) ? 'ssr' :
             (import.meta.client && this.hasMounted.value) ? 'client' : 'csr';
 
@@ -114,11 +112,11 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             lvl: logObj.level,
             msg: logObj.args?.[0],
             ctx: {
-                env: env,
-                type: logObj.type,
                 ...this.globalContext.value,
                 ...logObj.args?.slice(1)[0],
             },
+            env: env,
+            type: logObj.type,
             trace: traceContext,
         };
     }

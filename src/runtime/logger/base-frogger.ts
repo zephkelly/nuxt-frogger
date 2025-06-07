@@ -56,17 +56,8 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             }
         });
 
-        if (this.consoleReporter !== undefined) {
-            this.consola.addReporter({
-                log: (logObj: LogObject) => {
-                    try {
-                        this.consoleReporter?.log(logObj);
-                    }
-                    catch (err) {
-                        console.log(`[${logObj.type.toUpperCase()}]`, logObj.args?.[0] || '', ...logObj.args?.slice(1) || []);
-                    }
-                }
-            });
+        if (this.consoleReporter !== null) {
+            this.addReporter(this.consoleReporter);
         }
 
         

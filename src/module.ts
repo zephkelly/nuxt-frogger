@@ -22,7 +22,9 @@ export default defineNuxtModule<ModuleOptions>({
     },
     defaults: {
         clientModule: true,
-        serverModule: true,
+        serverModule: {
+            autoEventCapture: true
+        },
 
         app: 'nuxt-frogger',
         
@@ -159,6 +161,25 @@ export default defineNuxtModule<ModuleOptions>({
 
         updateRuntimeConfig(moduleRuntimeConfig)
 
+        _nuxt.hook('nitro:config', async (nitroConfig: any) => {
+            nitroConfig.experimental = nitroConfig.experimental || {}
+
+            nitroConfig.experimental.tasks = true
+            nitroConfig.experimental.asyncContext = true
+
+            if (_options.serverModule) {
+                if (_options.websocket) {
+                    nitroConfig.experimental.websocket = true;
+                }
+
+                if (typeof _options.serverModule === 'object') {
+                    nitroConfig.experimental.asyncContext = _options.serverModule.autoEventCapture !== false;
+                }
+                else {
+                    nitroConfig.experimental.asyncContext = true;
+                }
+            }
+        })
         
         _nuxt.hook('nitro:build:before', () => {
             if (_nuxt.options.dev && ( _options.serverModule || _options.clientModule )) {

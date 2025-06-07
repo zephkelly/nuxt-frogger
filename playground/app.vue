@@ -75,7 +75,7 @@ const socket = useWebsocket('/api/_frogger/dev-ws', {
     },
     queryParams: {
         channel: 'main',
-        level: 'error'
+        level: 0,
     },
     onMessage: async (event, message) => {
         console.log('WebSocket message received:', message);

@@ -9,7 +9,7 @@ export default defineNuxtConfig({
             version: '1.0.0',
         },
 
-        rateLimiter: {
+        rateLimit: {
             limits: {
                 perIp: 10,
             }
@@ -20,12 +20,6 @@ export default defineNuxtConfig({
                 includeComponentOuterHTML: false,
                 includeComponentProps: false,
             }
-        }
-    },
-
-    nitro: {
-        experimental: {
-            websocket: true
         }
     }
 })

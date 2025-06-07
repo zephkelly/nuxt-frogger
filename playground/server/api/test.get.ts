@@ -17,7 +17,7 @@ export default defineEventHandler((event) => {
 
     logger.info('This is another log message with additional context');
 
-    const childLogger = logger.child({
+    const childLogger = logger.reactiveChild({
         context: {
             childField: 'childValue',
         }   
@@ -31,12 +31,6 @@ export default defineEventHandler((event) => {
 
     childLogger.info('This is a log message from the child logger with additional context from parent');
 
-    // // logger.addContext({
-    // //     additionalField: 'additionalValue',
-    // // })
-    // logger.info('This is a log message with additional context');
-
-    // childLogger.log('This is a log message from the child logger with additional context from parent');
 
     return 'request received and logged successfully';
 });

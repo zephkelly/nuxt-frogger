@@ -157,11 +157,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
     }
 
 
-    /**
-     * Create a child logger that shares the same trace ID
-     * @param reactive - If true, child will reactively reference parent's context. If false, child gets a copy of current context.
-     */
-    public child(options: ClientLoggerOptions, reactive: boolean = false): ClientFrogger {
+    public createChild(options: ClientLoggerOptions, reactive: boolean): ClientFrogger {
         const { traceId, parentSpanId } = this.createChildTraceContext();
         const childContext = this.createChildContext(reactive);
 
@@ -181,5 +177,13 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         }
 
         return child;
+    }
+
+    public child(options: ClientLoggerOptions): ClientFrogger {
+        return this.createChild(options, false);
+    }
+
+    public reactiveChild(options: ClientLoggerOptions): ClientFrogger {
+        return this.createChild(options, true);
     }
 }

@@ -134,7 +134,9 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
 
 
     // Child loggers
-    public abstract child(options: FroggerOptions, reactive?: boolean): IFroggerLogger;
+    public abstract child(options: FroggerOptions): IFroggerLogger;
+
+    public abstract reactiveChild(options: FroggerOptions): IFroggerLogger;
 
     protected createChildTraceContext(): { traceId: string; parentSpanId: string | null } {
         return {

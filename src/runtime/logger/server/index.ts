@@ -70,11 +70,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
     }
 
 
-    /**
-     * Create a child logger that shares the same trace ID
-     * @param reactive - If true, child will reactively reference parent's context. If false, child gets a copy of current context.
-     */
-    public child(options: ServerLoggerOptions, reactive: boolean = false): ServerFroggerLogger {
+    private createChild(options: ServerLoggerOptions, reactive: boolean): ServerFroggerLogger {
         const { traceId, parentSpanId } = this.createChildTraceContext();
         const childContext = this.createChildContext(reactive);
 
@@ -98,5 +94,17 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         }
 
         return child;
-    }   
+    }
+
+    /**
+     * Create a child logger that shares the same trace ID
+     * @param options - Logger options for the child logger
+     */
+    public child(options: ServerLoggerOptions): ServerFroggerLogger {
+        return this.createChild(options, false);
+    }
+
+    public reactiveChild(options: ServerLoggerOptions): ServerFroggerLogger {
+        return this.createChild(options, true);
+    }
 }

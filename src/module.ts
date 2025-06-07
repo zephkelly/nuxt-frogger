@@ -5,6 +5,7 @@ import {
     addServerPlugin,
     addImportsDir,
     addServerImportsDir,
+    addServerImports,
     addServerHandler,
     updateRuntimeConfig
 } from '@nuxt/kit'
@@ -123,19 +124,23 @@ export default defineNuxtModule<ModuleOptions>({
         const moduleRuntimeConfig = {
             public: {
                 frogger: {
+                    clientModule: _options.clientModule,
                     app: _options.app,
                     globalErrorCapture: _options.public?.globalErrorCapture,
                     endpoint: _options.public?.endpoint,
                     batch: _options.public?.batch,
                     scrub: _options.scrub,
+
+                    websocket: {
+                        route: typeof _options.websocket === 'object' ? _options.websocket.route : '/api/_frogger/dev-ws',
+                        defaultChannel: typeof _options.websocket === 'object' ? _options.websocket.defaultChannel : 'main'
+                    }
                 },
 
-                websocket: {
-                    route: typeof _options.websocket === 'object' ? _options.websocket.route : '/api/_frogger/dev-ws',
-                    defaultChannel: typeof _options.websocket === 'object' ? _options.websocket.defaultChannel : 'main'
-                }
             },
             frogger: {
+                serverModule: _options.serverModule,
+
                 file: {
                     directory: logDir,
                     fileNameFormat: _options.file?.fileNameFormat,
@@ -232,8 +237,44 @@ export default defineNuxtModule<ModuleOptions>({
 
         if (_options.serverModule) {
             _nuxt.options.alias['#frogger/server'] = resolver.resolve('./runtime/server');
-            addServerImportsDir(resolver.resolve('./runtime/server/utils'))
-            
+            // addServerImportsDir(resolver.resolve('./runtime/server/utils'))
+
+            const autoEventCapture = typeof _options.serverModule === 'object' 
+                ? _options.serverModule.autoEventCapture !== false 
+                : _options.serverModule;
+
+            if (autoEventCapture) {
+                console.log(
+                    '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
+                    `🐸 Auto event capture enabled`
+                );
+                addServerImports([
+                    {
+                        name: 'getFrogger',
+                        from: resolver.resolve('./runtime/server/utils/auto')
+                    }
+                ])
+            }
+            else {
+                console.log(
+                    '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
+                    `🐸 Auto event capture disabled`
+                );
+                addServerImports([
+                    {
+                        name: 'getFrogger',
+                        from: resolver.resolve('./runtime/server/utils/manual')
+                    }
+                ])
+            }
+
+            addServerImports([
+                {
+                    name: 'HttpReporter',
+                    from: resolver.resolve('./runtime/server/utils/reporters/http-reporter')
+                }
+            ])
+                
             addServerPlugin(resolver.resolve('./runtime/server/plugins/log-queue.server'))
             addServerPlugin(resolver.resolve('./runtime/server/plugins/trace-headers.server'))
             
@@ -243,7 +284,7 @@ export default defineNuxtModule<ModuleOptions>({
             })
 
             if (_options.websocket) {
-                addServerImportsDir(resolver.resolve('./runtime/server/websocket'))
+                // addServerImportsDir(resolver.resolve('./runtime/server/websocket'))
                 
                 // Auto-register WebSocket handler in development mode
                 if (_nuxt.options.dev) {

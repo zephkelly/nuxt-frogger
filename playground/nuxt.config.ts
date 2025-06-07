@@ -20,6 +20,10 @@ export default defineNuxtConfig({
                 includeComponentOuterHTML: false,
                 includeComponentProps: false,
             }
+        },
+
+        serverModule: {
+            autoEventCapture: false,
         }
     }
 })

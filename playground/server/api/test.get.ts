@@ -1,4 +1,8 @@
 export default defineEventHandler((event) => {
+    const logger = getFrogger(event);
+
+    logger.error('This endpoint does not exist', { event });
+
     return createError({
         statusCode: 404,
         statusMessage: 'Not Found',

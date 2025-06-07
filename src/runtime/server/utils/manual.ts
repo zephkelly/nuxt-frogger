@@ -37,9 +37,11 @@ export function getFrogger(
     const event = isEvent ? eventOrOptions as H3Event : undefined;
     const options = isEvent ? maybeOptions : eventOrOptions as ServerLoggerOptions;
 
-    const runtimeFileOptions = useRuntimeConfig().frogger.file;
-    const runtimeBatchOptions = useRuntimeConfig().public.frogger.batch;
-    const runtimeEndpoint = useRuntimeConfig().public.frogger.endpoint;
+    const config = useRuntimeConfig();
+
+    const runtimeFileOptions = config.frogger.file;
+    const runtimeBatchOptions = config.public.frogger.batch;
+    const runtimeEndpoint = config.public.frogger.endpoint;
 
     const froggerOptions = {
         file: runtimeFileOptions,

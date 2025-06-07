@@ -621,7 +621,7 @@ export class WebSocketTransport implements IFroggerTransport {
 
             console.log(
                 '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
-                `🐸 Websocket channel '${channelId}' has been cleaned up`
+                `🐸 Websocket channel '${channelId}' has been destroyed`
             ); 
         }
         catch (error) {

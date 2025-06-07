@@ -46,11 +46,11 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             lvl: logObj.level,
             msg: logObj.args?.[0],
             ctx: {
-                env: 'server',
-                type: logObj.type,
                 ...this.globalContext.value,
                 ...logObj.args?.slice(1)[0],
             },
+            env: 'server',
+            type: logObj.type,
             trace: currentTraceContext,
         };
 

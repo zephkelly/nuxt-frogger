@@ -23,7 +23,7 @@ export default defineNuxtConfig({
         },
 
         serverModule: {
-            autoEventCapture: false,
+            autoEventCapture: true,
         }
     }
 })

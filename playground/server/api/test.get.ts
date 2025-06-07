@@ -1,5 +1,5 @@
 export default defineEventHandler((event) => {
-    const logger = getFrogger(event);
+    const logger = getFrogger();
 
     logger.error('This endpoint does not exist', { event });
 

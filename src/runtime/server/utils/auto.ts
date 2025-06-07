@@ -1,6 +1,7 @@
 import { defu } from 'defu';
 import type { H3Event } from "h3";
-import { useRuntimeConfig } from '#imports';
+//@ts-ignore
+import { useRuntimeConfig, useEvent } from '#imports';
 
 import { ServerFroggerLogger } from "./server-logger";
 import { ServerLogQueueService } from '../services/server-log-queue';
@@ -29,7 +30,13 @@ export function getFrogger(
 ): IFroggerLogger {
     const isEvent = eventOrOptions && 'context' in eventOrOptions;
     
-    const event = isEvent ? eventOrOptions as H3Event : undefined;
+    let event = isEvent ? eventOrOptions as H3Event : undefined;
+
+    if (!event) {
+        event = useEvent();
+    }
+
+
     const options = isEvent ? maybeOptions : eventOrOptions as ServerLoggerOptions;
 
     const config = useRuntimeConfig();

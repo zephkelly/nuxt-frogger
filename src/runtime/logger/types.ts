@@ -29,8 +29,9 @@ export interface IFroggerLogger {
 
     // Reporter Management ------------------------------------------
     /**
-     * 
-
+     * Add a custom reporter to the logger
+     * @param reporter The reporter object to add
+     * This reporter will be used to handle log messages and can be any object that implements the IFroggerReporter interface
      */
     addReporter(reporter: IFroggerReporter): void;
 

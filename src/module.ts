@@ -11,17 +11,17 @@ import {
 } from '@nuxt/kit'
 
 import { join, isAbsolute } from 'node:path'
-
-import type { ModuleOptions } from './runtime/shared/types/module-options'
-import { loadFroggerConfig } from './runtime/shared/utils/frogger-config'
-
 import { defu } from 'defu'
 
 import {
     DEFAULT_LOGGING_ENDPOINT,
     DEFAULT_WEBSOCKET_ENDPOINT
 } from './runtime/shared/types/module-options'
-import { server } from 'typescript'
+
+import type { ModuleOptions } from './runtime/shared/types/module-options'
+import { loadFroggerConfig } from './runtime/shared/utils/frogger-config'
+
+
 
 export default defineNuxtModule<ModuleOptions>({
     meta: {
@@ -142,10 +142,9 @@ export default defineNuxtModule<ModuleOptions>({
         }
 
         if (finalOptions.serverModule === false && finalOptions.clientModule === false) {
-            throw new Error('FROGGER 🐸: `serverModule` and `clientModule` are both set to `false`. At least one is required to use Frogger.');
+            throw new Error('🐸FROGGER: `serverModule` and `clientModule` are both set to `false`. At least one is required to use Frogger.');
         }
         
-
 
         // Setup log directory
         const configuredDirectory = finalOptions.file?.directory || 'logs';
@@ -224,25 +223,22 @@ export default defineNuxtModule<ModuleOptions>({
             }
         })
         
-
         _nuxt.hook('nitro:build:before', () => {
-
             // Warnings
             if (finalOptions.serverModule === false && finalOptions.public?.endpoint === DEFAULT_LOGGING_ENDPOINT) {
                 console.log(
-                '\x1b[33mFROGGER WARN\x1b[0m',
-                `🐸 You are using Frogger with \x1b[36mserverModule\x1b[0m set to \x1b[36mfalse\x1b[0m and no \x1b[36mpublic.endpoint\x1b[0m
+                '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
+                `You are using Frogger with \x1b[36mserverModule\x1b[0m set to \x1b[36mfalse\x1b[0m and no \x1b[36mpublic.endpoint\x1b[0m
                 set in your \x1b[36mfrogger.config.ts\x1b[0m. Your logs will never leave the client!`
                 );
             }
 
             if (_nuxt.options.dev && ( finalOptions.serverModule || finalOptions.clientModule )) {
                 console.log(
-                    '%cFROGGER', 'color: black; background-color: rgb(9, 195, 81) font-weight: bold; font-size: 1.15rem;',
-                    `🐸 Ready to log`
+                    '🐸 \x1b[32mFROGGER\x1b[0m',
+                    `Ready to log`
                 );
             }
-
         })
 
         if (_nuxt.options.dev) {
@@ -256,7 +252,8 @@ export default defineNuxtModule<ModuleOptions>({
                     console.log(
                         '\x1b[36mℹ\x1b[0m frogger.config.ts updated. Restarting Nuxt...'
                     );
-                    _nuxt.callHook('restart');
+                    
+                    _nuxt.callHook('restart', { hard: true });
                 }
             });
         }

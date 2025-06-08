@@ -43,17 +43,17 @@ onMounted(() => {
 })
 
 
-const socket = useWebsocket('/api/_frogger/dev-ws', {
-    auto_connect: true,
-    heartbeat: {
-        auto_heartbeat: true,
-    },
-    queryParams: {
-        channel: 'main',
-        level: 0,
-    },
-    onMessage: async (event, message) => {
-        console.log('WebSocket message received:', message);
-    }
-});
+// const socket = useWebsocket('/api/_frogger/dev-ws', {
+//     auto_connect: true,
+//     heartbeat: {
+//         auto_heartbeat: true,
+//     },
+//     queryParams: {
+//         channel: 'main',
+//         level: 0,
+//     },
+//     onMessage: async (event, message) => {
+//         console.log('WebSocket message received:', message);
+//     }
+// });
 </script>

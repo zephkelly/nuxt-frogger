@@ -25,7 +25,9 @@ export const LOG_LEVELS = {
     2: ['log'],
     3: ['info', 'success', 'fail', 'ready', 'start'],
     4: ['debug'],
-    5: ['trace']
+    5: ['trace'],
+    999: ['verbose'],
+    '-999': ['silent']
 } as const;
 
 export const LEVEL_TO_NUMBER: Record<string, number> = {
@@ -39,5 +41,7 @@ export const LEVEL_TO_NUMBER: Record<string, number> = {
     'ready': 3,
     'start': 3,
     'debug': 4,
-    'trace': 5
+    'trace': 5,
+    'verbose': 999,
+    'silent': -999
 };

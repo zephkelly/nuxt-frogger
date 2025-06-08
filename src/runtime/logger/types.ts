@@ -1,5 +1,6 @@
 import type { IFroggerReporter } from "./_reporters/types";
 import type { FroggerOptions } from "../shared/types/options";
+import type { LogType } from "consola";
 
 
 
@@ -90,6 +91,29 @@ export interface IFroggerLogger {
     trace(message: string, context?: Object): void;
 
     /**
+     * Log a silent-level message
+     * @param message The primary message to log
+     * @param context Additional context to include
+     */
+    silent(message: string, context?: Object): void;
+
+    /**
+     * Log a verbose-level message
+     * @param message The primary message to log
+     * @param context Additional context to include
+     */
+    verbose(message: string, context?: Object): void;
+
+    /**
+     * Log a message with a specific log level
+     * @param level The log level (e.g., 'error', 'warn', 'info', etc.)
+     * @param message The primary message to log
+     * @param context Additional context to include
+     */
+    logLevel(level: LogType, message: string, context?: Object): void;
+
+
+    /**
      * Add a custom reporter to handle log messages
      * @param reporter The reporter object with a log method
      */
@@ -111,6 +135,8 @@ export interface IFroggerLogger {
      * Clear all custom reporters
      */
     clearReporters(): void;
+
+
 
     /**
      * Add additional context to all requests made by the logger

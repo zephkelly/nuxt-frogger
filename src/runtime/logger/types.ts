@@ -8,43 +8,29 @@ export interface IFroggerLogger {
     /**
      * Get W3C Trace Context headers for the current logger instance
      * For use with HTTP requests. add to the request headers of $fetch or useFetch:
+     * @param customVendor Optional vendor string to use in the headers
+     * This will forward the traceID, last spanID, and vendor name of the logger 
+     * in the request headers
      *  
+     * @example
      * ```ts
      * const logger = useFrogger();
-     * ```
+     * logger.info('Making request to API!');
      * 
-     * With $fetch...
-     * ```ts
      * const respose = await $fetch('/api/endpoint', {
      *   method: 'POST',
      *   headers: logger.getHeaders()
      * });
-     * ```
-     * With useFetch...
-     * ```ts
-     * const { data, error } = await useFetch('/api/endpoint', {
-     *   method: 'POST',
-     *   headers: logger.getHeaders()
-     * });
-     * ```
      * 
-     * Or, use the spread operator to add additional
-     * ```ts
-     * const { data, error } = await useFetch('/api/endpoint', {
-     *  method: 'POST',
-     *  headers: {
-     *    ...logger.getHeaders(),
-     *   'X-My-Custom-Header': 'value'
-     *   }
-     * });
+     * // Then, getFrogger() will automatically parse the headers from the event in your server routes
      * ```
      */
     getHeaders(customVendor?: string): Record<string, string>;
 
     // Reporter Management ------------------------------------------
     /**
-     * Add a custom reporter to handle log messages
-     * @param reporter The reporter object with a log method
+     * 
+
      */
     addReporter(reporter: IFroggerReporter): void;
 

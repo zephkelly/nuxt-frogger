@@ -337,4 +337,14 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             context,
         )
     }
+
+
+    public reset(): void {
+        this.customReporters = [];
+        this.consoleReporter = null;
+        this.scrubber = null;
+        this.globalContext.value = {};
+        this.traceId = generateTraceId();
+        this.lastSpanId = null;
+    }
 }

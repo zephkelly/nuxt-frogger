@@ -156,4 +156,11 @@ export interface IFroggerLogger {
      * @param options Options for creating a reactive child logger instance
      */
     reactiveChild(options: FroggerOptions): IFroggerLogger;
+
+
+    /**
+     * Reset the logger to its initial state
+     * This will clear all reporters and context
+     */
+    reset(): void;
 }

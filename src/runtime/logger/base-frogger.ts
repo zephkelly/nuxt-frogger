@@ -265,15 +265,13 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
 
 
     public reset(): void {
-        this.customReporters = [];
-        this.consoleReporter = null;
-        this.scrubber = null;
         this.globalContext.value = {};
+        
         this.traceId = generateTraceId();
         this.lastSpanId = null;
     }
 
-    
+
     // Server and client logger implement these different
     protected abstract createLoggerObject(logObj: LogObject): LoggerObject | Promise<LoggerObject>;
 

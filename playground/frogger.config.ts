@@ -8,6 +8,6 @@ export default defineFroggerOptions({
         version: '1.0.0'
     },
 
-    serverModule: true
+    serverModule: false
 
 });

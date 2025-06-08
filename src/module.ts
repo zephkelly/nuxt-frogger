@@ -249,6 +249,22 @@ export default defineNuxtModule<ModuleOptions>({
 
         })
 
+        if (_nuxt.options.dev) {
+            const possibleConfigPaths = [
+                'frogger.config.ts',
+                'frogger.config.js',
+            ];
+
+            _nuxt.hook('builder:watch', (event, path) => {
+                if (event === 'change' && possibleConfigPaths.includes(path)) {
+                    console.log(
+                        '\x1b[36mℹ\x1b[0m frogger.config.ts updated. Restarting Nuxt...'
+                    );
+                    _nuxt.callHook('restart');
+                }
+            });
+        }
+
 
         if (finalOptions.clientModule) {
             _nuxt.options.alias['#frogger/client'] = resolver.resolve('./runtime/app');

@@ -42,7 +42,7 @@ export class ConsoleReporter implements IFroggerReporter {
         const typeColors = {
             error: colors.red,
             warn: colors.yellow,
-            info: colors.blue,
+            info: colors.cyan,
             debug: colors.gray,
             trace: colors.magenta,
             success: colors.green,

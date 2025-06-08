@@ -10,8 +10,11 @@
 
 <script setup>
 const test = async () => {
+    const logger = useFrogger();
+    
     try {
         const response = await $fetch('/api/test', {
+            headers: logger.getHeaders()
         });
     }
     catch (error) {

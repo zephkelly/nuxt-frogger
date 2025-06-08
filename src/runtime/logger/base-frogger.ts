@@ -75,86 +75,27 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
 
     }
 
-    public addReporter(reporter: IFroggerReporter): void {
-        this.customReporters.push(reporter);
-    }
-
-    public removeReporter(reporter: IFroggerReporter): void {
-        const index = this.customReporters.indexOf(reporter);
-        if (index > -1) {
-            this.customReporters.splice(index, 1);
-        }
-    }
-
-    public clearReporters(): void {
-        this.customReporters = [];
-    }
-
-    public getReporters(): readonly IFroggerReporter[] {
-        return [...this.customReporters];
-    }
-
-    // Global context
-    public addContext(context: LogContext): void {
-        this.globalContext.value = defu(this.globalContext.value, context);
-    }
     
-    private async handleLog(logObj: LogObject): Promise<void> {
-        try {
-            const loggerObject = await this.createLoggerObject(logObj);
-
-            if (this.scrubber) {
-                await this.scrubber?.scrubLoggerObject(loggerObject);
-            }
-            
-            await this.emitToReporters(loggerObject);
-            
-            await this.processLoggerObject(loggerObject);
-        }
-        catch (error) {
-            console.error('Error in log handling pipeline:', error);
-        }
-    }
-    private async emitToReporters(loggerObject: LoggerObject): Promise<void> {
-        const reporterPromises = this.customReporters.map(async (reporter) => {
-            try {
-                await reporter.log(loggerObject);
-            }
-            catch (error) {
-                console.error('Error in custom reporter:', error);
-            }
-        });
+    // Trace Context Management ------------------------------------------
+    public getHeaders(
+        customVendor?: string
+    ): Record<string, string> {
+        const vendorData = customVendor 
+            ? { frogger: customVendor }
+            : { frogger: generateSpanId() };
         
-        await Promise.all(reporterPromises);
-    }
-
-    protected abstract createLoggerObject(logObj: LogObject): LoggerObject | Promise<LoggerObject>;
-
-    protected abstract processLoggerObject(loggerObject: LoggerObject): void | Promise<void>;
-
-
-    // Child loggers
-    public abstract child(options: FroggerOptions): IFroggerLogger;
-
-    public abstract reactiveChild(options: FroggerOptions): IFroggerLogger;
-
-    protected createChildTraceContext(): { traceId: string; parentSpanId: string | null } {
-        return {
+        const headers = generateW3CTraceHeaders({
             traceId: this.traceId,
-            parentSpanId: this.lastSpanId
+            parentSpanId: this.lastSpanId || undefined,
+            vendorData
+        });
+
+        return {
+            traceparent: headers.traceparent,
+            ...(headers.tracestate && { tracestate: headers.tracestate })
         };
     }
 
-    protected createChildContext(reactive: boolean = false): Ref<LogContext> | LogContext {
-        if (reactive) {
-            return this.mergedGlobalContext;
-        }
-        else {
-            return { ...this.mergedGlobalContext.value };
-        }
-    }
-
-    // Trace context
     protected generateTraceContext(suppliedTraceContext?: TraceContext): TraceContext {
         if (suppliedTraceContext) {
             if (suppliedTraceContext.traceId) {
@@ -180,76 +121,60 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         
         return traceContext;
     }
- 
-    /**
-     * Set the trace ID and last span ID for this logger
-     * (Used internally for SSR-CSR continuity)
-     */
+
     protected setTraceContext(traceId: string, parentSpanId: string | null = null): void {
         this.traceId = traceId;
         this.lastSpanId = parentSpanId;
     }
 
-    /**
-     * Get W3C Trace Context headers for the current logger instance
-     * For use with HTTP requests. add to the request headers of $fetch or useFetch:
-     *  
-     * ```ts
-     * const logger = useFrogger();
-     * ```
-     * 
-     * With $fetch...
-     * ```ts
-     * const respose = await $fetch('/api/endpoint', {
-     *   method: 'POST',
-     *   headers: logger.getHeaders()
-     * });
-     * ```
-     * With useFetch...
-     * ```ts
-     * const { data, error } = await useFetch('/api/endpoint', {
-     *   method: 'POST',
-     *   headers: logger.getHeaders()
-     * });
-     * ```
-     * 
-     * Or, use the spread operator to add additional
-     * ```ts
-     * const { data, error } = await useFetch('/api/endpoint', {
-     *  method: 'POST',
-     *  headers: {
-     *    ...logger.getHeaders(),
-     *   'X-My-Custom-Header': 'value'
-     *   }
-     * });
-     * ```
-     */
-    public getHeaders(
-        customVendor?: string
-    ): Record<string, string> {
-        const vendorData = customVendor 
-            ? { frogger: customVendor }
-            : { frogger: generateSpanId() };
-        
-        const headers = generateW3CTraceHeaders({
-            traceId: this.traceId,
-            parentSpanId: this.lastSpanId || undefined,
-            vendorData
-        });
 
-        return {
-            traceparent: headers.traceparent,
-            ...(headers.tracestate && { tracestate: headers.tracestate })
-        };
+    // Reporter Management ------------------------------------------
+    public addReporter(reporter: IFroggerReporter): void {
+        this.customReporters.push(reporter);
+    }
+
+    public removeReporter(reporter: IFroggerReporter): void {
+        const index = this.customReporters.indexOf(reporter);
+        if (index > -1) {
+            this.customReporters.splice(index, 1);
+        }
+    }
+
+    public clearReporters(): void {
+        this.customReporters = [];
+    }
+
+    public getReporters(): readonly IFroggerReporter[] {
+        return [...this.customReporters];
     }
 
 
+    // Context Management -------------------------------------------
+    public addContext(context: LogContext): void {
+        this.globalContext.value = defu(this.globalContext.value, context);
+    }
+
+    public setContext(context: LogContext): void {
+        this.globalContext.value = context;
+    }
+
+    public clearContext(): void {
+        this.globalContext.value = {};
+    }
+        
+    
+    // Child Logger Management --------------------------------------
+    public abstract child(options: FroggerOptions): IFroggerLogger;
+    
+    public abstract reactiveChild(options: FroggerOptions): IFroggerLogger;
+
+
+    // Logging Methods ---------------------------------------------
     public logLevel(level: LogType, message: string, context?: Object): void {
         this.consola[level](message, context);
     }
 
-    
-    // 0 ----------------------------------------------------
+    // 0 -----------------------------------------------------------
     public fatal(message: string, context?: Object): void {
         this.consola.fatal(message,
             context,
@@ -336,5 +261,67 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         this.consola.verbose(message,
             context,
         )
+    }
+
+
+    public reset(): void {
+        this.globalContext.value = {};
+        
+        this.traceId = generateTraceId();
+        this.lastSpanId = null;
+    }
+
+
+    // Server and client logger implement these different
+    protected abstract createLoggerObject(logObj: LogObject): LoggerObject | Promise<LoggerObject>;
+
+    protected abstract processLoggerObject(loggerObject: LoggerObject): void | Promise<void>;
+
+
+
+    private async handleLog(logObj: LogObject): Promise<void> {
+        try {
+            const loggerObject = await this.createLoggerObject(logObj);
+
+            if (this.scrubber) {
+                await this.scrubber?.scrubLoggerObject(loggerObject);
+            }
+            
+            await this.emitToReporters(loggerObject);
+            
+            await this.processLoggerObject(loggerObject);
+        }
+        catch (error) {
+            console.error('Error in log handling pipeline:', error);
+        }
+    }
+
+    private async emitToReporters(loggerObject: LoggerObject): Promise<void> {
+        const reporterPromises = this.customReporters.map(async (reporter) => {
+            try {
+                await reporter.log(loggerObject);
+            }
+            catch (error) {
+                console.error('Error in custom reporter:', error);
+            }
+        });
+        
+        await Promise.all(reporterPromises);
+    }
+
+    protected createChildTraceContext(): { traceId: string; parentSpanId: string | null } {
+        return {
+            traceId: this.traceId,
+            parentSpanId: this.lastSpanId
+        };
+    }
+
+    protected createChildContext(reactive: boolean = false): Ref<LogContext> | LogContext {
+        if (reactive) {
+            return this.mergedGlobalContext;
+        }
+        else {
+            return { ...this.mergedGlobalContext.value };
+        }
     }
 }

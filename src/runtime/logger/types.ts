@@ -5,6 +5,90 @@ import type { LogType } from "consola";
 
 
 export interface IFroggerLogger {
+    /**
+     * Get W3C Trace Context headers for the current logger instance
+     * For use with HTTP requests. add to the request headers of $fetch or useFetch:
+     * @param customVendor Optional vendor string to use in the headers
+     * This will forward the traceID, last spanID, and vendor name of the logger 
+     * in the request headers
+     *  
+     * @example
+     * ```ts
+     * const logger = useFrogger();
+     * logger.info('Making request to API!');
+     * 
+     * const respose = await $fetch('/api/endpoint', {
+     *   method: 'POST',
+     *   headers: logger.getHeaders()
+     * });
+     * 
+     * // Then, getFrogger() will automatically parse the headers from the event in your server routes
+     * ```
+     */
+    getHeaders(customVendor?: string): Record<string, string>;
+
+    // Reporter Management ------------------------------------------
+    /**
+     * 
+
+     */
+    addReporter(reporter: IFroggerReporter): void;
+
+    /**
+     * Remove a custom reporter
+     * @param reporter The reporter object to remove
+     */
+    removeReporter(reporter: IFroggerReporter): void;
+
+    /**
+     * Get the current list of custom reporters
+     * @returns An array of reporter objects
+     */
+    getReporters(): readonly IFroggerReporter[];
+
+    /**
+     * Clear all custom reporters
+     */
+    clearReporters(): void;
+
+
+    // Context Management ------------------------------------------
+    /**
+     * Add additional context to all requests made by the logger
+     * @param context Additional context to add to the logger
+     */
+    addContext(context: Object): void;
+    
+    /**
+     * Set the context for the logger
+     * This will replace any existing context with the new context
+     * @param context The new context to set for the logger
+     */
+    setContext(context: Object): void;
+
+    /**
+     * Clear all additional context from the logger
+     * This will remove all context that has been added to the logger
+     */
+    clearContext(): void;
+
+
+    // Child Logger Management ------------------------------------------
+    /**
+     * Create a non-reactive child logger instance
+     * @param options Options for creating a child logger instance
+     */
+    child(options: FroggerOptions): IFroggerLogger;
+
+    /**
+     * Create a reactive child logger instance
+     * @param options Options for creating a reactive child logger instance
+     */
+    reactiveChild(options: FroggerOptions): IFroggerLogger;
+
+
+        // Log Levels ------------------------------------------
+    
     // 0 ------------------------------------------
     /**
     * Log an error-level message
@@ -113,47 +197,10 @@ export interface IFroggerLogger {
     logLevel(level: LogType, message: string, context?: Object): void;
 
 
-    /**
-     * Add a custom reporter to handle log messages
-     * @param reporter The reporter object with a log method
-     */
-    addReporter(reporter: IFroggerReporter): void;
 
     /**
-     * Remove a custom reporter
-     * @param reporter The reporter object to remove
+     * Reset the logger to its initial state
+     * This will clear all reporters and context
      */
-    removeReporter(reporter: IFroggerReporter): void;
-
-    /**
-     * Get the current list of custom reporters
-     * @returns An array of reporter objects
-     */
-    getReporters(): readonly IFroggerReporter[];
-
-    /**
-     * Clear all custom reporters
-     */
-    clearReporters(): void;
-
-
-
-    /**
-     * Add additional context to all requests made by the logger
-     * @param context Additional context to add to the logger
-     */
-    addContext(context: Object): void;
-
-
-    /**
-     * Create a non-reactive child logger instance
-     * @param options Options for creating a child logger instance
-     */
-    child(options: FroggerOptions): IFroggerLogger;
-
-    /**
-     * Create a reactive child logger instance
-     * @param options Options for creating a reactive child logger instance
-     */
-    reactiveChild(options: FroggerOptions): IFroggerLogger;
+    reset(): void;
 }

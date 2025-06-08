@@ -6,13 +6,14 @@ import type { WebsocketOptions } from "../../websocket/types/options";
 import type { ScrubberOptions } from "../../scrubber/options";
 
 
+
 export interface ModuleOptions {
     clientModule?: boolean
     serverModule?: {
         autoEventCapture?: boolean
     } | boolean
     
-    app: AppInfoOptions,
+    app?: AppInfoOptions,
 
     file?: FileOptions
     

@@ -4,10 +4,9 @@ import {
     createResolver,
     addServerPlugin,
     addImportsDir,
-    addServerImportsDir,
     addServerImports,
     addServerHandler,
-    updateRuntimeConfig
+    updateRuntimeConfig,
 } from '@nuxt/kit'
 
 import { join, isAbsolute } from 'node:path'
@@ -120,14 +119,18 @@ export default defineNuxtModule<ModuleOptions>({
     async setup(_options, _nuxt) {
         const resolver = createResolver(import.meta.url)
         
+        // Provide #frogger import alias
+        _nuxt.options.alias = _nuxt.options.alias || {};
+        _nuxt.options.alias['#frogger/config'] = resolver.resolve('./runtime/options');
 
+
+        // Try to load configuration from frogger.config.ts or frogger.config.js
         const froggerConfig = await loadFroggerConfig(_nuxt.options.rootDir);
 
         let finalOptions: ModuleOptions
-        const hasNuxtConfigOptions = Object.keys(_options).length > 0
         
         if (froggerConfig) {   
-            finalOptions = defu(_options, froggerConfig) as ModuleOptions;
+            finalOptions = defu(froggerConfig, _options) as ModuleOptions;
         }
         else {
             finalOptions = _options
@@ -142,9 +145,6 @@ export default defineNuxtModule<ModuleOptions>({
             : join(_nuxt.options.rootDir, configuredDirectory);
 
 
-        // Provide #frogger import alias
-        _nuxt.options.alias = _nuxt.options.alias || {};
-        _nuxt.options.alias['#frogger'] = resolver.resolve('./runtime/index');
 
 
         // Set runtime config
@@ -216,13 +216,6 @@ export default defineNuxtModule<ModuleOptions>({
         
 
         _nuxt.hook('nitro:build:before', () => {
-
-            if (hasNuxtConfigOptions) {
-                console.log(
-                    '%cFROGGER', 'color: black; background-color: rgb(9, 195, 81); font-weight: bold; font-size: 1.15rem;',
-                    '🐸 frogger.config.ts and module options defined. Preferring frogger.config.ts'
-                )
-            }
             
             if (finalOptions.serverModule) {
                 const serverBatchStatus = finalOptions.batch === false ? '(immediate)' : '(batched)';

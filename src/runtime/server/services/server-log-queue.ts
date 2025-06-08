@@ -6,7 +6,7 @@ import type { IFroggerTransport } from '../../logger/_transports/types'
 import type { LoggerObject } from '../../shared/types/log'
 import type { LoggerObjectBatch } from '../../shared/types/batch'
 
-import { useRuntimeConfig } from '#imports'
+// import { useRuntimeConfig } from '#imports'
 
 
 
@@ -40,9 +40,9 @@ export class ServerLogQueueService {
 
         this.initialised = true
 
+        //@ts-ignore
         const config = useRuntimeConfig()
     
-        //@ts-expect-error
         const batchingEnabled = config.frogger.batch !== false;
         
         const fileTransporter = new FileTransport();

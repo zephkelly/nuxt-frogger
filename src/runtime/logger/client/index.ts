@@ -11,6 +11,8 @@ import type { LoggerObject, LogContext } from '../../shared/types/log';
 import type { LoggerObjectBatch } from '../../shared/types/batch';
 import { parseAppInfoConfig } from '../../app-info/parse';
 
+import { DEFAULT_LOGGING_ENDPOINT } from '../../shared/types/module-options';
+
 import { defu } from 'defu';
 
 /**
@@ -19,6 +21,7 @@ import { defu } from 'defu';
  */
 export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
     private options: Required<ClientLoggerOptions>;
+    private serverModuleEnabled = false;
     protected hasMounted: Ref<boolean>;
     private batchingEnabled = true;
 
@@ -29,8 +32,12 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
         this.hasMounted = hasMounted;
 
-
         const config = useRuntimeConfig();
+
+        if (config.public.frogger.serverModule) {
+            this.serverModuleEnabled = true;
+        }
+
         const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
 
         this.options = {
@@ -112,7 +119,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             lvl: logObj.level,
             msg: logObj.args?.[0],
             ctx: {
-                ...this.mergedGlobalContext,
+                ...this.mergedGlobalContext.value,
                 ...this.globalContext.value,
                 ...logObj.args?.slice(1)[0],
             },
@@ -124,6 +131,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
     private async sendLogImmediate(logObj: LoggerObject): Promise<void> {
         if (!this.options.endpoint) return;
+        if (this.serverModuleEnabled === false && this.options.endpoint === DEFAULT_LOGGING_ENDPOINT) return;
 
         const batch: LoggerObjectBatch = {
             logs: [logObj],

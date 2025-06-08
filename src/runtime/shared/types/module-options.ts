@@ -36,7 +36,13 @@ export interface ModuleOptions {
             includeStack?: boolean
             includeInfo?: boolean
         } | boolean
+
+        serverModule?: boolean
     }
 }
 
 export const APP_MOUNTED_STATE_KEY = 'frogger-app-mounted-state';
+
+export const DEFAULT_LOGGING_ENDPOINT = '/api/_frogger/logs';
+
+export const DEFAULT_WEBSOCKET_ENDPOINT = '/api/_frogger/dev-ws';

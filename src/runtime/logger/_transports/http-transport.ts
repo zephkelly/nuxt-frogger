@@ -122,13 +122,10 @@ export class HttpTransport implements IFroggerTransport {
             this.retries.delete(batchId); 
         }
         catch (error) {
-            console.error(`HttpReporter failed to send batch ${batchId}:`, error);
-            
             if (this.options.retryOnFailure) {
                 await this.handleSendFailure(batchId, batch);
             }
             else {
-                console.error(`HttpReporter dropped ${batch.logs.length} logs due to send failure`);
                 throw error;
             }
         }
@@ -177,8 +174,8 @@ export class HttpTransport implements IFroggerTransport {
         catch(error) {
             if (error instanceof H3Error) {
                 console.log(
-                    '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
-                    `🐸 [ERROR] http reporter failed to send logs`
+                    '%cFROGGER ERROR', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
+                    `🐸 http reporter failed to send logs`
                 );
             }
         }
@@ -200,8 +197,6 @@ export class HttpTransport implements IFroggerTransport {
         
         const backoffDelay = this.options.retryDelay * Math.pow(2, retryCount);
         
-        console.warn(`HttpReporter: Retrying batch ${batchId} in ${backoffDelay}ms (attempt ${retryCount + 1}/${this.options.maxRetries})`);
-        
         await new Promise(resolve => setTimeout(resolve, backoffDelay));
         
         try {
@@ -209,7 +204,6 @@ export class HttpTransport implements IFroggerTransport {
             this.retries.delete(batchId);
         }
         catch (error) {
-            console.error(`HttpReporter: Retry ${retryCount + 1} for batch ${batchId} failed:`, error);
             await this.handleSendFailure(batchId, batch);
         }
     }

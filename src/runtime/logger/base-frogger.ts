@@ -2,7 +2,7 @@ import { watch, type Ref, ref, computed } from "vue";
 import { type ConsolaInstance, createConsola } from "consola/core";
 import { generateTraceId, generateSpanId, generateW3CTraceHeaders } from "../shared/utils/trace-headers";
 
-import type { LogObject } from 'consola';
+import type { LogType, LogObject } from 'consola';
 import type { LoggerObject } from "../shared/types/log";
 import type { IFroggerLogger } from "./types";
 import type { FroggerOptions } from "../shared/types/options";
@@ -244,6 +244,11 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
     }
 
 
+    public logLevel(level: LogType, message: string, context?: Object): void {
+        this.consola[level](message, context);
+    }
+
+    
     // 0 ----------------------------------------------------
     public fatal(message: string, context?: Object): void {
         this.consola.fatal(message,
@@ -315,6 +320,20 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
     // 5 ----------------------------------------------------
     public trace(message: string, context?: Object): void {
         this.consola.trace(message,
+            context,
+        )
+    }
+
+    // -999 -------------------------------------------------
+    public silent(message: string, context?: Object): void {
+        this.consola.silent(message,
+            context,
+        )
+    }
+
+    // +999 -------------------------------------------------
+    public verbose(message: string, context?: Object): void {
+        this.consola.verbose(message,
             context,
         )
     }

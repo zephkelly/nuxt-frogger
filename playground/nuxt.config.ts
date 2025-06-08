@@ -5,25 +5,9 @@ export default defineNuxtConfig({
 
     frogger: {
         app: {
-            name: 'test-nuxt-frogger',
-            version: '1.0.0',
+            name: 'my-app',
+            version: '1.0.0'
         },
-
-        rateLimit: {
-            limits: {
-                perIp: 10,
-            }
-        },
-
-        public: {
-            globalErrorCapture: {
-                includeComponentOuterHTML: false,
-                includeComponentProps: false,
-            }
-        },
-
-        serverModule: {
-            autoEventCapture: true,
-        }
+        serverModule: true
     }
 })

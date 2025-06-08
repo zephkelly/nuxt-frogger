@@ -1,0 +1,1 @@
+export { defineFroggerOptions } from "./shared/utils/frogger-config";

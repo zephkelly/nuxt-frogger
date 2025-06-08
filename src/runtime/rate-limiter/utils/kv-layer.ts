@@ -1,5 +1,5 @@
 //@ts-ignore
-import { useStorage } from '#imports'
+// import { useStorage } from '#imports'
 import type { IRateLimitStorage } from '../types/storage'
 
 
@@ -21,6 +21,7 @@ export class RateLimitKVLayer implements IRateLimitStorage {
     async get<T = any>(key: string): Promise<T | null> {
         try {
             const fullKey = `${this.storageKey}:${key}`
+            //@ts-ignore
             const value = await useStorage().getItem(fullKey)
             
             if (value && typeof value === 'object' && 'data' in value && 'expiresAt' in value) {
@@ -52,9 +53,11 @@ export class RateLimitKVLayer implements IRateLimitStorage {
                     data: value,
                     expiresAt
                 }
+                //@ts-ignore
                 await useStorage().setItem(fullKey, wrappedValue)
             }
             else {
+                //@ts-ignore
                 await useStorage().setItem(fullKey, value)
             }
         }
@@ -67,6 +70,7 @@ export class RateLimitKVLayer implements IRateLimitStorage {
     async delete(key: string): Promise<void> {
         try {
             const fullKey = `${this.storageKey}:${key}`
+            //@ts-ignore
             await useStorage().removeItem(fullKey)
         }
         catch (error) {
@@ -88,6 +92,7 @@ export class RateLimitKVLayer implements IRateLimitStorage {
     
     private async isExpired(fullKey: string): Promise<boolean> {
         try {
+            //@ts-ignore
             const value = await useStorage().getItem(fullKey)
             if (!value || typeof value !== 'object') return false
            
@@ -102,9 +107,11 @@ export class RateLimitKVLayer implements IRateLimitStorage {
     
     async cleanup(): Promise<void> {
         try {
+            //@ts-ignore
             const keys = await useStorage().getKeys(`${this.storageKey}:`)
             const cleanupPromises = keys.map(async (key: string) => {
                 if (await this.isExpired(key)) {
+                    //@ts-ignore
                     await useStorage().removeItem(key)
                 }
             })

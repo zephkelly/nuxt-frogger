@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.1.4
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.3...v0.1.4)
+
+### 🩹 Fixes
+
+- DefineNuxtPlugin is only available via #app import ([c70c55d](https://github.com/zephkelly/nuxt-frogger/commit/c70c55d))
+
+### 🏡 Chore
+
+- Move all #app imports to use #imports ([5a89044](https://github.com/zephkelly/nuxt-frogger/commit/5a89044))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.3
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.2...v0.1.3)

@@ -1,8 +1,8 @@
 import { ref, onMounted, onBeforeUnmount, nextTick, watch } from "vue"
-import { navigateTo } from "#imports"
+// import { navigateTo } from "#imports"
 
-// Connection message types
-import { MessageType, type WebSocketMessage, WebSocketMessageAuthor, WebSocketStatus } from "../../websocket/types"
+import { MessageType, type LogWebSocketMessage, WebSocketMessageAuthor, WebSocketStatus } from "../../websocket/types"
+
 
 
 interface WebSocketOptions {
@@ -17,13 +17,13 @@ interface WebSocketOptions {
     heartbeat?: {
         auto_heartbeat?: boolean
         interval?: number
-        message?: WebSocketMessage<unknown>
+        message?: LogWebSocketMessage
         response_timeout?: number
     },
     queryParams?: Record<string, string>
     onConnected?: (socket: WebSocket) => void
     onDisconnected?: (ws: WebSocket, event: CloseEvent) => void
-    onMessage?: (ws: WebSocket, message: WebSocketMessage<unknown>) => void
+    onMessage?: (ws: WebSocket, message: LogWebSocketMessage) => void
     onError?: (ws: WebSocket, event: Event) => void
 }
 
@@ -41,7 +41,6 @@ const DEFAULT_OPTIONS: Required<WebSocketOptions> = {
         interval: 1000 * 60,
         response_timeout: 5000,
         message: {
-            from: WebSocketMessageAuthor.Client,
             type: 'ping'
         }
     },
@@ -57,6 +56,10 @@ export const useWebsocket = (
     socket_options: WebSocketOptions = {},
     channel?: string
 ) => {
+    if (import.meta.server) {
+        return
+    }
+
     const options = {
         ...DEFAULT_OPTIONS,
         ...socket_options,
@@ -95,10 +98,10 @@ export const useWebsocket = (
     let heartbeatTimeout: ReturnType<typeof setTimeout> | undefined;
     let awaitingHeartbeatResponse = false;
 
-    const lastMessage = ref<WebSocketMessage<unknown> | null>(null)
-    let bufferedData: (WebSocketMessage<unknown>)[] = []
+    const lastMessage = ref<LogWebSocketMessage | null>(null)
+    let bufferedData: (LogWebSocketMessage)[] = []
 
-    function send(data: WebSocketMessage<unknown>, useBuffer = true) {
+    function send(data: LogWebSocketMessage, useBuffer = true) {
         if (!socket.value || status.value !== WebSocketStatus.Open) {
             if (useBuffer) {
                 bufferedData.push(data)
@@ -228,6 +231,7 @@ export const useWebsocket = (
                 if (message.data.code === 401) {
                     intentionallyClosed = true
                     close(1000, false)
+                    //@ts-ignore
                     await navigateTo('/')
                 }
             }

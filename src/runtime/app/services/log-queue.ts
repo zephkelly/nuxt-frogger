@@ -7,9 +7,10 @@ import { useRuntimeConfig } from '#app';
 import { uuidv7 } from '../../shared/utils/uuid';
 
 import { handleRateLimit } from '../../rate-limiter/utils/limit-handler';
-import { SimpleConsoleLogger } from '../../shared/utils/console-frogger';
+import { SimpleConsoleLogger } from '../../logger/other/console-frogger';
 
 import { parseAppInfoConfig } from '../../app-info/parse';
+import { DEFAULT_LOGGING_ENDPOINT } from '../../shared/types/module-options';
 
 
 interface RetryState {
@@ -23,6 +24,7 @@ export class LogQueueService {
     private timer: ReturnType<typeof setTimeout> | null = null;
     private sending: boolean = false;
     private batchingEnabled: boolean = true;
+    private readonly serverModuleEnabled: boolean;
     private readonly reporterId: string;
 
     private endpoint: string;
@@ -48,6 +50,7 @@ export class LogQueueService {
         this.reporterId = 'client-log-queue-' + uuidv7();
 
         const config = useRuntimeConfig();
+        this.serverModuleEnabled = config.public.frogger.serverModule;
         //@ts-ignore
         const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
 
@@ -206,6 +209,10 @@ export class LogQueueService {
             return;
         }
 
+        if (!this.serverModuleEnabled && this.endpoint === DEFAULT_LOGGING_ENDPOINT) {
+            return;
+        }
+
         if (this.isRateLimited()) {
             return;
         }
@@ -275,6 +282,10 @@ export class LogQueueService {
 
     private async sendLogImmediately(log: LoggerObject): Promise<void> {
         if (!this.endpoint) return;
+
+        if (!this.serverModuleEnabled && this.endpoint === DEFAULT_LOGGING_ENDPOINT) {
+            return;
+        }
 
         if (this.isRateLimited()) {
             console.debug('Dropping immediate log due to rate limiting');

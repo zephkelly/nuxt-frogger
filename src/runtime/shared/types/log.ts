@@ -4,19 +4,22 @@ import type { TraceContext } from "./trace-headers";
 
 
 export interface LogContext {
-    type?: LogType;
-    env?: 'ssr' | 'client' | 'server';
     [key: string]: any
 }
 
 export interface LoggerObject {
     time: number;
     lvl: number;
-    msg?: string;
+    type: LogType;
+    msg: string;
     ctx: LogContext;
-    trace: TraceContext;
-    source?: string;
     tags?: string[];
+    env: 'ssr' | 'csr' | 'client' | 'server';
+    source?: {
+        name: string;
+        version: string;
+    };
+    trace: TraceContext;
 }
 
 export const LOG_LEVELS = {
@@ -25,7 +28,9 @@ export const LOG_LEVELS = {
     2: ['log'],
     3: ['info', 'success', 'fail', 'ready', 'start'],
     4: ['debug'],
-    5: ['trace']
+    5: ['trace'],
+    999: ['verbose'],
+    '-999': ['silent']
 } as const;
 
 export const LEVEL_TO_NUMBER: Record<string, number> = {
@@ -39,5 +44,7 @@ export const LEVEL_TO_NUMBER: Record<string, number> = {
     'ready': 3,
     'start': 3,
     'debug': 4,
-    'trace': 5
+    'trace': 5,
+    'verbose': 999,
+    'silent': -999
 };

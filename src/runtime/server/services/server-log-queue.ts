@@ -1,20 +1,20 @@
-import { BatchReporter, createBatchReporter } from '../utils/reporters/batch-reporter'
-import { FileReporter } from '../utils/reporters/file-reporter'
-import { WebSocketLogReporter } from '../../websocket/reporter'
+import { WebSocketTransport } from '../../logger/_transports/websocket-transport'
+import { BatchTransport, createBatchTransport } from '../../logger/_transports/batch-transport'
+import { FileTransport } from '../../logger/_transports/file-transport'
 
-import type { IReporter } from '../../shared/types/internal-reporter'
+import type { IFroggerTransport } from '../../logger/_transports/types'
 import type { LoggerObject } from '../../shared/types/log'
 import type { LoggerObjectBatch } from '../../shared/types/batch'
 
-import { useRuntimeConfig } from '#imports'
+// import { useRuntimeConfig } from '#imports'
 
 
 
 export class ServerLogQueueService {
     private static instance: ServerLogQueueService | null = null;
     
-    private batchReporter?: IReporter;
-    private directReporters: IReporter[] = [];
+    private batchTransporter?: BatchTransport;
+    private directTransporters: IFroggerTransport[] = [];
 
     private initialised: boolean = false
 
@@ -40,33 +40,32 @@ export class ServerLogQueueService {
 
         this.initialised = true
 
+        //@ts-ignore
         const config = useRuntimeConfig()
     
-        //@ts-expect-error
         const batchingEnabled = config.frogger.batch !== false;
         
-        const fileReporter = new FileReporter();
+        const fileTransporter = new FileTransport();
 
-        let websocketReporter: IReporter | undefined;
+        let websocketTransport: IFroggerTransport | undefined;
         if (config.frogger.websocket) {
-            websocketReporter = WebSocketLogReporter.getInstance();
+            websocketTransport = WebSocketTransport.getInstance();
         }
         
         if (batchingEnabled) {
-            const downstreamReporters: IReporter[] = []
-            downstreamReporters.push(fileReporter);
-            if (websocketReporter) {
-                downstreamReporters.push(websocketReporter);
+            const downstreamTransporters: IFroggerTransport[] = []
+            downstreamTransporters.push(fileTransporter);
+            if (websocketTransport) {
+                downstreamTransporters.push(websocketTransport);
             }
 
-            const batchReporter = createBatchReporter(downstreamReporters);
-            this.batchReporter = batchReporter;
+            const batchTransporter = createBatchTransport(downstreamTransporters);
+            this.batchTransporter = batchTransporter;
         }
         else {
-            this.directReporters.push(fileReporter);
-            
-            if (websocketReporter) {
-                this.directReporters.push(websocketReporter);
+            this.directTransporters.push(fileTransporter);
+            if (websocketTransport) {
+                this.directTransporters.push(websocketTransport);
             }
         }
     }
@@ -87,9 +86,9 @@ export class ServerLogQueueService {
             return;
         }
 
-        if (this.batchReporter) {
+        if (this.batchTransporter) {
             try {
-                this.batchReporter.logBatch(logs);
+                this.batchTransporter.logBatch(logs);
             }
             catch (err) {
                 console.error(`Error in batch reporter:`, err);
@@ -103,9 +102,9 @@ export class ServerLogQueueService {
     public enqueueLog(logObj: LoggerObject): void {
         if (!this.ensureInitialised()) return;
 
-        if (this.batchReporter) {
+        if (this.batchTransporter) {
             try {
-                this.batchReporter.log(logObj);
+                this.batchTransporter.log(logObj);
             }
             catch (err) {
                 console.error(`Error in batch reporter:`, err);
@@ -123,15 +122,15 @@ export class ServerLogQueueService {
 
         const flushPromises: Promise<void>[] = [];
 
-        if (this.batchReporter) {
-            if (this.batchReporter.forceFlush) {
-                flushPromises.push(this.batchReporter.forceFlush().catch(err => {
-                    console.error(`Error flushing batch reporter:`, err);
+        if (this.batchTransporter) {
+            if (this.batchTransporter.forceFlush) {
+                flushPromises.push(this.batchTransporter.forceFlush().catch(err => {
+                    console.error(`Error flushing batch transporter:`, err);
                 }));
             }
         }
         else {
-            for (const reporter of this.directReporters) {
+            for (const reporter of this.directTransporters) {
                 if (reporter.forceFlush) {
                     flushPromises.push(reporter.forceFlush().catch(err => {
                         console.error(`Error flushing ${reporter.name}:`, err);
@@ -150,16 +149,16 @@ export class ServerLogQueueService {
 
         const destroyPromises: Promise<void>[] = [];
 
-        if (this.batchReporter) {
-            if (this.batchReporter.destroy) {
-                destroyPromises.push(this.batchReporter.destroy().catch(err => {
+        if (this.batchTransporter) {
+            if (this.batchTransporter.destroy) {
+                destroyPromises.push(this.batchTransporter.destroy().catch(err => {
                     console.error(`Error destroying batch reporter:`, err);
                 }));
             }
         }
         
-        if (this.directReporters.length > 0) {
-            for (const reporter of this.directReporters) {
+        if (this.directTransporters.length > 0) {
+            for (const reporter of this.directTransporters) {
                 if (reporter.destroy) {
                     destroyPromises.push(reporter.destroy().catch(err => {
                         console.error(`Error destroying ${reporter.name}:`, err);
@@ -170,66 +169,66 @@ export class ServerLogQueueService {
         
         await Promise.allSettled(destroyPromises);
         
-        this.batchReporter = undefined;
-        this.directReporters = [];
+        this.batchTransporter = undefined;
+        this.directTransporters = [];
         this.initialised = false;
     }
 
-    public addReporter(reporter: IReporter): void {
+    public addTransport(transport: IFroggerTransport): void {
         if (!this.ensureInitialised()) return;
-        if (this.batchReporter) {
-            if (typeof (this.batchReporter as any).addDownstreamReporter === 'function') {
-                (this.batchReporter as BatchReporter).addDownstreamReporter(reporter);
+        if (this.batchTransporter) {
+            if (typeof this.batchTransporter.addDownstreamTransporter === 'function') {
+                this.batchTransporter.addDownstreamTransporter(transport);
             }
             else {
-                this.directReporters.push(reporter);
+                this.directTransporters.push(transport);
             }
         }
         else {
-            this.directReporters.push(reporter);
+            this.directTransporters.push(transport);
         }
     }
 
-    public removeReporter(reporter: IReporter): void {
+    public removeTransport(transport: IFroggerTransport): void {
         if (!this.ensureInitialised()) return;
 
-        if (this.batchReporter && typeof (this.batchReporter as any).removeDownstreamReporter === 'function') {
-            (this.batchReporter as BatchReporter).removeDownstreamReporter(reporter);
+        if (this.batchTransporter && typeof this.batchTransporter.removeDownstreamTransporter === 'function') {
+            this.batchTransporter.removeDownstreamTransporter(transport);
         }
         else {
-            const index = this.directReporters.indexOf(reporter);
+            const index = this.directTransporters.indexOf(transport);
             if (index > -1) {
-                this.directReporters.splice(index, 1);
+                this.directTransporters.splice(index, 1);
             }
         }
     }
 
-    public clearReporters(): void {
+    public clearTransporters(): void {
         if (!this.ensureInitialised()) return;
 
-        if (this.batchReporter && typeof (this.batchReporter as any).clearDownstreamReporters === 'function') {
-            (this.batchReporter as BatchReporter).clearDownstreamReporters();
+        if (this.batchTransporter && typeof this.batchTransporter.removeDownstreamTransporter === 'function') {
+            this.batchTransporter.clearDownstreamTransporters();
         }
         else {
-            this.directReporters = [];
+            this.directTransporters = [];
         }
     }
 
     public getReporterInfo(): { 
         mode: 'batched' | 'direct';
-        batchReporter?: string;
-        directReporters: string[];
+        batchTransporter?: string;
+        directTransporters: string[];
         downstreamReporters?: string[];
     } {
         const info: any = {
-            mode: this.batchReporter ? 'batched' : 'direct',
-            directReporters: this.directReporters.map(r => r.name)
+            mode: this.batchTransporter ? 'batched' : 'direct',
+            directTransporters: this.directTransporters.map(r => r.name)
         };
 
-        if (this.batchReporter) {
-            info.batchReporter = this.batchReporter.name;
-            if (typeof (this.batchReporter as any).getDownstreamReporters === 'function') {
-                info.downstreamReporters = (this.batchReporter as any).getDownstreamReporters();
+        if (this.batchTransporter) {
+            info.batchTransporter = this.batchTransporter.name;
+            if (typeof this.batchTransporter.getDownstreamTransporters === 'function') {
+                info.downstreamReporters = this.batchTransporter.getDownstreamTransporters();
             }
         }
 
@@ -237,7 +236,7 @@ export class ServerLogQueueService {
     }
 
     private callDirectReporters(method: 'log' | 'logBatch', data: LoggerObject | LoggerObject[]): void {
-        for (const reporter of this.directReporters) {
+        for (const reporter of this.directTransporters) {
             try {
                 if (method === 'log') {
                     reporter.log(data as LoggerObject);

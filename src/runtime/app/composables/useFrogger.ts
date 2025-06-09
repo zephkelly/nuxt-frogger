@@ -1,22 +1,21 @@
-import { ClientFrogger } from "../utils/client-logger";
-import type { IFroggerLogger } from "../../shared/types/frogger";
-
-import { useState } from '#app';
 import { computed, onMounted } from 'vue';
+// import { useState } from '#imports';
+
+import { ClientFrogger } from '../../logger/client';
+import type { IFroggerLogger } from '../../logger/types';
+
+import { APP_MOUNTED_STATE_KEY } from '../../shared/types/module-options';
+
 
 
 /**
  * Composable to access the Frogger logger from any component
  */
 export function useFrogger(): IFroggerLogger {
-    const hasMounted = useState<boolean>('frogger-has-mounted', () => false);
-    const logger = new ClientFrogger(computed(() => hasMounted.value));
+    //@ts-ignore
+    const hasMounted = useState<boolean>(APP_MOUNTED_STATE_KEY, () => false);
 
-    if (!hasMounted.value) {
-        onMounted(() => {
-            hasMounted.value = true;
-        });
-    };
+    const logger = new ClientFrogger(computed(() => hasMounted.value));
 
     return logger;
 }

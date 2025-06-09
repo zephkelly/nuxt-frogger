@@ -1,7 +1,7 @@
 import { ServerLogQueueService } from "../services/server-log-queue";
 
 //@ts-ignore
-import { defineNitroPlugin } from '#imports';
+// import { defineNitroPlugin } from '#imports';
 
 
 //@ts-ignore

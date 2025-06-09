@@ -1,6 +1,5 @@
 import { H3Event, createError, setResponseHeaders } from 'h3'
 
-//@ts-ignore
 import { useRuntimeConfig } from '#imports'
 
 import type {
@@ -30,7 +29,7 @@ export class SlidingWindowRateLimiter {
         const runtimeConfig = useRuntimeConfig()
         const rateLimiterConfig = runtimeConfig.frogger?.rateLimit
 
-        //@ts-expect-error
+        //@ts-ignore
         this.isEnabled = rateLimiterConfig !== false
 
         if (!this.isEnabled) {

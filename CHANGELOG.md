@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.1.3
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.2...v0.1.3)
+
+### 🩹 Fixes
+
+- Update missing runtimeConfig imports in server log queue and getFrogger instances ([9f7a8f3](https://github.com/zephkelly/nuxt-frogger/commit/9f7a8f3))
+
+### 🏡 Chore
+
+- Update homepage in package.json and update readme install guide ([b3e69b0](https://github.com/zephkelly/nuxt-frogger/commit/b3e69b0))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.2
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.1...v0.1.2)

@@ -1,5 +1,5 @@
 import { type Ref } from 'vue';
-import { useNuxtApp, useState, useRuntimeConfig } from '#app';
+import { useNuxtApp, useState, useRuntimeConfig } from '#imports';
 
 import { BaseFroggerLogger } from '../base-frogger';
 import { LogQueueService } from '../../app/services/log-queue';

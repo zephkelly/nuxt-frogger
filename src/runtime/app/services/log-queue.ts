@@ -3,7 +3,7 @@ import { H3Error } from 'h3';
 import type { LoggerObject } from '../../shared/types/log';
 import type { LoggerObjectBatch } from '../../shared/types/batch';
 
-import { useRuntimeConfig } from '#app';
+import { useRuntimeConfig } from '#imports';
 import { uuidv7 } from '../../shared/utils/uuid';
 
 import { handleRateLimit } from '../../rate-limiter/utils/limit-handler';

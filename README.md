@@ -20,23 +20,9 @@ pnpm dlx nuxi@latest module add nuxt-frogger
 npx nuxi@latest module add nuxt-frogger
 ```
 
-**yarn:**
-```sh
-yarn dlx nuxi@latest module add nuxt-frogger
-```
-
-**bun:**
-```sh
-bunx nuxi@latest module add nuxt-frogger
-```
-
-And that's it! A default configuration of Frogger is now installed in your Nuxt project. Take a look at the getting started guide to learn how to make your first log.
-
 ### Manual Installation
 
-Does the command above not work?
-
-You can install Frogger and register it manually:
+Does the command above not work? You can install Frogger and register it manually:
 
 **pnpm:**
 ```sh
@@ -46,16 +32,6 @@ pnpm add nuxt-frogger
 **npm:**
 ```sh
 npm install nuxt-frogger
-```
-
-**yarn:**
-```sh
-yarn add nuxt-frogger
-```
-
-**bun:**
-```sh
-bun add nuxt-frogger
 ```
 
 ### Register the Module

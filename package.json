@@ -9,7 +9,7 @@
   "bugs": {
     "url": "https://github.com/zephkelly/nuxt-frogger/issues"
   },
-  "homepage": "https://zephkelly.github.io/nuxt-frogger/installation.html",
+  "homepage": "https://zephkelly.github.io/nuxt-frogger",
   "license": "MIT",
   "type": "module",
   "exports": {

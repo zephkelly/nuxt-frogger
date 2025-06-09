@@ -1,6 +1,6 @@
 {
   "name": "nuxt-frogger",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "Logging and tracing module for Nuxt applications",
   "repository": {
     "type": "git",
@@ -44,6 +44,7 @@
   "dependencies": {
     "@nuxt/kit": "^3.17.3",
     "consola": "^3.4.2",
+    "defu": "^6.1.4",
     "vitepress-plugin-group-icons": "^1.5.5"
   },
   "devDependencies": {
@@ -69,7 +70,8 @@
     "tracing",
     "monitoring",
     "observability",
-    "frogger"
+    "frogger",
+    "nuxt-frogger"
   ],
   "author": "zephkelly"
 }

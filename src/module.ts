@@ -313,8 +313,8 @@ export default defineNuxtModule<ModuleOptions>({
 
             addServerImports([
                 {
-                    name: 'HttpReporter',
-                    from: resolver.resolve('./runtime/server/utils/reporters/http-reporter')
+                    name: 'HttpTransport',
+                    from: resolver.resolve('./runtime/logger/_transports/http-transport')
                 }
             ])
                 
@@ -332,7 +332,7 @@ export default defineNuxtModule<ModuleOptions>({
                     
                     addServerHandler({
                         route: wsRoute,
-                        handler: resolver.resolve('./runtime/server/api/dev-websocket-handler.ts'),
+                        handler: resolver.resolve('./runtime/server/api/dev-websocket-handler'),
                     })
                 }
             }

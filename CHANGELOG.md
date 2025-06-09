@@ -24,7 +24,7 @@
   - Transports do something with your logs, or send them somewhere.
   - Built-in transports include:
     - Batch Transport - Moved from reporter to transporter. If enabled,
-      all other reporters become downstream reporters of the batch transport.
+      all other transports become downstream transports of the batch transporter.
     - File Transport
     - HTTP Transport ([#38](https://github.com/zephkelly/nuxt-frogger/pull/38))
     - Websocket Transport ([#55](https://github.com/zephkelly/nuxt-frogger/pull/55))
@@ -56,7 +56,7 @@
   - Added an optional `frogger.config.ts` file to the root of your Nuxt project to move configuration out of `nuxt.config.js`.
 
 - Toggleable Client/Server Modes ([#78](https://github.com/zephkelly/nuxt-frogger/pull/78))
-  - In some scenarios you may not want the server side in SSR or statically generated apps.
+  - In some scenarios you may not want the server side in SPA or statically generated apps.
   - You can now toggle the client and server modes on and off via module options.
 
 ### 🐛 Bug Fixes

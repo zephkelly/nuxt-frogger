@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.1.1
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.0...v0.1.1)
+
+### 🩹 Fixes
+
+- Incorrect import paths for http-transport and web-soc handler ([80e615d](https://github.com/zephkelly/nuxt-frogger/commit/80e615d))
+
+### 🏡 Chore
+
+- Update readme to include installation steps ([dc9994b](https://github.com/zephkelly/nuxt-frogger/commit/dc9994b))
+- Fix import and log format errors in deduplication tests ([7d75c7d](https://github.com/zephkelly/nuxt-frogger/commit/7d75c7d))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.0
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.0.2...v0.1.0)

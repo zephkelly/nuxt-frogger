@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.2
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.1...v0.1.2)
+
+### 🩹 Fixes
+
+- Broken useState imports in useFrogger and client log queue ([098e20b](https://github.com/zephkelly/nuxt-frogger/commit/098e20b))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.1
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.0...v0.1.1)

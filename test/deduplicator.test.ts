@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { LogDeduplicator } from '~/src/runtime/websocket/deduplicator';
+import { LogDeduplicator } from '../src/runtime/websocket/deduplicator';
 import type { LoggerObject } from '../src/runtime/shared/types/log';
 
 
@@ -106,7 +106,10 @@ describe('LogDeduplicator', () => {
                 traceId: traceId,
                 spanId: spanId,
             },
-            source: 'test-source',
+            source: {
+                name: 'test-source',
+                version: '1.0.0',
+            },
             tags: [],
             type: 'info',
             env: 'client',
@@ -356,7 +359,10 @@ describe('LogDeduplicator', () => {
             msg: 'Test log',
             time: new Date().getTime(),
             trace: { traceId: traceId, spanId: spanId },
-            source: 'test',
+            source: {
+                name: 'test-source',
+                version: '1.0.0',
+            },
             tags: [],
             env: 'client',
             type: 'info',

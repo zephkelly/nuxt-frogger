@@ -1,4 +1,4 @@
-// import { useState, onMounted } from '#imports';
+import { useState, onMounted } from '#imports';
 import { defineNuxtPlugin } from '#app';
 import { LogQueueService } from "../services/log-queue";
 

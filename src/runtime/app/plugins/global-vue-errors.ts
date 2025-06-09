@@ -1,4 +1,5 @@
-import { defineNuxtPlugin, useRuntimeConfig } from "#imports";
+import { defineNuxtPlugin } from "#app";
+import { useRuntimeConfig } from "#imports";
 import { useFrogger } from "../composables/useFrogger";
 
 import { H3Error } from "h3";

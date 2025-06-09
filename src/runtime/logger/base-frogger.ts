@@ -1,4 +1,4 @@
-import { watch, type Ref, ref, computed } from "vue";
+import { type Ref, ref, computed } from "vue";
 import { type ConsolaInstance, createConsola } from "consola/core";
 import { generateTraceId, generateSpanId, generateW3CTraceHeaders } from "../shared/utils/trace-headers";
 
@@ -21,6 +21,11 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
     protected consola: ConsolaInstance;
     protected globalContext: Ref<LogContext> = ref({});
     protected parentGlobalContext: Ref<LogContext> | null = null;
+
+    protected appInfo?: {
+        name?: string;
+        version?: string;
+    }
 
     protected readonly mergedGlobalContext: Ref<LogContext> = computed(() => {
         return defu(this.globalContext.value, this.parentGlobalContext?.value || {});

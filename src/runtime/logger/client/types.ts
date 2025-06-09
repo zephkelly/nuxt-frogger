@@ -11,20 +11,6 @@ export interface ClientLoggerOptions extends FroggerOptions {
      * @default '/api/_logger/logs'
      */
     endpoint?: string;
-
-    appInfo?: {
-        /**
-         * Application name
-         * @default 'unknown'
-         */
-        name?: string;
-
-        /**
-         * Application version
-         * @default 'unknown'
-         */
-        version?: string;
-    }
 }
 
 

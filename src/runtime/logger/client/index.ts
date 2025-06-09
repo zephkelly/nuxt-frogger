@@ -40,16 +40,14 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
         const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
 
-        this.options = {
-            appInfo: isSet ? { 
-                name: name || 'unknown', 
-                version 
-            } : { 
-                name: 'unknown',
-                version: 'unknown'
-            },
-            endpoint: config.public.frogger.endpoint,
+        this.appInfo = isSet ? { 
+            name: name,
+            version: version
+        } : undefined;
 
+        this.options = {
+            endpoint: config.public.frogger.endpoint,
+            
             level: 3,
             context: {},
             consoleOutput: true,
@@ -117,6 +115,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         return {
             time: logObj.date.getTime(),
             lvl: logObj.level,
+            type: logObj.type,
             msg: logObj.args?.[0],
             ctx: {
                 ...this.mergedGlobalContext.value,
@@ -124,7 +123,10 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
                 ...logObj.args?.slice(1)[0],
             },
             env: env,
-            type: logObj.type,
+            source: this.appInfo !== undefined ? {
+                name: this.appInfo.name || 'unknown',
+                version: this.appInfo?.version || 'unknown',
+            } : undefined,
             trace: traceContext,
         };
     }
@@ -135,7 +137,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
         const batch: LoggerObjectBatch = {
             logs: [logObj],
-            app: this.options.appInfo
+            app: this.appInfo
         };
 
         return $fetch(this.options.endpoint, {

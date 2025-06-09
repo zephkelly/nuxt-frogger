@@ -11,6 +11,8 @@
 <script setup>
 const test = async () => {
     const logger = useFrogger();
+
+    logger.info('Testing logger');
     
     try {
         const response = await $fetch('/api/test', {

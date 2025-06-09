@@ -1,10 +1,11 @@
 import type { LogObject, LogType } from 'consola/basic';
 
-
+import { useRuntimeConfig } from '#imports';
 import { BaseFroggerLogger } from '../base-frogger';
 import type { ServerLoggerOptions } from '../../server/types/logger';
 import type { LoggerObject, LogContext } from '../../shared/types/log';
 import { ServerLogQueueService } from '../../server/services/server-log-queue';
+import { parseAppInfoConfig } from '../../app-info/parse';
 
 import type { TraceContext } from '../../shared/types/trace-headers';
 
@@ -19,6 +20,15 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
     constructor(options: ServerLoggerOptions, traceContext: TraceContext | null = null) {
         super(options);
         this.options = options;
+
+        const config = useRuntimeConfig();
+        const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
+
+        this.appInfo = isSet ? { 
+            name: name,
+            version: version
+        } : undefined;
+
         this.logQueue = ServerLogQueueService.getInstance();
         this.traceContext = traceContext;
     }
@@ -43,6 +53,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         const loggerObject: LoggerObject = {
             time: logObj.date.getTime(),
             lvl: logObj.level,
+            type: logObj.type,
             msg: logObj.args?.[0],
             ctx: {
                 ...this.mergedGlobalContext.value,
@@ -50,7 +61,10 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
                 ...logObj.args?.slice(1)[0],
             },
             env: 'server',
-            type: logObj.type,
+            source: this.appInfo !== undefined ? {
+                name: this.appInfo.name || 'unknown',
+                version: this.appInfo?.version || 'unknown',
+            } : undefined,
             trace: currentTraceContext,
         };
 

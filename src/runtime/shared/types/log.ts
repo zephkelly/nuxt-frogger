@@ -11,12 +11,15 @@ export interface LoggerObject {
     time: number;
     lvl: number;
     type: LogType;
-    msg?: string;
+    msg: string;
     ctx: LogContext;
-    trace: TraceContext;
-    source?: string;
     tags?: string[];
     env: 'ssr' | 'csr' | 'client' | 'server';
+    source?: {
+        name: string;
+        version: string;
+    };
+    trace: TraceContext;
 }
 
 export const LOG_LEVELS = {

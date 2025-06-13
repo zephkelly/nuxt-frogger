@@ -4,7 +4,7 @@ import { generateSpanId, generateTraceId } from '../../shared/utils/trace-header
 import type { TraceContext } from '../../shared/types/trace-headers';
 
 //@ts-ignore
-// import { defineNitroPlugin } from '#imports';
+import { defineNitroPlugin } from '#imports';
 
 //@ts-ignore
 export default defineNitroPlugin((nitroApp) => {

@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.5
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.4...v0.1.5)
+
+### 🏡 Chore
+
+- Add defineNitroPlugin imports and pass client frogger options ([#82](https://github.com/zephkelly/nuxt-frogger/pull/82))
+
+### ❤️ Contributors
+
+- Evan Kelly <masterevank@gmail.com>
+
 ## v0.1.4
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.3...v0.1.4)

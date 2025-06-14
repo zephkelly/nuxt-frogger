@@ -1,7 +1,7 @@
-export type AppInfoOptions = string | {
+export type AppInfoOptions =  {
     name: string;
     version?: string;
-} | undefined;
+} | string
 
 
 export type ExtractedAppInfo = {

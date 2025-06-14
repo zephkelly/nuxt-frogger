@@ -97,8 +97,6 @@ export default defineNuxtModule<ModuleOptions>({
             defaultQueryTimeout: 30000,
         },
 
-        // Set in the public runtime config, can be overridden
-        // at runtime using 'NUXT_PUBLIC_FROGGER_' environment variables
         public: {
             endpoint: DEFAULT_LOGGING_ENDPOINT,
             

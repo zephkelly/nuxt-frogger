@@ -1,7 +1,7 @@
 # Installation
 
-## Automatic Installation
-To install and register the latest version of Frogger, navigate to your Nuxt project and run the following command:
+## Automatic Install
+To install and register the latest version of Frogger run the following command:
 
 ::: code-group
 
@@ -22,13 +22,13 @@ $ bunx nuxi@latest module add nuxt-frogger
 ```
 :::
 
-And that's it! A default configuration of Frogger is now installed in your Nuxt project. Take a look at the getting started guide to learn how to make your first log.
+A default configuration of Frogger is now installed in your Nuxt project. Take a look at the [Getting Started](./getting-started.md) guide to learn how to make your first log.
 
 Want to make some changes to Frogger's configuration? Check out the [Configuration](./configuration.md) guide.
 
-## Manual Installation
-Does the command above not work?
-You can install Frogger and register it manually:
+## Manual Install
+Does command above not work?
+To install Frogger and register it manually:
 
 ::: code-group
 
@@ -50,7 +50,7 @@ $ bun add nuxt-frogger
 :::
 
 ### Register the Module
-Add `'nuxt-frogger'` to `modules` in your `nuxt.config.ts` file.
+Add `'nuxt-frogger'` as a module in your `nuxt.config.ts` file.
 
 ```ts
 export default defineNuxtConfig({
@@ -59,3 +59,23 @@ export default defineNuxtConfig({
     ]
 })
 ```
+
+## Recommended Config
+While everything should work out of the box, I recommend at least setting up a name and version for your application that will be included in the logs. Set the `app` property in the `frogger` configuration object in your `nuxt.config.ts` file:
+
+```ts
+export default defineNuxtConfig({
+    modules: [
+        'nuxt-frogger'
+    ],
+
+    frogger: {
+        app: {  
+            name: 'My App',  // [!code ++]
+            version: '1.0.0'  // [!code ++]
+        } 
+    } 
+})
+```
+
+For more configuration options, check out the [Configuration](./configuration.md) guide.

@@ -11,7 +11,7 @@ export default defineConfig({
     themeConfig: {
         nav: [
             { text: 'Home', link: '/' },
-            { text: 'Installation', link: '/installation' }
+            { text: 'Installation', link: '/installation' },
         ],
 
         sidebar: [
@@ -21,6 +21,7 @@ export default defineConfig({
                     { text: 'Installation', link: '/installation' },
                     { text: 'Configuration', link: '/configuration' },
                     { text: 'Getting Started', link: '/getting-started' },
+                    { text: 'Why Frogger', link: '/why-frogger.md' },
                 ]
             }
         ],

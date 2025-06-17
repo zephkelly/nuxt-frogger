@@ -1,4 +1,7 @@
 export default defineEventHandler((event) => {
+
+    console.log(event.headers)
+
     const logger = getFrogger({
         context: {
             myField: 'myValue',

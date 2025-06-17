@@ -16,7 +16,7 @@ const test = async () => {
     
     try {
         const response = await $fetch('/api/test', {
-            headers: logger.getHeaders()
+            headers: logger.getHeaders('uat_cp_rrs')
         });
     }
     catch (error) {

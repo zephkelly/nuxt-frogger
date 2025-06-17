@@ -17,7 +17,6 @@ export default defineNuxtConfig({
 ```
 Use this to set things like the location of your log files, the configuration of the log ingestion endpoint, batching options for client or server, and more.
 
-
 ### Module Interface
 Everything is optional, meaning what you don't configure will fallback to default values. The [Getting Started](./getting-started.md) guide will get you familiar with the most common options:
 ```ts

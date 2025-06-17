@@ -1,8 +1,8 @@
 # Configuration
-There are multiple way to configure Frogger, depending on your needs and preferences. You can use the module options in your `nuxt.config.ts` file, create a separate `frogger.config.ts` configuration file, or use environment variables and runtime configuration to override the default settings.
+There are multiple way to configure Frogger. You can use the `frogger` key in your `nuxt.config.ts` file to adjust module options. You can create a separate `frogger.config.ts` configuration file in the root of your project, or you can use environment variables and runtime configuration to override settings in different environments.
 
 ::: info Hierarchy 
-`frogger.config.ts` will always override `nuxt.config.ts`. Runtime config and env variables will always override both of these.
+`frogger.config.ts` will always override `nuxt.config.ts`. Runtime config and env variables will always override both.
 :::
 
 ## Module Options
@@ -18,19 +18,8 @@ export default defineNuxtConfig({
 Use this to set things like the location of your log files, the configuration of the log ingestion endpoint, batching options for client or server, and more.
 
 
-### Frogger's Module Interface
-```ts
-export default defineNuxtConfig({
-    frogger: {
-        /* Configuration options go here! */
-    }
-})
-```
-Use this to set things like the location of your log files, the configuration of the log ingestion endpoint, batching options for client or server, and more.
-
-
-### Frogger's Module Interface
-Everything is optional, meaning what you don't configure will fallback to default values. Look in the sidebar to find more information about different options:
+### Module Interface
+Everything is optional, meaning what you don't configure will fallback to default values. The [Getting Started](./getting-started.md) guide will get you familiar with the most common options:
 ```ts
 export interface ModuleOptions {
     clientModule?: boolean
@@ -275,7 +264,7 @@ export default defineNuxtModule<ModuleOptions>({
 :::
 
 ## Frogger Config
-If you prefer to keep your Frogger configuration separate from your Nuxt configuration, you can create a `frogger.config.ts` file in the root of your project which will be automatically scanned by Frogger.
+If you prefer to keep your Frogger configuration separate from your Nuxt configuration, you can create a `frogger.config.ts` file in the root of your project. It will be automatically scanned by Frogger.
 
 ```ts
 import { defineFroggerOptions } from '#frogger/config';
@@ -308,7 +297,9 @@ export default defineNuxtConfig({
 ```
 
 ::: warning
-Changing Frogger's options at runtime is **not** recommended. It won't work. Some Frogger internals capture configuration options at build time meaning they wont react to the changes. Configuration options should only be set at build time. 
+Changing Frogger's options during the runtime of your applications is **not** recommended. It won't work. Frogger internals capture configuration options at build time, and wont react to changes. Configuration options should only be set at the starting of your application or at build time.
+:::
 
-If you need something more dynamic, logger instances are designed to be pluggable, extendable, and configurable at runtime.
+::: tip
+If you need something more dynamic, [logger instances](./getting-started.md#loggers) are designed to be pluggable, extendable, and configurable at runtime.
 :::

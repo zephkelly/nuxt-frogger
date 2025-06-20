@@ -47,6 +47,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
         this.options = {
             endpoint: config.public.frogger.endpoint,
+            baseUrl: config.public.frogger.baseUrl || '',
             
             level: 3,
             context: {},
@@ -140,7 +141,9 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             app: this.appInfo
         };
 
-        return $fetch(this.options.endpoint, {
+        const url = new URL(this.options.endpoint, this.options.baseUrl);
+
+        return $fetch(url.toString(), {
             method: 'POST',
             body: batch,
             headers: {

@@ -11,6 +11,8 @@ export interface ClientLoggerOptions extends FroggerOptions {
      * @default '/api/_logger/logs'
      */
     endpoint?: string;
+
+    baseUrl?: string;
 }
 
 

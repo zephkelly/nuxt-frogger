@@ -14,6 +14,7 @@ import { uuidv7 } from '../../shared/utils/uuid';
 
 export interface HttpTransportOptions {
     endpoint: string;
+    baseUrl?: string;
     vendor?: string;
     headers?: Record<string, string>;
     timeout?: number;
@@ -57,6 +58,7 @@ export class HttpTransport implements IFroggerTransport {
 
         this.options = {
             endpoint: options.endpoint,
+            baseUrl: options.baseUrl || config.public.frogger.baseUrl || '',
             vendor: options.vendor || 'frogger',
             appInfo: isSet ? { 
                 name: name || 'unknown', 
@@ -164,7 +166,9 @@ export class HttpTransport implements IFroggerTransport {
         try {
             const headers = this.createRequestHeaders(batch);
 
-            await $fetch(this.options.endpoint, {
+            const url = new URL(this.options.endpoint, this.options.baseUrl);
+
+            await $fetch(url.toString(), {
                 method: 'POST',
                 headers: headers,
                 body: batch,

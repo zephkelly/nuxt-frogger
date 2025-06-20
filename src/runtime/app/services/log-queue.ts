@@ -28,6 +28,7 @@ export class LogQueueService {
     private readonly reporterId: string;
 
     private endpoint: string;
+    private readonly baseUrl: string;
     private maxBatchSize: number | undefined;
     private maxBatchAge: number | undefined;
     private maxQueueSize: number | undefined;
@@ -57,6 +58,7 @@ export class LogQueueService {
         this.appInfo = isSet ? { name, version } : { name: 'unknown', version: 'unknown' };
         
         this.endpoint = config.public.frogger.endpoint;
+        this.baseUrl = config.public.frogger.baseUrl || '';
 
         //@ts-expect-error
         this.batchingEnabled = config.public?.frogger?.batch !== false;
@@ -241,8 +243,10 @@ export class LogQueueService {
                     processChain: this.appInfo?.name ? [this.appInfo.name] : [],
                 }
             };
+
+            const url = new URL(this.endpoint, this.baseUrl);
             
-            await $fetch.raw(this.endpoint, {
+            await $fetch(url.toString(), {
                 method: 'POST',
                 body: batch,
             });

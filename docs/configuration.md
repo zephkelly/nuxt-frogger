@@ -40,6 +40,8 @@ export interface ModuleOptions {
     
     public?: {
         endpoint?: string
+        baseUrl?: string
+        
         batch?: BatchOptions | false
 
         globalErrorCapture?: {
@@ -142,6 +144,7 @@ export interface ModuleOptions {
     
     public?: {
         endpoint?: string
+        baseUrl?: string
 
         batch?: {
             maxSize?: number
@@ -229,7 +232,7 @@ export default defineNuxtModule<ModuleOptions>({
         },
 
         websocket: {
-            route: DEFAULT_WEBSOCKET_ENDPOINT,
+            route: '/api/_frogger/dev-ws',
             defaultChannel: 'main',
             maxConcurrentQueries: 10,
             maxQueryResults: 1000,
@@ -237,7 +240,7 @@ export default defineNuxtModule<ModuleOptions>({
         },
 
         public: {
-            endpoint: DEFAULT_LOGGING_ENDPOINT,
+            endpoint: '/api/_frogger/logs',
             
             globalErrorCapture: {
                 includeComponent: true,

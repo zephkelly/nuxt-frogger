@@ -8,6 +8,11 @@ export default defineFroggerOptions({
         version: '1.0.0'
     },
 
+    public: {
+        endpoint: '/api/Logs',
+        baseUrl: 'https://uat2.cp.rrs.com',
+    },
+
     serverModule: true,
     clientModule: true,
 });

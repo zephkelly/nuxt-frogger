@@ -162,6 +162,7 @@ export default defineNuxtModule<ModuleOptions>({
                     serverModule: finalOptions.serverModule === true || typeof finalOptions.serverModule === 'object' ? true : false,
                     globalErrorCapture: finalOptions.public?.globalErrorCapture,
                     endpoint: finalOptions.public?.endpoint,
+                    baseUrl: finalOptions.public?.baseUrl || _nuxt.options.app.baseURL,
                     batch: finalOptions.public?.batch,
                     scrub: finalOptions.scrub,
 

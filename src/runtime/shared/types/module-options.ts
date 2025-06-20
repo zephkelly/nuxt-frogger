@@ -27,6 +27,8 @@ export interface ModuleOptions {
     
     public?: {
         endpoint?: string
+        baseUrl?: string
+        
         batch?: BatchOptions | false
 
         globalErrorCapture?: {

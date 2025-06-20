@@ -66,7 +66,6 @@ logger.logLevel(currentLogLevel, 'This is an info log at level 2');
 ```
 
 
-
 ## Log Anatomy
 Frogger is opinionated about the structure of its logs to ensure consistency and to make it as easy to pick up and use as possible.
 
@@ -147,7 +146,6 @@ logger.info('User logged in',
 }
 ```
 :::
-
 
 
 ## Loggers
@@ -288,8 +286,8 @@ const childLogger = parentLogger.child({
 
 childLogger.info('User logged in');
 ```
-This will create a log with the context:
 
+This will create a log with the context:
 ```ts
 ctx: { 
     userId: '12345', // From the parent  

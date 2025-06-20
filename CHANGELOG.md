@@ -1,5 +1,49 @@
 # Changelog
 
+## v0.1.6
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.5...v0.1.6)
+
+### 🚀 Enhancements
+
+- Add justification section, expand getting started guide ([7a12e0a](https://github.com/zephkelly/nuxt-frogger/commit/7a12e0a))
+- Add baseUrl option to module options and client logger options ([754aff5](https://github.com/zephkelly/nuxt-frogger/commit/754aff5))
+- Add baseUrl option in module options, client logger, http transport ([88debe6](https://github.com/zephkelly/nuxt-frogger/commit/88debe6))
+
+### 🩹 Fixes
+
+- Incorrect import paths for http-transport and web-soc handler ([4cb6739](https://github.com/zephkelly/nuxt-frogger/commit/4cb6739))
+- Broken useState imports in useFrogger and client log queue ([4263376](https://github.com/zephkelly/nuxt-frogger/commit/4263376))
+- Update missing runtimeConfig imports in server log queue and getFrogger instances ([4eeda63](https://github.com/zephkelly/nuxt-frogger/commit/4eeda63))
+- DefineNuxtPlugin is only available via #app import ([a8b3202](https://github.com/zephkelly/nuxt-frogger/commit/a8b3202))
+
+### 📖 Documentation
+
+- Update installation and configuration pages, add getting started page ([d18f0e8](https://github.com/zephkelly/nuxt-frogger/commit/d18f0e8))
+- Update installation and configuration pages, add getting started page ([97cd24e](https://github.com/zephkelly/nuxt-frogger/commit/97cd24e))
+- Update docs to include baseUrl option ([c33cc9b](https://github.com/zephkelly/nuxt-frogger/commit/c33cc9b))
+
+### 🏡 Chore
+
+- Add defineNitroPlugin imports and pass client frogger options through useFrogger composable ([19f9a77](https://github.com/zephkelly/nuxt-frogger/commit/19f9a77))
+- Release v0.1.0 ([4efe49d](https://github.com/zephkelly/nuxt-frogger/commit/4efe49d))
+- Update readme to include installation steps ([3387b78](https://github.com/zephkelly/nuxt-frogger/commit/3387b78))
+- Fix import and log format errors in deduplication tests ([9ba6c7f](https://github.com/zephkelly/nuxt-frogger/commit/9ba6c7f))
+- **release:** V0.1.1 ([ac518f6](https://github.com/zephkelly/nuxt-frogger/commit/ac518f6))
+- **release:** V0.1.2 ([4fde4d2](https://github.com/zephkelly/nuxt-frogger/commit/4fde4d2))
+- Update homepage in package.json and update readme install guide ([c0b3d55](https://github.com/zephkelly/nuxt-frogger/commit/c0b3d55))
+- **release:** V0.1.3 ([b266103](https://github.com/zephkelly/nuxt-frogger/commit/b266103))
+- Move all #app imports to use #imports ([be1795c](https://github.com/zephkelly/nuxt-frogger/commit/be1795c))
+- **release:** V0.1.4 ([3a9c443](https://github.com/zephkelly/nuxt-frogger/commit/3a9c443))
+- **release:** V0.1.5 ([908d349](https://github.com/zephkelly/nuxt-frogger/commit/908d349))
+- Mostly complete main overview sections ([3e4a0d2](https://github.com/zephkelly/nuxt-frogger/commit/3e4a0d2))
+- Mostly complete overview section of docs ([#87](https://github.com/zephkelly/nuxt-frogger/pull/87))
+
+### ❤️ Contributors
+
+- Evan Kelly <masterevank@gmail.com>
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.5
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.4...v0.1.5)

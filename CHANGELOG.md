@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.7
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.6...v0.1.7)
+
+### 🏡 Chore
+
+- Fix missing useStorage import ([24890da](https://github.com/zephkelly/nuxt-frogger/commit/24890da))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.6
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.5...v0.1.6)

@@ -1,5 +1,5 @@
 //@ts-ignore
-// import { useStorage } from '#imports'
+import { useStorage } from '#imports'
 import type { IRateLimitStorage } from '../types/storage'
 
 

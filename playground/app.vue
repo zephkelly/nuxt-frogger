@@ -9,6 +9,8 @@
 </template>
 
 <script setup>
+const socket = useWebsocket();
+
 const test = async () => {
     const logger = useFrogger();
 

@@ -211,7 +211,7 @@ export class LogQueueService {
             return;
         }
 
-        if (!this.serverModuleEnabled && this.endpoint === DEFAULT_LOGGING_ENDPOINT) {
+        if (!this.serverModuleEnabled && this.endpoint === DEFAULT_LOGGING_ENDPOINT && !this.baseUrl) {
             return;
         }
 

@@ -1,6 +1,6 @@
 import { Peer } from "crossws";
 
-import type { IFroggerTransport } from "./types";
+import type { IWebSocketTransport } from "./../../websocket/types";
 import type { IWebSocketStateStorage } from "../../websocket/state/types";
 import type { LoggerObject } from "../../shared/types/log";
 
@@ -16,7 +16,7 @@ import { LogLevelFilter } from "../../shared/utils/log-level-filter";
 
 
 
-export class WebSocketTransport implements IFroggerTransport {
+export class WebSocketTransport implements IWebSocketTransport {
     public readonly name = 'WebSocketTransport';
     public readonly transportId: string;
 
@@ -41,7 +41,7 @@ export class WebSocketTransport implements IFroggerTransport {
         });
     }
 
-    public static getInstance(state?: IWebSocketStateStorage): WebSocketTransport {
+    public static getInstance(state?: IWebSocketStateStorage): IWebSocketTransport {
         if (!WebSocketTransport.instance) {
             WebSocketTransport.instance = new WebSocketTransport(state);
         }
@@ -319,11 +319,11 @@ export class WebSocketTransport implements IFroggerTransport {
         }
     }
 
-    public async removeSubscription(peerId: string): Promise<boolean> {
+    public async removeSubscription(peerId: string): Promise<void> {
         try {
             const subscription = this.subscriptions.get(peerId);
             if (!subscription) {
-                return false;
+                return;
             }
 
             for (const channelId of subscription.channels) {
@@ -356,12 +356,10 @@ export class WebSocketTransport implements IFroggerTransport {
             catch (error) {
                 console.error(`WebSocketTransport: Failed to delete subscription from storage:`, error);
             }
-
-            return true;
         }
         catch (error) {
             console.error('WebSocketTransport: Error unsubscribing admin:', error);
-            return false;
+            throw error;
         }
     }
 

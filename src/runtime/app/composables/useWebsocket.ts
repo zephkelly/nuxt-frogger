@@ -1,5 +1,4 @@
 import { ref, onMounted, onBeforeUnmount, nextTick, watch } from "vue"
-// import { navigateTo } from "#imports"
 
 import { MessageType, type LogWebSocketMessage, WebSocketMessageAuthor, WebSocketStatus } from "../../websocket/types"
 
@@ -20,6 +19,8 @@ interface WebSocketOptions {
         message?: LogWebSocketMessage
         response_timeout?: number
     },
+    channel?: string
+    endpoint?: string | undefined
     queryParams?: Record<string, string>
     onConnected?: (socket: WebSocket) => void
     onDisconnected?: (ws: WebSocket, event: CloseEvent) => void
@@ -27,6 +28,7 @@ interface WebSocketOptions {
     onError?: (ws: WebSocket, event: Event) => void
 }
 
+//@ts-expect-error
 const DEFAULT_OPTIONS: Required<WebSocketOptions> = {
     auto_connect: false,
     reconnect: {
@@ -34,7 +36,7 @@ const DEFAULT_OPTIONS: Required<WebSocketOptions> = {
         interval: 1000,
         delay: 1000,
         attempts: 3,
-        onReconnectFailed: () => {}
+        onReconnectFailed: () => { }
     },
     heartbeat: {
         auto_heartbeat: true,
@@ -44,17 +46,16 @@ const DEFAULT_OPTIONS: Required<WebSocketOptions> = {
             type: 'ping'
         }
     },
+    channel: 'main',
     queryParams: {},
-    onConnected: () => {},
-    onDisconnected: () => {},
-    onMessage: () => {},
-    onError: () => {}
+    onConnected: () => { },
+    onDisconnected: () => { },
+    onMessage: () => { },
+    onError: () => { }
 }
 
 export const useWebsocket = (
-    url: string,
-    socket_options: WebSocketOptions = {},
-    channel?: string
+    socket_options: WebSocketOptions = {}
 ) => {
     if (import.meta.server) {
         return
@@ -77,16 +78,26 @@ export const useWebsocket = (
         }
     }
 
+    const config = useRuntimeConfig()
+
+    //@ts-expect-error
+    const configURL = config.public.frogger.websocket.route
+
     const {
         onConnected,
         onMessage,
         onError,
         auto_connect,
         reconnect,
-        heartbeat
+        heartbeat,
+        endpoint,
+        channel
     } = options;
 
-    const urlRef = ref<string>(url);
+    console.log("WebSocket endpoint from options:", options);
+
+    const urlRef = ref<string>(endpoint || configURL);
+    console.log("WebSocket URL:", urlRef.value);
     const status = ref<WebSocketStatus>(WebSocketStatus.Closed);
     const socket = ref<WebSocket | undefined>(undefined);
     const channelRef = ref<string | undefined>(channel);
@@ -188,7 +199,7 @@ export const useWebsocket = (
             if ((!intentionallyClosed && event.code !== 1000) && reconnect.auto_reconnect) {
                 if (reconnect.attempts === 'unlimited' || (typeof reconnect.attempts === "number" && (reconnectAttempts < 0 || reconnectAttempts < reconnect.attempts))) {
                     reconnectAttempts++
-            
+
                     const backoffTime = Math.min(reconnect.delay! * Math.pow(2, reconnectAttempts), 30000);
                     setTimeout(setup, backoffTime)
                 }
@@ -204,7 +215,7 @@ export const useWebsocket = (
             onError?.(ws, event)
         }
 
-        ws.onmessage = async (event: MessageEvent) => {     
+        ws.onmessage = async (event: MessageEvent) => {
             if (heartbeat.auto_heartbeat) {
                 resetHeartbeat()
             }
@@ -243,11 +254,11 @@ export const useWebsocket = (
 
     function buildSocketUrl(): string {
         const params = new URLSearchParams();
-        
+
         if (channelRef.value) {
             params.append('channel', channelRef.value);
         }
-        
+
         Object.entries(options.queryParams).forEach(([key, value]) => {
             params.append(key, value);
         });

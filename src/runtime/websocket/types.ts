@@ -24,6 +24,14 @@ export interface PersistedSubscription {
 }
 
 
+export interface IWebSocketTransport {
+    subscribe(peer: Peer, channel: string, filters?: SubscriptionFilter): Promise<boolean>;
+    removeSubscription(peerId: string): Promise<void>;
+    getSubscription(peerId: string): any;
+    getStatus(): Promise<any>;
+    getFilterDescription(filters?: SubscriptionFilter): string;
+}
+
 // Websocket handler
 export interface FroggerWebSocketOptions {
     upgrade?: (request: Request) => Promise<boolean> | boolean;

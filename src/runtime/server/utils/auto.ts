@@ -24,7 +24,7 @@ export function getFrogger(
     maybeOptions?: ServerLoggerOptions
 ): IFroggerLogger {
     const isEvent = eventOrOptions && 'context' in eventOrOptions;
-    
+
     let event = isEvent ? eventOrOptions as H3Event : undefined;
 
     if (!event) {
@@ -37,8 +37,11 @@ export function getFrogger(
 
     const config = useRuntimeConfig();
 
+    //@ts-ignore
     const runtimeFileOptions = config.frogger.file;
+    //@ts-ignore
     const runtimeBatchOptions = config.public.frogger.batch;
+    //@ts-ignore
     const runtimeEndpoint = config.public.frogger.endpoint;
 
     const froggerOptions = {
@@ -48,16 +51,16 @@ export function getFrogger(
     }
 
     const mergedOptions = defu(froggerOptions, options) as ServerLoggerOptions;
-    
+
     let traceContext: TraceContext | undefined;
     if (event?.context?.frogger) {
         traceContext = event.context.frogger;
     }
-    
+
     if (traceContext) {
         return new ServerFroggerLogger(mergedOptions, traceContext);
     }
-    
+
 
     return new ServerFroggerLogger(mergedOptions);
 }

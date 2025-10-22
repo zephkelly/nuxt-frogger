@@ -11,7 +11,7 @@ import type { ClientLoggerOptions } from '../../logger/client/types';
 /**
  * Composable to access the Frogger logger from any component
  */
-export function useFrogger(options: ClientLoggerOptions): IFroggerLogger {
+export function useFrogger(options?: ClientLoggerOptions): IFroggerLogger {
     //@ts-ignore
     const hasMounted = useState<boolean>(APP_MOUNTED_STATE_KEY, () => false);
 

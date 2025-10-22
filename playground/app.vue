@@ -15,6 +15,12 @@ const socket = useWebsocket({
     },
 });
 
+onMounted(() => {
+    if (!import.meta.client) return
+
+    socket.connect('main');
+});
+
 const test = async () => {
     const logger = useFrogger();
 

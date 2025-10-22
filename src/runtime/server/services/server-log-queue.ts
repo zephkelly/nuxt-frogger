@@ -3,6 +3,8 @@ import { BatchTransport, createBatchTransport } from '../../logger/_transports/b
 import { FileTransport } from '../../logger/_transports/file-transport'
 
 import type { IFroggerTransport } from '../../logger/_transports/types'
+
+import { LogScrubber } from '../../scrubber'
 import type { LoggerObject } from '../../shared/types/log'
 import type { LoggerObjectBatch } from '../../shared/types/batch'
 
@@ -12,10 +14,11 @@ import { useRuntimeConfig } from '#imports'
 
 export class ServerLogQueueService {
     private static instance: ServerLogQueueService | null = null;
-    
+
     private batchTransporter?: BatchTransport;
     private directTransporters: IFroggerTransport[] = [];
 
+    private scrubber: LogScrubber | null = null;
     private initialised: boolean = false
 
 
@@ -41,17 +44,21 @@ export class ServerLogQueueService {
         this.initialised = true
 
         const config = useRuntimeConfig()
-    
+
+        if (config.frogger.scrub) {
+            this.scrubber = new LogScrubber(config.frogger.scrub);
+        }
+
         //@ts-ignore
         const batchingEnabled = config.frogger.batch !== false;
-        
+
         const fileTransporter = new FileTransport();
 
         let websocketTransport: IFroggerTransport | undefined;
         if (config.frogger.websocket) {
             websocketTransport = WebSocketTransport.getInstance();
         }
-        
+
         if (batchingEnabled) {
             const downstreamTransporters: IFroggerTransport[] = []
             downstreamTransporters.push(fileTransporter);
@@ -77,13 +84,17 @@ export class ServerLogQueueService {
         return true;
     }
 
-    
+
     public enqueueBatch(loggerObjectBatch: LoggerObjectBatch): void {
         if (!this.ensureInitialised()) return;
 
         const logs = loggerObjectBatch.logs;
         if (logs.length === 0) {
             return;
+        }
+
+        if (this.scrubber) {
+            this.scrubber.scrubBatch(logs);
         }
 
         if (this.batchTransporter) {
@@ -101,6 +112,10 @@ export class ServerLogQueueService {
 
     public enqueueLog(logObj: LoggerObject): void {
         if (!this.ensureInitialised()) return;
+
+        if (this.scrubber) {
+            this.scrubber.scrubLoggerObject(logObj);
+        }
 
         if (this.batchTransporter) {
             try {
@@ -138,7 +153,7 @@ export class ServerLogQueueService {
                 }
             }
         }
-        
+
         await Promise.allSettled(flushPromises);
     }
 
@@ -156,7 +171,7 @@ export class ServerLogQueueService {
                 }));
             }
         }
-        
+
         if (this.directTransporters.length > 0) {
             for (const reporter of this.directTransporters) {
                 if (reporter.destroy) {
@@ -166,9 +181,9 @@ export class ServerLogQueueService {
                 }
             }
         }
-        
+
         await Promise.allSettled(destroyPromises);
-        
+
         this.batchTransporter = undefined;
         this.directTransporters = [];
         this.initialised = false;
@@ -214,7 +229,7 @@ export class ServerLogQueueService {
         }
     }
 
-    public getReporterInfo(): { 
+    public getReporterInfo(): {
         mode: 'batched' | 'direct';
         batchTransporter?: string;
         directTransporters: string[];

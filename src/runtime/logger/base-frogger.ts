@@ -42,12 +42,12 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
     private consoleReporter: ConsoleReporter | null = null;
     private scrubber: LogScrubber | null = null;
 
-    
+
     constructor(options: FroggerOptions = {}) {
         this.traceId = generateTraceId();
         this.level = options.level ?? 3;
         this.consoleOutput = options.consoleOutput !== false;
-        this.scrub = options.scrub !== false;
+        this.scrub = options.scrub === true;
 
         const config = useRuntimeConfig();
 
@@ -58,11 +58,11 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         if (options.consoleOutput !== false) {
             this.consoleReporter = new ConsoleReporter();
         }
-        
+
         this.consola = createConsola({
             level: this.level
         });
-        
+
         this.consola.addReporter({
             log: async (logObj: LogObject) => {
                 await this.handleLog(logObj);
@@ -73,22 +73,22 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             this.addReporter(this.consoleReporter);
         }
 
-        
+
         if (options.context) {
             this.globalContext.value = { ...options.context };
         }
 
     }
 
-    
+
     // Trace Context Management ------------------------------------------
     public getHeaders(
         customVendor?: string
     ): Record<string, string> {
-        const vendorData = customVendor 
+        const vendorData = customVendor
             ? { frogger: customVendor }
             : { frogger: generateSpanId() };
-        
+
         const headers = generateW3CTraceHeaders({
             traceId: this.traceId,
             parentSpanId: this.lastSpanId || undefined,
@@ -112,18 +112,18 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         }
 
         const newSpanId = generateSpanId();
-        
+
         const traceContext: TraceContext = {
             traceId: this.traceId,
             spanId: newSpanId
         };
-        
+
         if (this.lastSpanId) {
             traceContext.parentId = this.lastSpanId;
         }
-        
+
         this.lastSpanId = newSpanId;
-        
+
         return traceContext;
     }
 
@@ -166,11 +166,11 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
     public clearContext(): void {
         this.globalContext.value = {};
     }
-        
-    
+
+
     // Child Logger Management --------------------------------------
     public abstract child(options: FroggerOptions): IFroggerLogger;
-    
+
     public abstract reactiveChild(options: FroggerOptions): IFroggerLogger;
 
 
@@ -185,21 +185,21 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             context,
         )
     }
-    
+
     public error(message: string, context?: Object): void {
         this.consola.error(message,
             context,
         )
     }
-    
-    
+
+
     // 1 ----------------------------------------------------
     public warn(message: string, context?: Object): void {
         this.consola.warn(message,
             context,
         )
     }
-    
+
 
     // 2 ----------------------------------------------------
     public log(message: string, context?: Object): void {
@@ -208,7 +208,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         )
     }
 
-    
+
     // 3 ----------------------------------------------------
     public info(message: string, context?: Object): void {
         this.consola.info(message,
@@ -239,7 +239,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             context,
         )
     }
-    
+
     // 4 ----------------------------------------------------
     public debug(message: string, context?: Object): void {
         this.consola.debug(message,
@@ -271,7 +271,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
 
     public reset(): void {
         this.globalContext.value = {};
-        
+
         this.traceId = generateTraceId();
         this.lastSpanId = null;
     }
@@ -291,9 +291,9 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             if (this.scrubber) {
                 await this.scrubber?.scrubLoggerObject(loggerObject);
             }
-            
+
             await this.emitToReporters(loggerObject);
-            
+
             await this.processLoggerObject(loggerObject);
         }
         catch (error) {
@@ -310,7 +310,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
                 console.error('Error in custom reporter:', error);
             }
         });
-        
+
         await Promise.all(reporterPromises);
     }
 

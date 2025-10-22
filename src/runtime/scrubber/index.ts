@@ -1,5 +1,4 @@
 import type { LoggerObject } from "../shared/types/log";
-import type { LoggerObjectBatch } from "../shared/types/batch";
 import { type ScrubberConfig, type ScrubRule, type ScrubResult, type ScrubAction, SCRUB_ACTION } from "./types";
 
 import { defu } from "defu";
@@ -10,7 +9,7 @@ export class LogScrubber {
     private fieldRuleMap: Map<string, ScrubRule>;
     private regexRules: { pattern: RegExp; rule: ScrubRule }[];
     private scrubStats: { totalProcessed: number; totalScrubbed: number };
-    private fieldRuleCache: Map<string, ScrubRule | null> = new Map();
+    private fieldRuleCache: Map<string, ScrubRule | null>;
     private readonly MAX_CACHE_SIZE = 1000;
 
     constructor(config: Partial<ScrubberConfig> = {}) {
@@ -24,6 +23,7 @@ export class LogScrubber {
 
         this.fieldRuleMap = new Map();
         this.regexRules = [];
+        this.fieldRuleCache = new Map()
         this.scrubStats = { totalProcessed: 0, totalScrubbed: 0 };
 
         this.buildRuleMaps();
@@ -298,10 +298,10 @@ export class LogScrubber {
         };
     }
 
-    public scrubBatch(batch: LoggerObjectBatch): ScrubResult[] {
+    public scrubBatch(batch: LoggerObject[]): ScrubResult[] {
         const results: ScrubResult[] = [];
 
-        for (const logObj of batch.logs) {
+        for (const logObj of batch) {
             results.push(this.scrubLoggerObject(logObj));
         }
 

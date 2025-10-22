@@ -1,5 +1,6 @@
 import { H3Error } from 'h3';
 
+import { LogScrubber } from '../../scrubber/index';
 import type { LoggerObject } from '../../shared/types/log';
 import type { LoggerObjectBatch } from '../../shared/types/batch';
 
@@ -20,6 +21,8 @@ interface RetryState {
 }
 
 export class LogQueueService {
+    private scrubber: LogScrubber | null = null;
+
     private queue: LoggerObject[] = [];
     private timer: ReturnType<typeof setTimeout> | null = null;
     private sending: boolean = false;
@@ -51,7 +54,13 @@ export class LogQueueService {
         this.reporterId = 'client-log-queue-' + uuidv7();
 
         const config = useRuntimeConfig();
+
         this.serverModuleEnabled = config.public.frogger.serverModule;
+
+        if (config.public.frogger.scrub) {
+            this.scrubber = new LogScrubber(config.public.frogger.scrub);
+        }
+
         //@ts-ignore
         const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
 
@@ -229,10 +238,15 @@ export class LogQueueService {
         const logs = [...this.queue];
         this.queue = [];
 
+
         try {
             if (!this.endpoint) {
                 console.warn('No endpoint specified for sending logs');
                 return;
+            }
+
+            if (this.scrubber) {
+                this.scrubber.scrubBatch(logs);
             }
 
             const batch: LoggerObjectBatch = {
@@ -295,13 +309,18 @@ export class LogQueueService {
             return;
         }
 
+        if (this.scrubber) {
+            this.scrubber.scrubLoggerObject(log);
+        }
+
         const batch: LoggerObjectBatch = {
             logs: [log],
             app: this.appInfo
         };
 
         try {
-            await $fetch.raw(this.endpoint, {
+            await $fetch(this.endpoint, {
+                baseURL: this.baseUrl || undefined,
                 method: 'POST',
                 body: batch,
             });

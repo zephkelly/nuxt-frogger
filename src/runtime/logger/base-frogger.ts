@@ -51,7 +51,9 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
 
         const config = useRuntimeConfig();
 
+        //@ts-ignore
         if (config.public.frogger.scrub || options.scrub) {
+            //@ts-ignore
             this.scrubber = new LogScrubber(config.public.frogger.scrub);
         }
 

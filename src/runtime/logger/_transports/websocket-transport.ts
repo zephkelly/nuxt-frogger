@@ -11,7 +11,7 @@ import type {
     LogMessage
 } from "../../websocket/types";
 
-import { WebSocketStateKVLayer } from "../../websocket/state";
+import { createWebSocketStateKVLayer } from "../../websocket/state/factory";
 import { LogLevelFilter } from "../../shared/utils/log-level-filter";
 
 
@@ -33,7 +33,7 @@ export class WebSocketTransport implements IFroggerTransport {
 
     private constructor(storage?: IWebSocketStateStorage) {
         this.transportId = `websocket-reporter-${Date.now()}`;
-        this.state = storage || new WebSocketStateKVLayer();
+        this.state = storage || createWebSocketStateKVLayer('frogger-websocket-transport');
         this.startCleanupInterval();
 
         this.loadPersistedData().catch(error => {

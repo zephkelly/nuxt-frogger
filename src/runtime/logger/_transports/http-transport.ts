@@ -54,10 +54,12 @@ export class HttpTransport implements IFroggerTransport {
         this.transportId = `frogger-http-${uuidv7()}`;
 
         const config = useRuntimeConfig()
+        //@ts-ignore
         const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
 
         this.options = {
             endpoint: options.endpoint,
+            //@ts-ignore
             baseUrl: options.baseUrl || config.public.frogger.baseUrl || '',
             vendor: options.vendor || 'frogger',
             appInfo: isSet ? {

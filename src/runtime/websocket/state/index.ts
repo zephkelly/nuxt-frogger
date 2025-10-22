@@ -1,10 +1,12 @@
-//@ts-ignore
-import { useStorage } from '#imports'
-
 import type { IWebSocketStateStorage } from './types';
 import type { PersistedChannel, PersistedSubscription } from '../types';
 
-
+export interface StorageAdapter {
+    getItem: <T = any>(key: string) => Promise<T | null>;
+    setItem: (key: string, value: any) => Promise<void>;
+    removeItem: (key: string) => Promise<void>;
+    getKeys: (prefix?: string) => Promise<string[]>;
+}
 
 /**
  * Nitro KV Storage adapter for WebSocket log reporter
@@ -14,8 +16,13 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
     private readonly channelPrefix: string;
     private readonly subscriptionPrefix: string;
     private readonly channelPeersPrefix: string;
+    private readonly storage: StorageAdapter;
 
-    constructor(storageKey: string = 'websocket-log-reporter') {
+    constructor(
+        storage: StorageAdapter,
+        storageKey: string = 'websocket-log-reporter'
+    ) {
+        this.storage = storage;
         this.storageKey = storageKey;
         this.channelPrefix = `${storageKey}:channels`;
         this.subscriptionPrefix = `${storageKey}:subscriptions`;
@@ -28,13 +35,13 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
 
     private async get<T = any>(key: string): Promise<T | null> {
         try {
-            const value = await useStorage().getItem(key);
+            const value = await this.storage.getItem(key);
 
             if (value && typeof value === 'object' && 'data' in value && 'expiresAt' in value) {
                 const wrapped = value as { data: T; expiresAt: number };
 
                 if (Date.now() > wrapped.expiresAt) {
-                    await useStorage().removeItem(key);
+                    await this.storage.removeItem(key);
                     return null;
                 }
 
@@ -57,10 +64,10 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
                     data: value,
                     expiresAt
                 };
-                await useStorage().setItem(key, wrappedValue);
+                await this.storage.setItem(key, wrappedValue);
             }
             else {
-                await useStorage().setItem(key, value);
+                await this.storage.setItem(key, value);
             }
         }
         catch (error) {
@@ -71,7 +78,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
 
     private async delete(key: string): Promise<void> {
         try {
-            await useStorage().removeItem(key);
+            await this.storage.removeItem(key);
         }
         catch (error) {
             console.error(`Failed to delete WebSocket storage key ${key}:`, error);
@@ -80,7 +87,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
 
     private async getKeys(prefix: string): Promise<string[]> {
         try {
-            return await useStorage().getKeys(prefix);
+            return await this.storage.getKeys(prefix);
         }
         catch (error) {
             console.error(`Failed to get keys with prefix ${prefix}:`, error);
@@ -241,7 +248,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
 
     private async isExpired(fullKey: string): Promise<boolean> {
         try {
-            const value = await useStorage().getItem(fullKey);
+            const value = await this.storage.getItem(fullKey);
             if (!value || typeof value !== 'object') return false;
 
             const wrapped = value as { data: any; expiresAt: number };
@@ -266,7 +273,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
                 const keys = await this.getKeys(`${prefix}:`);
                 const cleanupPromises = keys.map(async (key: string) => {
                     if (await this.isExpired(key)) {
-                        await useStorage().removeItem(key);
+                        await this.storage.removeItem(key);
                     }
                 });
 

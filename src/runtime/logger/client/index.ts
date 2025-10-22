@@ -34,10 +34,12 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
         const config = useRuntimeConfig();
 
+        //@ts-ignore
         if (config.public.frogger.serverModule) {
             this.serverModuleEnabled = true;
         }
 
+        //@ts-ignore
         const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
 
         this.appInfo = isSet ? {
@@ -46,12 +48,15 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         } : undefined;
 
         this.options = {
+            //@ts-ignore
             endpoint: config.public.frogger.endpoint,
+            //@ts-ignore
             baseUrl: config.public.frogger.baseUrl || '',
 
             level: 3,
             context: {},
             consoleOutput: true,
+            //@ts-ignore
             scrub: config.public.frogger.scrub || true,
             ...options
         }

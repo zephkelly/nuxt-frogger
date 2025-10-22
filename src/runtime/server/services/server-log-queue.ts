@@ -45,7 +45,9 @@ export class ServerLogQueueService {
 
         const config = useRuntimeConfig()
 
+        //@ts-expect-error
         if (config.frogger.scrub) {
+            //@ts-ignore
             this.scrubber = new LogScrubber(config.frogger.scrub);
         }
 
@@ -55,6 +57,7 @@ export class ServerLogQueueService {
         const fileTransporter = new FileTransport();
 
         let websocketTransport: IFroggerTransport | undefined;
+        //@ts-ignore
         if (config.frogger.websocket) {
             websocketTransport = WebSocketTransport.getInstance();
         }

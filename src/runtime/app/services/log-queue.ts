@@ -55,9 +55,12 @@ export class LogQueueService {
 
         const config = useRuntimeConfig();
 
+        //@ts-ignore
         this.serverModuleEnabled = config.public.frogger.serverModule;
 
+        //@ts-ignore
         if (config.public.frogger.scrub) {
+            //@ts-ignore
             this.scrubber = new LogScrubber(config.public.frogger.scrub);
         }
 
@@ -66,7 +69,9 @@ export class LogQueueService {
 
         this.appInfo = isSet ? { name, version } : { name: 'unknown', version: 'unknown' };
 
+        //@ts-ignore
         this.endpoint = config.public.frogger.endpoint;
+        //@ts-ignore
         this.baseUrl = config.public.frogger.baseUrl || '';
 
         //@ts-expect-error
@@ -74,8 +79,11 @@ export class LogQueueService {
 
         if (!this.batchingEnabled) return;
 
+        //@ts-ignore
         this.maxBatchSize = config.public.frogger.batch?.maxSize;
+        //@ts-ignore
         this.maxBatchAge = config.public.frogger.batch?.maxAge;
+        //@ts-ignore
         this.maxQueueSize = config.public.frogger.batch?.maxSize;
     }
 

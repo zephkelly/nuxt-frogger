@@ -190,16 +190,22 @@ export class LogScrubber {
     }
 
     private maskPhone(phone: string): string {
-        const digits = phone.replace(/\D/g, '');
+        const chars = phone.split('');
+        const digitIndices: number[] = [];
 
-        if (digits.length < 4) return phone;
+        for (let i = 0; i < chars.length; i++) {
+            if (/\d/.test(chars[i])) {
+                digitIndices.push(i);
+            }
+        }
 
-        const masked = phone.replace(/\d/g, (digit, index) => {
-            const digitIndex = phone.substring(0, index).replace(/\D/g, '').length;
-            return (digitIndex === 0 || digitIndex === digits.length - 1) ? digit : '*';
-        });
+        if (digitIndices.length < 4) return phone;
 
-        return masked;
+        for (let i = 1; i < digitIndices.length - 1; i++) {
+            chars[digitIndices[i]] = '*';
+        }
+
+        return chars.join('');
     }
 
     private simpleHash(input: string): string {

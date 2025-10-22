@@ -94,12 +94,10 @@ describe('LogScrubber', () => {
         });
 
         it('should evict cache when MAX_CACHE_SIZE is exceeded', () => {
-            // Fill cache beyond MAX_CACHE_SIZE (1000)
             for (let i = 0; i < 1001; i++) {
                 scrubber.wouldScrub(`field${i}`);
             }
 
-            // First field should be evicted
             const result = scrubber.wouldScrub('field0');
             expect(result.wouldScrub).toBe(false);
         });

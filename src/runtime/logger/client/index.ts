@@ -26,7 +26,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
     private batchingEnabled = true;
 
     private ssrTraceState = useState<SSRTraceState>('frogger-ssr-trace-state');
-    
+
     constructor(hasMounted: Ref<boolean>, options: ClientLoggerOptions = {}) {
         super(options);
 
@@ -40,7 +40,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
         const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
 
-        this.appInfo = isSet ? { 
+        this.appInfo = isSet ? {
             name: name,
             version: version
         } : undefined;
@@ -48,7 +48,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         this.options = {
             endpoint: config.public.frogger.endpoint,
             baseUrl: config.public.frogger.baseUrl || '',
-            
+
             level: 3,
             context: {},
             consoleOutput: true,
@@ -58,7 +58,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
         //@ts-expect-error
         this.batchingEnabled = config.public.frogger.batch !== false;
-        
+
         this.setupTraceContext();
     }
 
@@ -72,7 +72,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             lastServerSpanId: null,
             isClientHydrated: false
         };
-        
+
         if (import.meta.server) {
             // On server: store the trace ID and span ID for client hydration
             this.ssrTraceState.value = {
@@ -88,7 +88,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
                     this.ssrTraceState.value.traceId,
                     this.ssrTraceState.value.lastServerSpanId
                 );
-                
+
                 this.ssrTraceState.value.isClientHydrated = true;
             }
 
@@ -141,9 +141,8 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             app: this.appInfo
         };
 
-        const url = new URL(this.options.endpoint, this.options.baseUrl);
-
-        return $fetch(url.toString(), {
+        return $fetch(this.options.endpoint, {
+            baseURL: this.options.baseUrl || undefined,
             method: 'POST',
             body: batch,
             headers: {
@@ -151,7 +150,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             }
         });
     }
-    
+
     protected async processLoggerObject(loggerObject: LoggerObject): Promise<void> {
         if (import.meta.client) {
             if (this.batchingEnabled) {
@@ -165,7 +164,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             await this.sendLogImmediate(loggerObject);
             return;
         }
-        
+
         await this.sendLogImmediate(loggerObject);
     }
 
@@ -176,13 +175,13 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
         const childOptions: ClientLoggerOptions = {
             ...defu(this.options, options),
-            context: reactive 
+            context: reactive
                 ? options.context
                 : (defu(childContext, options.context) as LogContext),
         };
 
         const child = new ClientFrogger(this.hasMounted, childOptions);
-        
+
         child.setTraceContext(traceId, parentSpanId);
 
         if (reactive) {

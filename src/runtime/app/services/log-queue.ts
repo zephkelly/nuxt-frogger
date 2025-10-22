@@ -34,7 +34,7 @@ export class LogQueueService {
     private maxQueueSize: number | undefined;
 
     private consoleLogger: SimpleConsoleLogger = new SimpleConsoleLogger()
-    
+
     private appInfo: { name?: string; version?: string } | undefined = undefined;
 
     private retryState: RetryState = {
@@ -56,7 +56,7 @@ export class LogQueueService {
         const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
 
         this.appInfo = isSet ? { name, version } : { name: 'unknown', version: 'unknown' };
-        
+
         this.endpoint = config.public.frogger.endpoint;
         this.baseUrl = config.public.frogger.baseUrl || '';
 
@@ -81,12 +81,12 @@ export class LogQueueService {
         }
 
         this.queue.push(log);
-        
+
         if (this.maxQueueSize && this.queue.length > this.maxQueueSize) {
             this.queue = this.queue.slice(-this.maxQueueSize);
             console.warn(`Log queue exceeded maximum size of ${this.maxQueueSize}. Old logs have been discarded.`);
         }
-        
+
         this.scheduleSend();
     }
 
@@ -110,7 +110,7 @@ export class LogQueueService {
             respectServerTiming: true,
             onRateLimit: (info, strat) => {
                 this.consoleLogger.error(`Rate limit hit: ${strat.message} (Tier: ${info.tier})`);
-                
+
                 if (info.isBlocked) {
                     this.consoleLogger.error(`IP blocked due to rate limit. Dropping logs.`);
                 }
@@ -126,7 +126,7 @@ export class LogQueueService {
 
         if (rateLimitInfo.isBlocked) {
             console.error(`Dropping ${this.queue.length} logs due to IP block`);
-            this.queue = []; 
+            this.queue = [];
             this.resetRetryState();
             return true;
         }
@@ -156,7 +156,7 @@ export class LogQueueService {
 
     private handleGeneralError(error: any): void {
         this.retryState.count++;
-        
+
         if (this.retryState.count >= this.maxRetries) {
             console.error(`Max retries (${this.maxRetries}) reached. Dropping ${this.queue.length} logs.`);
             this.queue = [];
@@ -173,7 +173,7 @@ export class LogQueueService {
 
         console.warn(
             `Send failed (attempt ${this.retryState.count}/${this.maxRetries}). ` +
-            `Retrying in ${Math.round(backoffMs / 1000)}s. Error:`, 
+            `Retrying in ${Math.round(backoffMs / 1000)}s. Error:`,
             error.message || error
         );
 
@@ -195,11 +195,11 @@ export class LogQueueService {
             this.sendLogs();
             return;
         }
-        
+
         if (this.timer !== null) {
             return;
         }
-        
+
         this.timer = setTimeout(() => {
             this.timer = null;
             this.sendLogs();
@@ -218,23 +218,23 @@ export class LogQueueService {
         if (this.isRateLimited()) {
             return;
         }
-        
+
         if (this.timer !== null) {
             clearTimeout(this.timer);
             this.timer = null;
         }
-        
+
         this.sending = true;
-        
+
         const logs = [...this.queue];
         this.queue = [];
-        
+
         try {
             if (!this.endpoint) {
                 console.warn('No endpoint specified for sending logs');
                 return;
             }
-            
+
             const batch: LoggerObjectBatch = {
                 logs,
                 app: this.appInfo,
@@ -244,9 +244,8 @@ export class LogQueueService {
                 }
             };
 
-            const url = new URL(this.endpoint, this.baseUrl);
-            
-            await $fetch(url.toString(), {
+            await $fetch(this.endpoint, {
+                baseURL: this.baseUrl || undefined,
                 method: 'POST',
                 body: batch,
             });
@@ -255,7 +254,7 @@ export class LogQueueService {
         }
         catch (error: any) {
             const wasRateLimit = this.handleRateLimit(error);
-            
+
             if (wasRateLimit) {
                 return;
             }
@@ -272,12 +271,12 @@ export class LogQueueService {
                 this.queue = this.queue.slice(0, this.maxQueueSize);
                 console.warn(`Dropped ${dropped} logs due to queue overflow during retry`);
             }
-            
+
             this.handleGeneralError(error);
         }
         finally {
             this.sending = false;
-            
+
             if (this.queue.length > 0 && !this.isRateLimited()) {
                 this.scheduleSend();
             }
@@ -311,7 +310,7 @@ export class LogQueueService {
         }
         catch (error: any) {
             console.error('Failed to send log immediately:', error);
-            
+
             this.handleRateLimit(error);
         }
     }

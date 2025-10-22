@@ -9,7 +9,11 @@
 </template>
 
 <script setup>
-const socket = useWebsocket();
+const socket = useWebsocket({
+    onMessage: (event) => {
+        console.log('Received message:', event.data);
+    },
+});
 
 const test = async () => {
     const logger = useFrogger();

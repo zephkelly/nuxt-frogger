@@ -16,10 +16,10 @@ type Props = {
 defineProps<Props>();
 
 async function testing() {
-    const clickFrogger = useFrogger();
+    const clickFrogger = useFrogger({});
     const number = Math.random();
     if (number < 0.5) {
-        for (let i = 0; i < 100; i++) {
+        for (let i = 0; i < 2; i++) {
             clickFrogger.error(`Click number ${i + 1}`);
         }
     } else {

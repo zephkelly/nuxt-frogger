@@ -46,7 +46,7 @@ export const defaultHttpTransportOptions: HttpTransportOptions = {
 export class HttpTransport implements IFroggerTransport {
     public readonly name = 'FroggerHttpTransport';
     public readonly transportId: string;
-    
+
     private options: Required<HttpTransportOptions>;
     private retries: Map<string, number> = new Map();
 
@@ -60,10 +60,10 @@ export class HttpTransport implements IFroggerTransport {
             endpoint: options.endpoint,
             baseUrl: options.baseUrl || config.public.frogger.baseUrl || '',
             vendor: options.vendor || 'frogger',
-            appInfo: isSet ? { 
-                name: name || 'unknown', 
-                version 
-            } : { 
+            appInfo: isSet ? {
+                name: name || 'unknown',
+                version
+            } : {
                 name: 'unknown',
                 version: 'unknown'
             },
@@ -118,10 +118,10 @@ export class HttpTransport implements IFroggerTransport {
 
     private async sendBatch(batch: LoggerObjectBatch): Promise<void> {
         const batchId = `batch-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        
+
         try {
-            await this.performHttpRequest(batch); 
-            this.retries.delete(batchId); 
+            await this.performHttpRequest(batch);
+            this.retries.delete(batchId);
         }
         catch (error) {
             if (this.options.retryOnFailure) {
@@ -132,7 +132,7 @@ export class HttpTransport implements IFroggerTransport {
             }
         }
     }
-    
+
 
     private createRequestHeaders(batch: LoggerObjectBatch): Record<string, string> {
         const firstLog = batch.logs[0];
@@ -155,7 +155,7 @@ export class HttpTransport implements IFroggerTransport {
         if (this.options.appInfo) {
             headers.set('x-frogger-source', this.options.appInfo.name);
         }
-        
+
         return Object.fromEntries(headers.entries());
     }
 
@@ -166,16 +166,15 @@ export class HttpTransport implements IFroggerTransport {
         try {
             const headers = this.createRequestHeaders(batch);
 
-            const url = new URL(this.options.endpoint, this.options.baseUrl);
-
-            await $fetch(url.toString(), {
+            await $fetch(this.options.endpoint, {
+                baseURL: this.options.baseUrl || undefined,
                 method: 'POST',
                 headers: headers,
                 body: batch,
                 signal: controller.signal
             });
         }
-        catch(error) {
+        catch (error) {
             if (error instanceof H3Error) {
                 console.log(
                     '%cFROGGER ERROR', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
@@ -190,19 +189,19 @@ export class HttpTransport implements IFroggerTransport {
 
     private async handleSendFailure(batchId: string, batch: LoggerObjectBatch): Promise<void> {
         const retryCount = this.retries.get(batchId) || 0;
-        
+
         if (retryCount >= this.options.maxRetries) {
             console.error(`HttpReporter: Maximum retry attempts (${this.options.maxRetries}) reached for batch ${batchId}. Dropping ${batch.logs.length} logs.`);
             this.retries.delete(batchId);
             throw new Error(`Max retries exceeded for batch ${batchId}`);
         }
-        
+
         this.retries.set(batchId, retryCount + 1);
-        
+
         const backoffDelay = this.options.retryDelay * Math.pow(2, retryCount);
-        
+
         await new Promise(resolve => setTimeout(resolve, backoffDelay));
-        
+
         try {
             await this.performHttpRequest(batch);
             this.retries.delete(batchId);

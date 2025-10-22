@@ -1,7 +1,4 @@
 export default defineEventHandler((event) => {
-
-    console.log(event.headers)
-
     const logger = getFrogger({
         context: {
             myField: 'myValue',
@@ -23,7 +20,7 @@ export default defineEventHandler((event) => {
     const childLogger = logger.reactiveChild({
         context: {
             childField: 'childValue',
-        }   
+        }
     })
 
     childLogger.info('This is a child logger with its own context');

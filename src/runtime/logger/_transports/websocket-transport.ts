@@ -1,7 +1,7 @@
 import { Peer } from "crossws";
 
 import type { IFroggerTransport } from "./types";
-import type  { IWebSocketStateStorage } from "../../websocket/state/types";
+import type { IWebSocketStateStorage } from "../../websocket/state/types";
 import type { LoggerObject } from "../../shared/types/log";
 
 import type {
@@ -35,7 +35,7 @@ export class WebSocketTransport implements IFroggerTransport {
         this.transportId = `websocket-reporter-${Date.now()}`;
         this.state = storage || new WebSocketStateKVLayer();
         this.startCleanupInterval();
-        
+
         this.loadPersistedData().catch(error => {
             console.error('WebSocketTransport: Failed to load persisted data:', error);
         });
@@ -70,7 +70,7 @@ export class WebSocketTransport implements IFroggerTransport {
                     last_activity: new Date(persistedChannel.last_activity).getTime(),
                     metadata: persistedChannel.metadata
                 };
-                
+
                 this.channels.set(persistedChannel.channel_uuid, channel);
             }
         }
@@ -151,7 +151,7 @@ export class WebSocketTransport implements IFroggerTransport {
                     subscribed_at: subscription.subscribed_at,
                     last_activity: subscription.last_activity
                 };
-                
+
                 persistPromises.push(this.state.setSubscription(peerId, persistedSubscription));
             }
 
@@ -196,7 +196,7 @@ export class WebSocketTransport implements IFroggerTransport {
         console.log(
             '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
             `🐸 Websocket channel '${channelId}' has been created`
-        );  
+        );
         return channel;
     }
 
@@ -209,8 +209,8 @@ export class WebSocketTransport implements IFroggerTransport {
     }
 
     public async subscribe(
-        peer: Peer, 
-        channelId: string, 
+        peer: Peer,
+        channelId: string,
         filters?: SubscriptionFilter
     ): Promise<boolean> {
         try {
@@ -273,7 +273,7 @@ export class WebSocketTransport implements IFroggerTransport {
     public async reconnectSubscription(peer: Peer): Promise<boolean> {
         try {
             const persistedSubscription = await this.state.getSubscription(peer.id);
-            
+
             if (!persistedSubscription) {
                 return false;
             }
@@ -290,7 +290,7 @@ export class WebSocketTransport implements IFroggerTransport {
 
             for (const channelId of subscription.channels) {
                 let channel = this.channels.get(channelId);
-                
+
                 if (!channel) {
                     channel = await this.createChannel(channelId);
                 }
@@ -302,7 +302,7 @@ export class WebSocketTransport implements IFroggerTransport {
             try {
                 await Promise.all([
                     this.state.updateSubscriptionActivity(peer.id),
-                    ...subscription.channels.map(channelId => 
+                    ...subscription.channels.map(channelId =>
                         this.state.updateChannelActivity(channelId)
                     )
                 ]);
@@ -330,7 +330,7 @@ export class WebSocketTransport implements IFroggerTransport {
                 const channel = this.channels.get(channelId);
                 if (channel) {
                     channel.subscribers.delete(peerId);
-                    
+
                     if (channel.subscribers.size === 0) {
                         await this.cleanupChannel(channelId);
                     }
@@ -345,7 +345,7 @@ export class WebSocketTransport implements IFroggerTransport {
             }
 
             this.subscriptions.delete(peerId);
-            
+
             const peerKeys = Array.from(this.lastMessageTimes.keys())
                 .filter(key => key.includes(peerId));
             peerKeys.forEach(key => this.lastMessageTimes.delete(key));
@@ -398,9 +398,9 @@ export class WebSocketTransport implements IFroggerTransport {
 
             for (const [filterKey, subscriberGroup] of subscriberGroups.entries()) {
                 const { peers, filters } = subscriberGroup;
-                
+
                 const filteredLogs = this.filterLogBatch(logs, filters);
-                
+
                 if (filteredLogs.length === 0) {
                     continue;
                 }
@@ -446,16 +446,16 @@ export class WebSocketTransport implements IFroggerTransport {
         for (const [peerId, peer] of channel.subscribers) {
             const subscription = this.subscriptions.get(peerId);
             const filters = subscription?.filters;
-            
+
             const filterKey = this.createFilterKey(filters);
-            
+
             if (!groups.has(filterKey)) {
                 groups.set(filterKey, {
                     peers: [],
                     filters
                 });
             }
-            
+
             groups.get(filterKey)!.peers.push({ peerId, peer });
         }
 
@@ -468,15 +468,15 @@ export class WebSocketTransport implements IFroggerTransport {
         }
 
         const parts: string[] = [];
-        
+
         if (filters.level !== undefined) {
             parts.push(`level:${filters.level}`);
         }
-        
+
         if (filters.source && filters.source.length > 0) {
             parts.push(`source:${filters.source.sort().join(',')}`);
         }
-        
+
         if (filters.tags && filters.tags.length > 0) {
             parts.push(`tags:${filters.tags.sort().join(',')}`);
         }
@@ -493,8 +493,8 @@ export class WebSocketTransport implements IFroggerTransport {
     }
 
     private async sendLogBatchToPeer(
-        peer: Peer, 
-        logs: LoggerObject[], 
+        peer: Peer,
+        logs: LoggerObject[],
         channelId: string,
         meta: {
             batchId?: string;
@@ -534,14 +534,14 @@ export class WebSocketTransport implements IFroggerTransport {
         }
 
         if (filters.source && filters.source.length > 0) {
-            if (!filters.source.includes(logObj.source || '')) {
+            if (!filters.source.includes(logObj.source?.name || '')) {
                 return false;
             }
         }
 
         if (filters.tags && filters.tags.length > 0) {
             const logTags = logObj.tags || [];
-            const hasMatchingTag = filters.tags.some(filterTag => 
+            const hasMatchingTag = filters.tags.some(filterTag =>
                 logTags.includes(filterTag)
             );
             if (!hasMatchingTag) {
@@ -555,11 +555,11 @@ export class WebSocketTransport implements IFroggerTransport {
     private shouldSendMessage(channelId: string): boolean {
         const now = Date.now();
         const lastTime = this.lastMessageTimes.get(channelId) || 0;
-        
+
         if (now - lastTime < this.MESSAGE_RATE_LIMIT) {
             return false;
         }
-        
+
         this.lastMessageTimes.set(channelId, now);
         return true;
     }
@@ -568,9 +568,9 @@ export class WebSocketTransport implements IFroggerTransport {
         if (this.cleanupInterval) {
             clearInterval(this.cleanupInterval);
         }
-        
+
         this.cleanupInterval = setInterval(() => {
-            this.cleanupStaleChannels().catch(err => 
+            this.cleanupStaleChannels().catch(err =>
                 console.error('WebSocketTransport: Error in cleanup interval:', err)
             );
         }, this.CLEANUP_INTERVAL);
@@ -582,7 +582,7 @@ export class WebSocketTransport implements IFroggerTransport {
 
         for (const [channelId, channel] of this.channels.entries()) {
             const timeSinceActivity = now.getTime() - channel.last_activity;
-            
+
             if (channel.subscribers.size === 0 || timeSinceActivity > this.STALE_CHANNEL_TIMEOUT) {
                 cleanupPromises.push(this.cleanupChannel(channelId));
             }
@@ -590,9 +590,33 @@ export class WebSocketTransport implements IFroggerTransport {
 
         await Promise.allSettled(cleanupPromises);
 
+        this.cleanupOrphanedRateLimits();
+
         this.state.cleanup().catch((error: unknown) => {
             console.error('WebSocketTransport: Storage cleanup failed:', error);
         });
+    }
+
+    private cleanupOrphanedRateLimits(): void {
+        const activeChannelIds = new Set(this.channels.keys());
+        const orphanedKeys: string[] = [];
+
+        for (const channelId of this.lastMessageTimes.keys()) {
+            if (!activeChannelIds.has(channelId)) {
+                orphanedKeys.push(channelId);
+            }
+        }
+
+        if (orphanedKeys.length > 0) {
+            console.log(
+                '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
+                `🐸 Cleaned up ${orphanedKeys.length} orphaned rate limit entries`
+            );
+
+            for (const key of orphanedKeys) {
+                this.lastMessageTimes.delete(key);
+            }
+        }
     }
 
     private async cleanupChannel(channelId: string, deleteFromStorage: boolean = true): Promise<void> {
@@ -601,7 +625,7 @@ export class WebSocketTransport implements IFroggerTransport {
 
         try {
             const cleanupPromises: Promise<void>[] = [];
-            
+
             for (const [peerId, peer] of channel.subscribers) {
                 cleanupPromises.push(this.cleanupPeer(peer, peerId));
             }
@@ -610,6 +634,8 @@ export class WebSocketTransport implements IFroggerTransport {
 
             channel.subscribers.clear();
             this.channels.delete(channelId);
+
+            this.lastMessageTimes.delete(channelId);
 
             if (deleteFromStorage) {
                 try {
@@ -622,11 +648,12 @@ export class WebSocketTransport implements IFroggerTransport {
             console.log(
                 '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
                 `🐸 Websocket channel '${channelId}' has been destroyed`
-            ); 
+            );
         }
         catch (error) {
             console.error(`WebSocketTransport: Error cleaning up channel ${channelId}:`, error);
             this.channels.delete(channelId);
+            this.lastMessageTimes.delete(channelId);
         }
     }
 
@@ -654,6 +681,8 @@ export class WebSocketTransport implements IFroggerTransport {
             created_at: number;
             last_activity: number;
         }>;
+        rateLimitEntries: number;
+        orphanedRateLimits: number;
     }> {
         const channelDetails = Array.from(this.channels.values()).map(channel => ({
             uuid: channel.channel_uuid,
@@ -672,12 +701,19 @@ export class WebSocketTransport implements IFroggerTransport {
             orphanedPeerMappings: 0
         }));
 
+        const activeChannelIds = new Set(this.channels.keys());
+        const orphanedRateLimits = Array.from(this.lastMessageTimes.keys())
+            .filter(channelId => !activeChannelIds.has(channelId))
+            .length;
+
         return {
             channels: this.channels.size,
             totalSubscribers,
             activeSubscriptions: this.subscriptions.size,
             state: stateStats,
-            channelDetails
+            channelDetails,
+            rateLimitEntries: this.lastMessageTimes.size,
+            orphanedRateLimits
         };
     }
 

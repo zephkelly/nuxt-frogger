@@ -14,33 +14,33 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
     private readonly channelPrefix: string;
     private readonly subscriptionPrefix: string;
     private readonly channelPeersPrefix: string;
-    
+
     constructor(storageKey: string = 'websocket-log-reporter') {
         this.storageKey = storageKey;
         this.channelPrefix = `${storageKey}:channels`;
         this.subscriptionPrefix = `${storageKey}:subscriptions`;
         this.channelPeersPrefix = `${storageKey}:channel-peers`;
     }
-    
+
     getStorageKey(): string {
         return this.storageKey;
     }
-    
+
     private async get<T = any>(key: string): Promise<T | null> {
         try {
             const value = await useStorage().getItem(key);
-            
+
             if (value && typeof value === 'object' && 'data' in value && 'expiresAt' in value) {
                 const wrapped = value as { data: T; expiresAt: number };
-                
+
                 if (Date.now() > wrapped.expiresAt) {
                     await useStorage().removeItem(key);
                     return null;
                 }
-                
+
                 return wrapped.data;
             }
-            
+
             return value as T | null;
         }
         catch (error) {
@@ -48,7 +48,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             return null;
         }
     }
-    
+
     private async set(key: string, value: any, ttl?: number): Promise<void> {
         try {
             if (ttl) {
@@ -68,7 +68,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             throw error;
         }
     }
-    
+
     private async delete(key: string): Promise<void> {
         try {
             await useStorage().removeItem(key);
@@ -77,7 +77,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             console.error(`Failed to delete WebSocket storage key ${key}:`, error);
         }
     }
-    
+
     private async getKeys(prefix: string): Promise<string[]> {
         try {
             return await useStorage().getKeys(prefix);
@@ -87,39 +87,39 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             return [];
         }
     }
-    
+
     async getChannel(channelId: string): Promise<PersistedChannel | null> {
         const key = `${this.channelPrefix}:${channelId}`;
         return await this.get<PersistedChannel>(key);
     }
-    
+
     async setChannel(channelId: string, channel: PersistedChannel, ttl?: number): Promise<void> {
         const key = `${this.channelPrefix}:${channelId}`;
         await this.set(key, channel, ttl);
     }
-    
+
     async deleteChannel(channelId: string): Promise<void> {
         const channelKey = `${this.channelPrefix}:${channelId}`;
         const peersKey = `${this.channelPeersPrefix}:${channelId}`;
-        
+
         await Promise.all([
             this.delete(channelKey),
             this.delete(peersKey)
         ]);
     }
-    
+
     async getAllChannels(): Promise<PersistedChannel[]> {
         try {
             const keys = await this.getKeys(`${this.channelPrefix}:`);
             const channels: PersistedChannel[] = [];
-            
+
             for (const key of keys) {
                 const channel = await this.get<PersistedChannel>(key);
                 if (channel) {
                     channels.push(channel);
                 }
             }
-            
+
             return channels;
         }
         catch (error) {
@@ -127,34 +127,34 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             return [];
         }
     }
-    
+
     async getSubscription(peerId: string): Promise<PersistedSubscription | null> {
         const key = `${this.subscriptionPrefix}:${peerId}`;
         return await this.get<PersistedSubscription>(key);
     }
-    
+
     async setSubscription(peerId: string, subscription: PersistedSubscription, ttl?: number): Promise<void> {
         const key = `${this.subscriptionPrefix}:${peerId}`;
         await this.set(key, subscription, ttl);
     }
-    
+
     async deleteSubscription(peerId: string): Promise<void> {
         const key = `${this.subscriptionPrefix}:${peerId}`;
         await this.delete(key);
     }
-    
+
     async getAllSubscriptions(): Promise<PersistedSubscription[]> {
         try {
             const keys = await this.getKeys(`${this.subscriptionPrefix}:`);
             const subscriptions: PersistedSubscription[] = [];
-            
+
             for (const key of keys) {
                 const subscription = await this.get<PersistedSubscription>(key);
                 if (subscription) {
                     subscriptions.push(subscription);
                 }
             }
-            
+
             return subscriptions;
         }
         catch (error) {
@@ -162,12 +162,12 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             return [];
         }
     }
-    
+
     async addPeerToChannel(channelId: string, peerId: string): Promise<void> {
         try {
             const key = `${this.channelPeersPrefix}:${channelId}`;
             const currentPeers = await this.get<string[]>(key) || [];
-            
+
             if (!currentPeers.includes(peerId)) {
                 currentPeers.push(peerId);
                 await this.set(key, currentPeers);
@@ -177,14 +177,14 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             console.error(`Failed to add peer ${peerId} to channel ${channelId}:`, error);
         }
     }
-    
+
     async removePeerFromChannel(channelId: string, peerId: string): Promise<void> {
         try {
             const key = `${this.channelPeersPrefix}:${channelId}`;
             const currentPeers = await this.get<string[]>(key) || [];
-            
+
             const updatedPeers = currentPeers.filter(id => id !== peerId);
-            
+
             if (updatedPeers.length === 0) {
                 await this.delete(key);
             } else {
@@ -195,7 +195,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             console.error(`Failed to remove peer ${peerId} from channel ${channelId}:`, error);
         }
     }
-    
+
     async getChannelPeers(channelId: string): Promise<string[]> {
         try {
             const key = `${this.channelPeersPrefix}:${channelId}`;
@@ -206,48 +206,54 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             return [];
         }
     }
-    
+
     async updateChannelActivity(channelId: string): Promise<void> {
         try {
             const channel = await this.getChannel(channelId);
             if (channel) {
-                channel.last_activity = new Date().getTime();
-                await this.setChannel(channelId, channel);
+                const updatedChannel: PersistedChannel = {
+                    ...channel,
+                    last_activity: new Date().getTime()
+                };
+                await this.setChannel(channelId, updatedChannel);
             }
         }
         catch (error) {
             console.error(`Failed to update activity for channel ${channelId}:`, error);
         }
     }
-    
+
     async updateSubscriptionActivity(peerId: string): Promise<void> {
         try {
             const subscription = await this.getSubscription(peerId);
             if (subscription) {
-                subscription.last_activity = new Date().getTime();
-                await this.setSubscription(peerId, subscription);
+                const updatedSubscription: PersistedSubscription = {
+                    ...subscription,
+                    last_activity: new Date().getTime()
+                };
+                await this.setSubscription(peerId, updatedSubscription);
             }
         }
         catch (error) {
             console.error(`Failed to update activity for subscription ${peerId}:`, error);
         }
     }
-    
+
     private async isExpired(fullKey: string): Promise<boolean> {
         try {
             const value = await useStorage().getItem(fullKey);
             if (!value || typeof value !== 'object') return false;
-            
+
             const wrapped = value as { data: any; expiresAt: number };
             if (!wrapped.expiresAt) return false;
-            
+
             return Date.now() > wrapped.expiresAt;
         }
         catch {
             return false;
         }
     }
-    
+
     async cleanup(): Promise<void> {
         try {
             const prefixes = [
@@ -255,7 +261,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
                 this.subscriptionPrefix,
                 this.channelPeersPrefix
             ];
-            
+
             for (const prefix of prefixes) {
                 const keys = await this.getKeys(`${prefix}:`);
                 const cleanupPromises = keys.map(async (key: string) => {
@@ -263,29 +269,29 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
                         await useStorage().removeItem(key);
                     }
                 });
-                
+
                 await Promise.all(cleanupPromises);
             }
-            
+
             await this.cleanupEmptyChannels();
         }
         catch (error) {
             console.error('Failed to cleanup WebSocket storage:', error);
         }
     }
-    
+
     private async cleanupEmptyChannels(): Promise<void> {
         try {
             const channels = await this.getAllChannels();
-            
+
             for (const channel of channels) {
                 const peers = await this.getChannelPeers(channel.channel_uuid);
-                
+
                 if (peers.length === 0) {
                     const lastActivity = new Date(channel.last_activity);
                     const now = new Date();
                     const hoursSinceActivity = (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
-                    
+
                     if (hoursSinceActivity > 24) {
                         await this.deleteChannel(channel.channel_uuid);
                     }
@@ -296,7 +302,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             console.error('Failed to cleanup empty channels:', error);
         }
     }
-    
+
     async getStorageStats(): Promise<{
         totalChannels: number;
         totalSubscriptions: number;
@@ -308,17 +314,17 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
                 this.getAllChannels(),
                 this.getAllSubscriptions()
             ]);
-            
+
             let channelsWithPeers = 0;
             let orphanedPeerMappings = 0;
-            
+
             for (const channel of channels) {
                 const peers = await this.getChannelPeers(channel.channel_uuid);
                 if (peers.length > 0) {
                     channelsWithPeers++;
                 }
             }
-            
+
             const peerMappingKeys = await this.getKeys(`${this.channelPeersPrefix}:`);
             for (const key of peerMappingKeys) {
                 const channelId = key.split(':').pop();
@@ -326,7 +332,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
                     orphanedPeerMappings++;
                 }
             }
-            
+
             return {
                 totalChannels: channels.length,
                 totalSubscriptions: subscriptions.length,

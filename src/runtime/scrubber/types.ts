@@ -27,6 +27,4 @@ export interface ScrubberConfig {
 export interface ScrubResult {
     scrubbed: boolean;
     fieldsModified: string[];
-    originalSize: number;
-    scrubbedSize: number;
 }

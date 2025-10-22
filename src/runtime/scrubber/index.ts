@@ -10,6 +10,8 @@ export class LogScrubber {
     private fieldRuleMap: Map<string, ScrubRule>;
     private regexRules: { pattern: RegExp; rule: ScrubRule }[];
     private scrubStats: { totalProcessed: number; totalScrubbed: number };
+    private fieldRuleCache: Map<string, ScrubRule | null> = new Map();
+    private readonly MAX_CACHE_SIZE = 1000;
 
     constructor(config: Partial<ScrubberConfig> = {}) {
         this.config = defu(config, {
@@ -23,7 +25,7 @@ export class LogScrubber {
         this.fieldRuleMap = new Map();
         this.regexRules = [];
         this.scrubStats = { totalProcessed: 0, totalScrubbed: 0 };
-        
+
         this.buildRuleMaps();
     }
 
@@ -89,33 +91,53 @@ export class LogScrubber {
     }
 
     private findRule(fieldName: string): ScrubRule | null {
+        if (this.fieldRuleCache.has(fieldName)) {
+            return this.fieldRuleCache.get(fieldName)!;
+        }
+
         const lowerFieldName = fieldName.toLowerCase();
-        
+
         const exactMatch = this.fieldRuleMap.get(lowerFieldName);
-        if (exactMatch) return exactMatch;
+        if (exactMatch) {
+            this.cacheRule(fieldName, exactMatch);
+            return exactMatch;
+        }
 
         for (const { pattern, rule } of this.regexRules) {
             if (pattern.test(fieldName)) {
+                this.cacheRule(fieldName, rule);
                 return rule;
             }
         }
 
+        this.cacheRule(fieldName, null);
         return null;
+    }
+
+    private cacheRule(fieldName: string, rule: ScrubRule | null): void {
+        if (this.fieldRuleCache.size >= this.MAX_CACHE_SIZE) {
+            const firstKey = this.fieldRuleCache.keys().next().value;
+
+            if (firstKey !== undefined) {
+                this.fieldRuleCache.delete(firstKey);
+            }
+        }
+        this.fieldRuleCache.set(fieldName, rule);
     }
 
     private isEmptyValue(value: any): boolean {
         if (typeof value === 'string') {
             return value.trim() === '';
         }
-        
+
         if (Array.isArray(value)) {
             return value.length === 0;
         }
-        
+
         if (typeof value === 'object' && value !== null) {
             return Object.keys(value).length === 0;
         }
-        
+
         return false;
     }
 
@@ -123,33 +145,33 @@ export class LogScrubber {
         if (value === null || value === undefined) return value;
 
         if (this.isEmptyValue(value)) return value;
-        
+
         const strValue = String(value);
-        
+
         switch (action) {
             case SCRUB_ACTION.REDACT_FULL:
                 return this.config.preserveTypes && typeof value === 'number' ? 0 : '[REDACTED]';
-                
+
             case SCRUB_ACTION.MASK_FIRST_ONLY:
                 if (strValue.length <= 1) return '*';
                 return strValue[0] + '*'.repeat(strValue.length - 1);
-                
+
             case SCRUB_ACTION.MASK_PARTIAL:
                 if (strValue.length < 2) return '*';
                 if (strValue.length < 7) {
                     return strValue[0] + '*'.repeat(strValue.length - 1);
                 }
                 return strValue[0] + '*'.repeat(5) + strValue[strValue.length - 1];
-                
+
             case SCRUB_ACTION.HASH_VALUE:
                 return this.simpleHash(strValue);
-                
+
             case SCRUB_ACTION.MASK_EMAIL:
                 return this.maskEmail(strValue);
-                
+
             case SCRUB_ACTION.MASK_PHONE:
                 return this.maskPhone(strValue);
-                
+
             default:
                 return value;
         }
@@ -158,25 +180,25 @@ export class LogScrubber {
     private maskEmail(email: string): string {
         const emailRegex = /^([^@]+)@(.+)$/;
         const match = email.match(emailRegex);
-        
+
         if (!match) return email;
-        
+
         const [, localPart, domain] = match;
         if (localPart.length <= 1) return `*@${domain}`;
-        
+
         return `${localPart[0]}***@${domain}`;
     }
 
     private maskPhone(phone: string): string {
         const digits = phone.replace(/\D/g, '');
-        
+
         if (digits.length < 4) return phone;
-        
+
         const masked = phone.replace(/\d/g, (digit, index) => {
             const digitIndex = phone.substring(0, index).replace(/\D/g, '').length;
             return (digitIndex === 0 || digitIndex === digits.length - 1) ? digit : '*';
         });
-        
+
         return masked;
     }
 
@@ -202,7 +224,7 @@ export class LogScrubber {
         if (visited.has(obj)) {
             return { modified: false, fieldsModified: [] };
         }
-        
+
         visited.add(obj);
 
         let modified = false;
@@ -224,7 +246,7 @@ export class LogScrubber {
             else {
                 for (const [key, value] of Object.entries(obj)) {
                     const rule = this.findRule(key);
-                    
+
                     if (rule) {
                         const scrubbedValue = this.applyScrubAction(value, rule.action);
                         if (scrubbedValue !== value) {
@@ -253,49 +275,26 @@ export class LogScrubber {
 
     public scrubLoggerObject(logObj: LoggerObject): ScrubResult {
         if (!this.config.enabled) {
-            return {
-                scrubbed: false,
-                fieldsModified: [],
-                originalSize: 0,
-                scrubbedSize: 0
-            };
+            return { scrubbed: false, fieldsModified: [] };
         }
 
         this.scrubStats.totalProcessed++;
 
-        let originalSize = 0;
-        try {
-            originalSize = JSON.stringify(logObj).length;
-        }
-        catch (e) {
-            originalSize = JSON.stringify(logObj.msg || '').length + 100;
-        }
-
         const result = this.scrubObject(logObj.ctx);
-        
+
         if (result.modified) {
             this.scrubStats.totalScrubbed++;
-        }
-
-        let scrubbedSize = 0;
-        try {
-            scrubbedSize = JSON.stringify(logObj).length;
-        }
-        catch (e) {
-            scrubbedSize = originalSize;
         }
 
         return {
             scrubbed: result.modified,
             fieldsModified: result.fieldsModified,
-            originalSize,
-            scrubbedSize
         };
     }
 
     public scrubBatch(batch: LoggerObjectBatch): ScrubResult[] {
         const results: ScrubResult[] = [];
-        
+
         for (const logObj of batch.logs) {
             results.push(this.scrubLoggerObject(logObj));
         }
@@ -321,8 +320,8 @@ export class LogScrubber {
     public getStats(): { totalProcessed: number; totalScrubbed: number; scrubRate: number } {
         return {
             ...this.scrubStats,
-            scrubRate: this.scrubStats.totalProcessed > 0 
-                ? this.scrubStats.totalScrubbed / this.scrubStats.totalProcessed 
+            scrubRate: this.scrubStats.totalProcessed > 0
+                ? this.scrubStats.totalScrubbed / this.scrubStats.totalProcessed
                 : 0
         };
     }

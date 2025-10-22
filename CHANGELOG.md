@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.1.8
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.7...v0.1.8)
+
+### 🚀 Enhancements
+
+- Add regex rule cache to scrubber ([b3bad9d](https://github.com/zephkelly/nuxt-frogger/commit/b3bad9d))
+
+### 🩹 Fixes
+
+- Single pass string operation on maskPhone in scrubber ([43df426](https://github.com/zephkelly/nuxt-frogger/commit/43df426))
+- Websocket KV layer mutating stored object ([a6e3395](https://github.com/zephkelly/nuxt-frogger/commit/a6e3395))
+
+### 🏡 Chore
+
+- **release:** V0.1.7 ([03c5426](https://github.com/zephkelly/nuxt-frogger/commit/03c5426))
+- Use built-in baseURL param in  over URL construction ([d1a3958](https://github.com/zephkelly/nuxt-frogger/commit/d1a3958))
+- Refactor websocket kv layer to use dep injection for storage ([fe87e26](https://github.com/zephkelly/nuxt-frogger/commit/fe87e26))
+- Improve client useFrogger and websocket  ergonomics ([64af9f4](https://github.com/zephkelly/nuxt-frogger/commit/64af9f4))
+
+### ✅ Tests
+
+- Add test cases for log scrubber ([3e81bc9](https://github.com/zephkelly/nuxt-frogger/commit/3e81bc9))
+- Add test file for websocket storage layer ([6831dd1](https://github.com/zephkelly/nuxt-frogger/commit/6831dd1))
+- Add websocket kv layer test case with 80%+ coverage ([49b4849](https://github.com/zephkelly/nuxt-frogger/commit/49b4849))
+
+### ❤️ Contributors
+
+- Ekelly <masterevank@gmail.com>
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.7
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.6...v0.1.7)

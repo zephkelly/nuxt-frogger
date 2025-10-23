@@ -13,8 +13,8 @@ import type {
 export class WebSocketLogHandler {
     private transport: IWebSocketTransport;
 
-    constructor(transport?: IWebSocketTransport) {
-        this.transport = transport || WebSocketTransport.getInstance();
+    constructor(transport: IWebSocketTransport) {
+        this.transport = transport;
     }
 
     async handleOpen(peer: Peer) {

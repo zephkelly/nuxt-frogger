@@ -5,6 +5,7 @@ import { Peer } from "crossws";
 import { WebSocketLogHandler } from "./../websocket/log-handler";
 import type { FroggerWebSocketOptions } from "./types";
 import { WebSocketTransport } from '../logger/_transports/websocket-transport';
+import { createWebSocketStateKVLayer } from './state/factory';
 
 /**
  * Nuxt-specific WebSocket handler wrapper
@@ -19,7 +20,7 @@ import { WebSocketTransport } from '../logger/_transports/websocket-transport';
  * });
  */
 export function defineFroggerWebSocketHandler(options: FroggerWebSocketOptions = {}) {
-    const handler = new WebSocketLogHandler(WebSocketTransport.getInstance());
+    const handler = new WebSocketLogHandler(WebSocketTransport.getInstance(createWebSocketStateKVLayer('frogger-websocket')));
 
     return defineWebSocketHandler({
         upgrade(request: Request) {

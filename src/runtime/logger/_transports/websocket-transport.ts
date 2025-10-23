@@ -10,7 +10,6 @@ import type {
     LogMessage
 } from "../../websocket/types";
 
-import { createWebSocketStateKVLayer } from "../../websocket/state/factory";
 import { LogLevelParser, type LogLevelInput } from "../../shared/utils/log-level-parser";
 import type { IFroggerTransport } from "./types";
 
@@ -31,9 +30,9 @@ export class WebSocketTransport implements IFroggerTransport {
     private readonly MESSAGE_RATE_LIMIT = 100;
     private lastMessageTimes: Map<string, number> = new Map();
 
-    private constructor(storage?: IWebSocketStateStorage) {
+    private constructor(storage: IWebSocketStateStorage) {
         this.transportId = `websocket-reporter-${Date.now()}`;
-        this.state = storage || createWebSocketStateKVLayer('frogger-websocket-transport');
+        this.state = storage;
         this.startCleanupInterval();
 
         this.loadPersistedData().catch(error => {
@@ -41,7 +40,7 @@ export class WebSocketTransport implements IFroggerTransport {
         });
     }
 
-    public static getInstance(state?: IWebSocketStateStorage) {
+    public static getInstance(state: IWebSocketStateStorage): WebSocketTransport {
         if (!WebSocketTransport.instance) {
             WebSocketTransport.instance = new WebSocketTransport(state);
         }

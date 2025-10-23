@@ -9,20 +9,17 @@
 </template>
 
 <script setup>
-const socket = useWebsocket({
-    onMessage: (event) => {
-        console.log('Received message:', event.data);
-    },
-});
+const socket = useFroggerWebSocket()
 
 onMounted(() => {
     if (!import.meta.client) return
-
-    socket.connect('main', {
-        filters: JSON.stringify({
-            level: [1, 0],
+    
+    socket.channel('main')
+        .levels([1, '0'])
+        .onMessage((ws, message) => {
+            console.log('Received message:', message);
         })
-    });
+        .connect()
 });
 
 const test = async () => {

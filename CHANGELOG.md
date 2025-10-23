@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.1.9
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.8...v0.1.9)
+
+### 🚀 Enhancements
+
+- Add nitro side global error capture ([1a4159c](https://github.com/zephkelly/nuxt-frogger/commit/1a4159c))
+- Log level parser utility ([1c900e5](https://github.com/zephkelly/nuxt-frogger/commit/1c900e5))
+- UseFroggerWebSocket composable with method-chaining syntax ([6be80e3](https://github.com/zephkelly/nuxt-frogger/commit/6be80e3))
+
+### 🏡 Chore
+
+- Update websocket transport to use new log level parser ([f22a940](https://github.com/zephkelly/nuxt-frogger/commit/f22a940))
+- Dependency inject storage and transport websocket layers ([9419f14](https://github.com/zephkelly/nuxt-frogger/commit/9419f14))
+
+### ✅ Tests
+
+- Parse url parameters test file ([ed66552](https://github.com/zephkelly/nuxt-frogger/commit/ed66552))
+- Websocket log handler test file ([21719f3](https://github.com/zephkelly/nuxt-frogger/commit/21719f3))
+
+### ❤️ Contributors
+
+- Ekelly <masterevank@gmail.com>
+
 ## v0.1.8
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.7...v0.1.8)

@@ -1,8 +1,9 @@
 import type { Peer } from 'crossws';
 import type { LoggerObject } from '../shared/types/log';
+import type { LogLevelInput } from '../shared/utils/log-level-parser';
 
 export interface SubscriptionFilter {
-    level?: string[];
+    level?: LogLevelInput | LogLevelInput[];
     source?: string[];
     tags?: string[];
 }
@@ -32,7 +33,6 @@ export interface IWebSocketTransport {
     getFilterDescription(filters?: SubscriptionFilter): string;
 }
 
-// Websocket handler
 export interface FroggerWebSocketOptions {
     upgrade?: (request: Request) => Promise<boolean> | boolean;
 }
@@ -49,7 +49,6 @@ export interface LogWebSocketMessage {
 }
 
 
-// Websocket communication
 export enum MessageType {
     Ping = 'ping',
     Pong = 'pong',

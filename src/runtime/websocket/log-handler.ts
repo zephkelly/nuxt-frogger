@@ -2,7 +2,6 @@ import { Peer } from "crossws";
 
 import { type IWebSocketTransport } from "./types";
 import { WebSocketTransport } from "../logger/_transports/websocket-transport";
-import { LogLevelFilter } from "../shared/utils/log-level-filter";
 
 import type {
     LogWebSocketMessage,
@@ -35,10 +34,12 @@ export function parseUrlParams(url: URL): LogWebSocketParams {
             filters = {};
 
             if (level) {
-                const numLevel = parseInt(level);
-                filters.level = isNaN(numLevel)
-                    ? level.split(',')
-                    : LogLevelFilter.getLevelsUpTo(numLevel);
+                if (level.includes(',')) {
+                    filters.level = level.split(',').map(l => l.trim());
+                }
+                else {
+                    filters.level = level;
+                }
             }
 
             if (tags) filters.tags = tags.split(',');

@@ -12,7 +12,7 @@ import type {
 } from "../../websocket/types";
 
 import { createWebSocketStateKVLayer } from "../../websocket/state/factory";
-import { LogLevelFilter } from "../../shared/utils/log-level-filter";
+import { LogLevelParser, type LogLevelInput } from "../../shared/utils/log-level-parser";
 import type { IFroggerTransport } from "./types";
 
 
@@ -92,7 +92,6 @@ export class WebSocketTransport implements IFroggerTransport {
             return;
         }
 
-        console.log('WebSocketTransport: Broadcasting log batch');
         this.broadcastLogBatch(logs).catch(error => {
             console.error('WebSocketTransport: Error broadcasting log batch:', error);
         });
@@ -217,10 +216,17 @@ export class WebSocketTransport implements IFroggerTransport {
         filters?: SubscriptionFilter
     ): Promise<boolean> {
         try {
-            if (filters?.level !== undefined && typeof filters.level === 'number') {
-                if (filters.level < 0 || filters.level > 5) {
-                    console.error(`WebSocketTransport: Invalid log level ${filters.level}. Must be between 0-5`);
-                    return false;
+            // Validate level filters if provided
+            if (filters?.level !== undefined) {
+                const levelsToValidate = Array.isArray(filters.level) ? filters.level : [filters.level];
+
+                for (const level of levelsToValidate) {
+                    try {
+                        LogLevelParser.parse(level);
+                    } catch (error) {
+                        console.error(`WebSocketTransport: Invalid log level '${level}':`, error);
+                        return false;
+                    }
                 }
             }
 
@@ -371,7 +377,6 @@ export class WebSocketTransport implements IFroggerTransport {
     }
 
     private async broadcastLogBatch(logs: LoggerObject[]): Promise<void> {
-        console.log('WebSocketTransport: Broadcasting log batch to channels', logs.length);
         if (!logs || logs.length === 0) {
             return;
         }
@@ -379,16 +384,12 @@ export class WebSocketTransport implements IFroggerTransport {
         const batchId = `batch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const originalLength = logs.length;
 
-        console.log(this.channels.size, 'channels to process');
         for (const [channelId, channel] of this.channels.entries()) {
-            console.log(`WebSocketTransport: Processing channel ${channelId} for log batch`);
             if (channel.subscribers.size === 0) {
-                console.log(`WebSocketTransport: No subscribers for channel ${channelId}, skipping`);
                 continue;
             }
 
             if (!this.shouldSendMessage(channelId)) {
-                console.log(`WebSocketTransport: Rate limit exceeded for channel ${channelId}, skipping`);
                 continue;
             }
 
@@ -402,16 +403,10 @@ export class WebSocketTransport implements IFroggerTransport {
 
             const subscriberGroups = this.groupSubscribersByFilters(channel);
 
-            console.log(`WebSocketTransport: Found ${subscriberGroups.size} subscriber groups for channel ${channelId}`);
-
             for (const [filterKey, subscriberGroup] of subscriberGroups.entries()) {
                 const { peers, filters } = subscriberGroup;
 
-                console.log(`WebSocketTransport: Processing filters for ${logs.length} logs: ${filterKey} for channel ${channelId}`);
-
                 const filteredLogs = this.filterLogBatch(logs, filters);
-                console.dir(logs, { depth: null });
-                console.log(`WebSocketTransport: Filter '${filterKey}' resulted in ${filteredLogs.length} logs for channel ${channelId}`);
 
                 if (filteredLogs.length === 0) {
                     continue;
@@ -427,14 +422,10 @@ export class WebSocketTransport implements IFroggerTransport {
                         });
                     }
 
-                    console.log(`WebSocketTransport: Preparing to send log batch to peer ${peerId} in channel ${channelId}`, peer);
-
                     if (!peer || !peer.websocket) {
                         channel.subscribers.delete(peerId);
                         return Promise.resolve();
                     }
-
-                    console.log(`WebSocketTransport: Sending log batch to peer ${peerId} in channel ${channelId} (filter: ${filterKey})`, peer);
 
                     return this.sendLogBatchToPeer(peer, filteredLogs, channelId, {
                         batchId,
@@ -486,7 +477,20 @@ export class WebSocketTransport implements IFroggerTransport {
         const parts: string[] = [];
 
         if (filters.level !== undefined) {
-            parts.push(`level:${filters.level}`);
+            if (Array.isArray(filters.level)) {
+                // For arrays, create a stable key by sorting the serialized values
+                const levelKeys = filters.level.map(level => {
+                    if (typeof level === 'number') return `n${level}`;
+                    return `s${level}`;
+                }).sort();
+                parts.push(`level:${levelKeys.join(',')}`);
+            } else {
+                // Single level value
+                const levelKey = typeof filters.level === 'number'
+                    ? `n${filters.level}`
+                    : `s${filters.level}`;
+                parts.push(`level:${levelKey}`);
+            }
         }
 
         if (filters.source && filters.source.length > 0) {
@@ -540,12 +544,21 @@ export class WebSocketTransport implements IFroggerTransport {
 
     private passesFilter(logObj: LoggerObject, filters: SubscriptionFilter): boolean {
         if (filters.level !== undefined) {
-            if (logObj.lvl === undefined) {
+            if (logObj.lvl === undefined || logObj.type === undefined) {
                 return false;
             }
 
-            if (!LogLevelFilter.passesLevelFilter(logObj.ctx.lvl, filters.level)) {
-                return false;
+            if (Array.isArray(filters.level)) {
+                const matchesAny = filters.level.some(levelInput =>
+                    LogLevelParser.matchesFilter(logObj.type, logObj.lvl, levelInput)
+                );
+                if (!matchesAny) {
+                    return false;
+                }
+            } else {
+                if (!LogLevelParser.matchesFilter(logObj.type, logObj.lvl, filters.level)) {
+                    return false;
+                }
             }
         }
 
@@ -749,7 +762,22 @@ export class WebSocketTransport implements IFroggerTransport {
         const parts: string[] = [];
 
         if (filters.level !== undefined) {
-            parts.push(`Levels: ${LogLevelFilter.describeLevelFilter(filters.level)}`);
+            if (Array.isArray(filters.level)) {
+                const descriptions = filters.level.map(level => {
+                    try {
+                        return LogLevelParser.describe(level);
+                    } catch {
+                        return `Invalid: ${level}`;
+                    }
+                });
+                parts.push(`Levels: ${descriptions.join(', ')}`);
+            } else {
+                try {
+                    parts.push(`Levels: ${LogLevelParser.describe(filters.level)}`);
+                } catch {
+                    parts.push(`Levels: Invalid (${filters.level})`);
+                }
+            }
         }
 
         if (filters.source && filters.source.length > 0) {

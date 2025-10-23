@@ -287,10 +287,10 @@ export default defineNuxtModule<ModuleOptions>({
                 name: 'useFrogger',
                 from: resolver.resolve('./runtime/app/composables/useFrogger')
             }]
-            if (finalOptions.websocket && finalOptions.serverModule !== false) {
+            if (finalOptions.websocket && finalOptions.serverModule) {
                 clientComposables.push({
-                    name: 'useWebsocket',
-                    from: resolver.resolve('./runtime/app/composables/useWebsocket')
+                    name: 'useFroggerWebSocket',
+                    from: resolver.resolve('./runtime/app/composables/useFroggerWebSocket')
                 })
             }
             addImports(clientComposables)
@@ -304,9 +304,6 @@ export default defineNuxtModule<ModuleOptions>({
                 addPlugin(resolver.resolve('./runtime/app/plugins/global-vue-errors'))
             }
 
-            if (finalOptions.websocket) {
-                addImportsDir(resolver.resolve('./runtime/app/composables/useWebsocket'))
-            }
         }
 
         if (finalOptions.serverModule) {
@@ -350,7 +347,15 @@ export default defineNuxtModule<ModuleOptions>({
 
             if (finalOptions.websocket) {
                 if (_nuxt.options.dev) {
+
                     const wsRoute = typeof finalOptions.websocket === 'object' ? finalOptions.websocket.route || '/api/_frogger/dev-ws' : '/api/_frogger/dev-ws';
+
+                    if (wsRoute !== '/api/_frogger/dev-ws') {
+                        console.log(
+                            '🐸 \x1b[32mFROGGER\x1b[0m',
+                            `Using custom WebSocket route: \x1b[36m${wsRoute}\x1b[0m`
+                        );
+                    }
 
                     addServerHandler({
                         route: wsRoute,

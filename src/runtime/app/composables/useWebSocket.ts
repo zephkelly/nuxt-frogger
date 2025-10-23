@@ -54,7 +54,7 @@ const DEFAULT_OPTIONS: Required<WebSocketOptions> = {
     onError: () => { }
 }
 
-export const useWebsocket = (
+export const useWebSocket = (
     socket_options: WebSocketOptions = {}
 ) => {
     if (import.meta.server) {
@@ -94,10 +94,7 @@ export const useWebsocket = (
         channel
     } = options;
 
-    console.log("WebSocket endpoint from options:", options);
-
     const urlRef = ref<string>(endpoint || configURL);
-    console.log("WebSocket URL:", urlRef.value);
     const status = ref<WebSocketStatus>(WebSocketStatus.Closed);
     const socket = ref<WebSocket | undefined>(undefined);
     const channelRef = ref<string | undefined>(channel);

@@ -1,6 +1,5 @@
 import { Peer } from "crossws";
 
-import type { IWebSocketTransport } from "./../../websocket/types";
 import type { IWebSocketStateStorage } from "../../websocket/state/types";
 import type { LoggerObject } from "../../shared/types/log";
 
@@ -216,7 +215,6 @@ export class WebSocketTransport implements IFroggerTransport {
         filters?: SubscriptionFilter
     ): Promise<boolean> {
         try {
-            // Validate level filters if provided
             if (filters?.level !== undefined) {
                 const levelsToValidate = Array.isArray(filters.level) ? filters.level : [filters.level];
 
@@ -247,10 +245,6 @@ export class WebSocketTransport implements IFroggerTransport {
             };
 
             this.subscriptions.set(peer.id, subscription);
-
-            // if (filters?.level !== undefined) {
-            //     const levelDesc = LogLevelFilter.describeLevelFilter(filters.level);
-            // }
 
             try {
                 const persistedSubscription: PersistedSubscription = {
@@ -478,18 +472,25 @@ export class WebSocketTransport implements IFroggerTransport {
 
         if (filters.level !== undefined) {
             if (Array.isArray(filters.level)) {
-                // For arrays, create a stable key by sorting the serialized values
                 const levelKeys = filters.level.map(level => {
                     if (typeof level === 'number') return `n${level}`;
                     return `s${level}`;
                 }).sort();
                 parts.push(`level:${levelKeys.join(',')}`);
-            } else {
-                // Single level value
+            }
+            else {
                 const levelKey = typeof filters.level === 'number'
                     ? `n${filters.level}`
                     : `s${filters.level}`;
                 parts.push(`level:${levelKey}`);
+            }
+        }
+
+        if (filters.type !== undefined) {
+            if (Array.isArray(filters.type)) {
+                parts.push(`type:${filters.type.sort().join(',')}`);
+            } else {
+                parts.push(`type:${filters.type}`);
             }
         }
 
@@ -557,6 +558,22 @@ export class WebSocketTransport implements IFroggerTransport {
                 }
             } else {
                 if (!LogLevelParser.matchesFilter(logObj.type, logObj.lvl, filters.level)) {
+                    return false;
+                }
+            }
+        }
+
+        if (filters.type !== undefined) {
+            if (logObj.type === undefined) {
+                return false;
+            }
+
+            if (Array.isArray(filters.type)) {
+                if (!filters.type.includes(logObj.type)) {
+                    return false;
+                }
+            } else {
+                if (logObj.type !== filters.type) {
                     return false;
                 }
             }
@@ -777,6 +794,14 @@ export class WebSocketTransport implements IFroggerTransport {
                 } catch {
                     parts.push(`Levels: Invalid (${filters.level})`);
                 }
+            }
+        }
+
+        if (filters.type !== undefined) {
+            if (Array.isArray(filters.type)) {
+                parts.push(`Types: ${filters.type.join(', ')}`);
+            } else {
+                parts.push(`Types: ${filters.type}`);
             }
         }
 

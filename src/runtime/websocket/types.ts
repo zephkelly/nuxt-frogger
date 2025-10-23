@@ -1,9 +1,11 @@
 import type { Peer } from 'crossws';
 import type { LoggerObject } from '../shared/types/log';
 import type { LogLevelInput } from '../shared/utils/log-level-parser';
+import type { LogType } from 'consola';
 
 export interface SubscriptionFilter {
     level?: LogLevelInput | LogLevelInput[];
+    type?: LogType | LogType[];
     source?: string[];
     tags?: string[];
 }

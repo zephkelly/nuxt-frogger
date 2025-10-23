@@ -2,53 +2,12 @@ import { Peer } from "crossws";
 
 import { type IWebSocketTransport } from "./types";
 import { WebSocketTransport } from "../logger/_transports/websocket-transport";
+import { parseUrlParams } from "./utils/parse-url-params";
 
 import type {
     LogWebSocketMessage,
     LogWebSocketParams,
 } from "./types";
-import type { SubscriptionFilter } from "./types";
-
-
-export function parseUrlParams(url: URL): LogWebSocketParams {
-    const channel = url.searchParams.get('channel');
-    const filtersParam = url.searchParams.get('filters');
-
-    let filters: SubscriptionFilter | undefined;
-
-    if (filtersParam) {
-        try {
-            filters = JSON.parse(filtersParam);
-        }
-        catch {
-            console.warn('[Frogger] Invalid filters JSON, ignoring');
-        }
-    }
-
-    if (!filters) {
-        const level = url.searchParams.get('level');
-        const tags = url.searchParams.get('tags');
-        const sources = url.searchParams.get('sources');
-
-        if (level || tags || sources) {
-            filters = {};
-
-            if (level) {
-                if (level.includes(',')) {
-                    filters.level = level.split(',').map(l => l.trim());
-                }
-                else {
-                    filters.level = level;
-                }
-            }
-
-            if (tags) filters.tags = tags.split(',');
-            if (sources) filters.source = sources.split(',');
-        }
-    }
-
-    return { channel: channel || undefined, filters };
-}
 
 
 export class WebSocketLogHandler {

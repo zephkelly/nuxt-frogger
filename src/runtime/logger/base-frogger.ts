@@ -79,7 +79,6 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         if (options.context) {
             this.globalContext.value = { ...options.context };
         }
-
     }
 
 

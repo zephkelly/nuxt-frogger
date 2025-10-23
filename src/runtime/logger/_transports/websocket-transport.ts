@@ -13,10 +13,11 @@ import type {
 
 import { createWebSocketStateKVLayer } from "../../websocket/state/factory";
 import { LogLevelFilter } from "../../shared/utils/log-level-filter";
+import type { IFroggerTransport } from "./types";
 
 
 
-export class WebSocketTransport implements IWebSocketTransport {
+export class WebSocketTransport implements IFroggerTransport {
     public readonly name = 'WebSocketTransport';
     public readonly transportId: string;
 
@@ -41,7 +42,7 @@ export class WebSocketTransport implements IWebSocketTransport {
         });
     }
 
-    public static getInstance(state?: IWebSocketStateStorage): IWebSocketTransport {
+    public static getInstance(state?: IWebSocketStateStorage) {
         if (!WebSocketTransport.instance) {
             WebSocketTransport.instance = new WebSocketTransport(state);
         }
@@ -80,6 +81,7 @@ export class WebSocketTransport implements IWebSocketTransport {
     }
 
     public log(logObj: LoggerObject): void {
+        console.log('WebSocketTransport: Broadcasting log');
         this.broadcastLogBatch([logObj]).catch(error => {
             console.error('WebSocketTransport: Error broadcasting log:', error);
         });
@@ -90,6 +92,7 @@ export class WebSocketTransport implements IWebSocketTransport {
             return;
         }
 
+        console.log('WebSocketTransport: Broadcasting log batch');
         this.broadcastLogBatch(logs).catch(error => {
             console.error('WebSocketTransport: Error broadcasting log batch:', error);
         });
@@ -194,8 +197,8 @@ export class WebSocketTransport implements IWebSocketTransport {
         }
 
         console.log(
-            '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
-            `🐸 Websocket channel '${channelId}' has been created`
+            '🐸 \x1b[32mFROGGER\x1b[0m',
+            `Websocket channel '${channelId}' has been created`
         );
         return channel;
     }
@@ -368,6 +371,7 @@ export class WebSocketTransport implements IWebSocketTransport {
     }
 
     private async broadcastLogBatch(logs: LoggerObject[]): Promise<void> {
+        console.log('WebSocketTransport: Broadcasting log batch to channels', logs.length);
         if (!logs || logs.length === 0) {
             return;
         }
@@ -375,7 +379,9 @@ export class WebSocketTransport implements IWebSocketTransport {
         const batchId = `batch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const originalLength = logs.length;
 
+        console.log(this.channels.size, 'channels to process');
         for (const [channelId, channel] of this.channels.entries()) {
+            console.log(`WebSocketTransport: Processing channel ${channelId} for log batch`);
             if (channel.subscribers.size === 0) {
                 continue;
             }
@@ -644,8 +650,8 @@ export class WebSocketTransport implements IWebSocketTransport {
             }
 
             console.log(
-                '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
-                `🐸 Websocket channel '${channelId}' has been destroyed`
+                '🐸 \x1b[32mFROGGER\x1b[0m',
+                `Websocket channel '${channelId}' has been destroyed`
             );
         }
         catch (error) {

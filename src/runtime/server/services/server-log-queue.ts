@@ -17,6 +17,7 @@ export class ServerLogQueueService {
 
     private batchTransporter?: BatchTransport;
     private directTransporters: IFroggerTransport[] = [];
+    private downstreamTransporters: IFroggerTransport[] = [];
 
     private scrubber: LogScrubber | null = null;
     private initialised: boolean = false
@@ -63,13 +64,12 @@ export class ServerLogQueueService {
         }
 
         if (batchingEnabled) {
-            const downstreamTransporters: IFroggerTransport[] = []
-            downstreamTransporters.push(fileTransporter);
+            this.downstreamTransporters.push(fileTransporter);
             if (websocketTransport) {
-                downstreamTransporters.push(websocketTransport);
+                this.downstreamTransporters.push(websocketTransport);
             }
 
-            const batchTransporter = createBatchTransport(downstreamTransporters);
+            const batchTransporter = createBatchTransport(this.downstreamTransporters);
             this.batchTransporter = batchTransporter;
         }
         else {

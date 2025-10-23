@@ -4,7 +4,7 @@ import type { RateLimitingOptions } from "../../rate-limiter/types";
 import type { AppInfoOptions } from "../../app-info/types";
 import type { WebsocketOptions } from "../../websocket/types/options";
 import type { ScrubberOptions } from "../../scrubber/options";
-
+import type { GlobalErrorCaptureOptions } from "./global-error";
 
 
 export interface ModuleOptions {
@@ -12,11 +12,11 @@ export interface ModuleOptions {
     serverModule?: {
         autoEventCapture?: boolean
     } | boolean
-    
+
     app?: AppInfoOptions,
 
     file?: FileOptions
-    
+
     batch?: BatchOptions | false
 
     rateLimit?: RateLimitingOptions | false
@@ -24,11 +24,13 @@ export interface ModuleOptions {
     websocket?: WebsocketOptions | boolean
 
     scrub?: ScrubberOptions | boolean
-    
+
+    errorCapture?: GlobalErrorCaptureOptions | boolean
+
     public?: {
         endpoint?: string
         baseUrl?: string
-        
+
         batch?: BatchOptions | false
 
         globalErrorCapture?: {

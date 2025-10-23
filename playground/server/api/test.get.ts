@@ -31,6 +31,6 @@ export default defineEventHandler((event) => {
 
     childLogger.info('This is a log message from the child logger with additional context from parent');
 
+    throw new Error('Ahh an error')
 
-    return 'request received and logged successfully';
 });

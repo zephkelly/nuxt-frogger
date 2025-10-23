@@ -35,7 +35,7 @@ export default defineNuxtModule<ModuleOptions>({
         },
 
         app: 'nuxt-frogger',
-        
+
         batch: {
             maxSize: 200,
             maxAge: 15000,
@@ -44,7 +44,7 @@ export default defineNuxtModule<ModuleOptions>({
             retryDelay: 10000,
             sortingWindowMs: 3000,
         },
-        
+
         file: {
             directory: 'logs',
             fileNameFormat: 'YYYY-MM-DD.log',
@@ -53,8 +53,8 @@ export default defineNuxtModule<ModuleOptions>({
             bufferMaxSize: 1 * 1024 * 1024,
             highWaterMark: 64 * 1024,
         },
-        
-        rateLimit: {      
+
+        rateLimit: {
             storage: {
                 driver: undefined,
                 options: {}
@@ -66,14 +66,14 @@ export default defineNuxtModule<ModuleOptions>({
                 perReporter: 50,
                 perApp: 30
             },
-            
+
             windows: {
                 global: 60,
                 perIp: 60,
                 perReporter: 60,
                 perApp: 60
             },
-            
+
             blocking: {
                 enabled: true,
                 escalationResetHours: 24,
@@ -97,9 +97,26 @@ export default defineNuxtModule<ModuleOptions>({
             defaultQueryTimeout: 30000,
         },
 
+        errorCapture: {
+            client: {
+                includeComponent: true,
+                includeComponentProps: true,
+                includeComponentOuterHTML: true,
+                includeInfo: true,
+                includeStack: true,
+            },
+            server: {
+                includeRequestContext: true,
+                includeHeaders: true,
+                includeRejectionHandled: false,
+                includeWarnings: false,
+                includeStack: true,
+            },
+        },
+
         public: {
             endpoint: DEFAULT_LOGGING_ENDPOINT,
-            
+
             globalErrorCapture: {
                 includeComponent: true,
                 includeComponentProps: false,
@@ -107,7 +124,6 @@ export default defineNuxtModule<ModuleOptions>({
                 includeStack: true,
                 includeInfo: true
             },
-
 
             batch: {
                 maxAge: 3000,
@@ -121,7 +137,7 @@ export default defineNuxtModule<ModuleOptions>({
     },
     async setup(_options, _nuxt) {
         const resolver = createResolver(import.meta.url)
-        
+
         // Provide #frogger import alias
         _nuxt.options.alias = _nuxt.options.alias || {};
         _nuxt.options.alias['#frogger/config'] = resolver.resolve('./runtime/options');
@@ -131,8 +147,8 @@ export default defineNuxtModule<ModuleOptions>({
         const froggerConfig = await loadFroggerConfig(_nuxt.options.rootDir);
 
         let finalOptions: ModuleOptions
-        
-        if (froggerConfig) { 
+
+        if (froggerConfig) {
             finalOptions = defu(froggerConfig, _options) as ModuleOptions;
         }
         else {
@@ -142,12 +158,12 @@ export default defineNuxtModule<ModuleOptions>({
         if (finalOptions.serverModule === false && finalOptions.clientModule === false) {
             throw new Error('🐸FROGGER: `serverModule` and `clientModule` are both set to `false`. At least one is required to use Frogger.');
         }
-        
+
 
         // Setup log directory
         const configuredDirectory = finalOptions.file?.directory || 'logs';
-        const logDir = isAbsolute(configuredDirectory) 
-            ? configuredDirectory 
+        const logDir = isAbsolute(configuredDirectory)
+            ? configuredDirectory
             : join(_nuxt.options.rootDir, configuredDirectory);
 
 
@@ -169,9 +185,11 @@ export default defineNuxtModule<ModuleOptions>({
                     websocket: {
                         route: typeof finalOptions.websocket === 'object' ? finalOptions.websocket.route : DEFAULT_WEBSOCKET_ENDPOINT,
                         defaultChannel: typeof finalOptions.websocket === 'object' ? finalOptions.websocket.defaultChannel : 'main'
-                    }
-                },
+                    },
 
+                    //@ts-ignore
+                    errorCapture: finalOptions.errorCapture.client
+                },
             },
             frogger: {
                 serverModule: finalOptions.serverModule,
@@ -184,7 +202,7 @@ export default defineNuxtModule<ModuleOptions>({
                     bufferMaxSize: finalOptions.file?.bufferMaxSize,
                     highWaterMark: finalOptions.file?.highWaterMark,
                 },
-                
+
                 batch: finalOptions.batch,
 
                 rateLimit: finalOptions.rateLimit,
@@ -196,6 +214,9 @@ export default defineNuxtModule<ModuleOptions>({
                 } : false,
 
                 scrub: finalOptions.scrub,
+
+                //@ts-ignore
+                errorCapture: finalOptions.errorCapture?.server
             }
         };
 
@@ -221,18 +242,18 @@ export default defineNuxtModule<ModuleOptions>({
                 }
             }
         })
-        
+
         _nuxt.hook('nitro:build:before', () => {
             // Warnings
             if (finalOptions.serverModule === false && finalOptions.public?.endpoint === DEFAULT_LOGGING_ENDPOINT) {
                 console.log(
-                '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
-                `You are using Frogger with \x1b[36mserverModule\x1b[0m set to \x1b[36mfalse\x1b[0m and no \x1b[36mpublic.endpoint\x1b[0m
+                    '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
+                    `You are using Frogger with \x1b[36mserverModule\x1b[0m set to \x1b[36mfalse\x1b[0m and no \x1b[36mpublic.endpoint\x1b[0m
                 set in your \x1b[36mfrogger.config.ts\x1b[0m. Your logs will never leave the client!`
                 );
             }
 
-            if (_nuxt.options.dev && ( finalOptions.serverModule || finalOptions.clientModule )) {
+            if (_nuxt.options.dev && (finalOptions.serverModule || finalOptions.clientModule)) {
                 console.log(
                     '🐸 \x1b[32mFROGGER\x1b[0m',
                     `Ready to log`
@@ -251,7 +272,7 @@ export default defineNuxtModule<ModuleOptions>({
                     console.log(
                         '\x1b[36mℹ\x1b[0m frogger.config.ts updated. Restarting Nuxt...'
                     );
-                    
+
                     _nuxt.callHook('restart', { hard: true });
                 }
             });
@@ -260,7 +281,7 @@ export default defineNuxtModule<ModuleOptions>({
 
         if (finalOptions.clientModule) {
             _nuxt.options.alias['#frogger/client'] = resolver.resolve('./runtime/app');
-            
+
             // Composables
             const clientComposables = [{
                 name: 'useFrogger',
@@ -276,8 +297,10 @@ export default defineNuxtModule<ModuleOptions>({
 
             addImportsDir(resolver.resolve('./runtime/app/utils'))
             addPlugin(resolver.resolve('./runtime/app/plugins/log-queue.client'))
-            
-            if (finalOptions.public?.globalErrorCapture !== false && finalOptions.public?.globalErrorCapture !== undefined) {
+
+            //@ts-expect-error
+            if (finalOptions?.errorCapture.client !== false && finalOptions?.errorCapture.client !== undefined) {
+                console.log('🐸 FROGGER: Setting up Vue global error capture');
                 addPlugin(resolver.resolve('./runtime/app/plugins/global-vue-errors'))
             }
 
@@ -316,10 +339,10 @@ export default defineNuxtModule<ModuleOptions>({
                     from: resolver.resolve('./runtime/logger/_transports/http-transport')
                 }
             ])
-                
+
             addServerPlugin(resolver.resolve('./runtime/server/plugins/log-queue.server'))
             addServerPlugin(resolver.resolve('./runtime/server/plugins/trace-headers.server'))
-            
+
             addServerHandler({
                 route: '/api/_frogger/logs',
                 handler: resolver.resolve('./runtime/server/api/logger.post'),
@@ -328,12 +351,18 @@ export default defineNuxtModule<ModuleOptions>({
             if (finalOptions.websocket) {
                 if (_nuxt.options.dev) {
                     const wsRoute = typeof finalOptions.websocket === 'object' ? finalOptions.websocket.route || '/api/_frogger/dev-ws' : '/api/_frogger/dev-ws';
-                    
+
                     addServerHandler({
                         route: wsRoute,
                         handler: resolver.resolve('./runtime/server/api/dev-websocket-handler'),
                     })
                 }
+            }
+
+            //@ts-expect-error
+            if (finalOptions.errorCapture.server !== false && finalOptions?.errorCapture.server !== undefined) {
+                console.log('🐸 FROGGER: Setting up Nitro global error capture');
+                addServerPlugin(resolver.resolve('./runtime/server/plugins/global-error.server'))
             }
         }
     },

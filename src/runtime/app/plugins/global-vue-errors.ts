@@ -11,7 +11,8 @@ export default defineNuxtPlugin((nuxtApp) => {
     nuxtApp.vueApp.config.errorHandler = (error, instance, info) => {
         const globalLogger = useFrogger();
 
-        const globalErrorCaptureConfig = config.public.frogger.globalErrorCapture;
+        //@ts-ignore
+        const globalErrorCaptureConfig = config.public.frogger.errorCapture;
 
         //@ts-ignore
         if (!globalErrorCaptureConfig || globalErrorCaptureConfig === false) {
@@ -30,7 +31,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             //@ts-ignore
             if (globalErrorCaptureConfig.includeComponent && instance) {
                 componentInformation.name = instance?.$.type?.__name || undefined;
-               
+
                 //@ts-ignore
                 if (globalErrorCaptureConfig.includeComponentOuterHTML && instance?.$el) {
                     componentInformation.outerHTML = instance.$el.outerHTML || null;
@@ -39,6 +40,13 @@ export default defineNuxtPlugin((nuxtApp) => {
                 //@ts-ignore
                 if (globalErrorCaptureConfig.includeComponentProps) {
                     componentInformation.props = instance?.$props || {};
+                }
+
+                if (globalErrorCaptureConfig.includeInfo) {
+                    componentInformation.props = {
+                        ...componentInformation.props,
+                        info,
+                    };
                 }
             }
         }

@@ -1,11 +1,12 @@
 import { type ConsolaInstance, createConsola } from "consola/core";
 import { ConsoleReporter } from "../_reporters/console-reporter";
 
-import type { LogObject } from 'consola';
+import type { LogObject, LogType } from 'consola';
 import type { LoggerObject } from "../../shared/types/log";
 import type { IFroggerLogger } from "../types";
 import type { IFroggerReporter } from "../_reporters/types";
 import type { LogContext } from "../../shared/types/log";
+import type { FroggerOptions } from "../../shared/types/options";
 
 export interface SimpleLoggerOptions {
     level?: number;
@@ -48,7 +49,7 @@ export class SimpleConsoleLogger implements IFroggerLogger {
                 log: (logObj: LogObject) => {
                     try {
                         this.consoleReporter?.log(logObj);
-                    } 
+                    }
                     catch (err) {
                         console.log(`[${logObj.type.toUpperCase()}]`, logObj.args?.[0] || '', ...logObj.args?.slice(1) || []);
                     }
@@ -60,11 +61,41 @@ export class SimpleConsoleLogger implements IFroggerLogger {
             this.globalContext = { ...options.context };
         }
     }
+    getHeaders(customVendor?: string): Record<string, string> {
+        throw new Error("Method not implemented.");
+    }
+    addContext(context: Object): void {
+        throw new Error("Method not implemented.");
+    }
+    setContext(context: Object): void {
+        throw new Error("Method not implemented.");
+    }
+    clearContext(): void {
+        throw new Error("Method not implemented.");
+    }
+    child(options: FroggerOptions): IFroggerLogger {
+        throw new Error("Method not implemented.");
+    }
+    reactiveChild(options: FroggerOptions): IFroggerLogger {
+        throw new Error("Method not implemented.");
+    }
+    silent(message: string, context?: Object): void {
+        throw new Error("Method not implemented.");
+    }
+    verbose(message: string, context?: Object): void {
+        throw new Error("Method not implemented.");
+    }
+    logLevel(level: LogType, message: string, context?: Object): void {
+        throw new Error("Method not implemented.");
+    }
+    reset(): void {
+        throw new Error("Method not implemented.");
+    }
 
     private async handleLog(logObj: LogObject): Promise<void> {
         try {
             const loggerObject = this.createLoggerObject(logObj);
-            
+
             await this.emitToReporters(loggerObject);
         } catch (error) {
             console.error('Error in log handling pipeline:', error);
@@ -96,7 +127,7 @@ export class SimpleConsoleLogger implements IFroggerLogger {
                 console.error('Error in custom reporter:', error);
             }
         });
-        
+
         await Promise.all(reporterPromises);
     }
 
@@ -123,7 +154,7 @@ export class SimpleConsoleLogger implements IFroggerLogger {
     public fatal(message: string, context?: Object): void {
         this.consola.fatal(message, context);
     }
-    
+
     public error(message: string, context?: Object): void {
         this.consola.error(message, context);
     }
@@ -155,7 +186,7 @@ export class SimpleConsoleLogger implements IFroggerLogger {
     public start(message: string, context?: Object): void {
         this.consola.start(message, context);
     }
-    
+
     public debug(message: string, context?: Object): void {
         this.consola.debug(message, context);
     }

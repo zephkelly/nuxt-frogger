@@ -18,7 +18,11 @@ const socket = useWebsocket({
 onMounted(() => {
     if (!import.meta.client) return
 
-    socket.connect('main');
+    socket.connect('main', {
+        filters: JSON.stringify({
+            level: ['1', '0'],
+        })
+    });
 });
 
 const test = async () => {

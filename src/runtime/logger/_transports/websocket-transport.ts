@@ -383,10 +383,12 @@ export class WebSocketTransport implements IFroggerTransport {
         for (const [channelId, channel] of this.channels.entries()) {
             console.log(`WebSocketTransport: Processing channel ${channelId} for log batch`);
             if (channel.subscribers.size === 0) {
+                console.log(`WebSocketTransport: No subscribers for channel ${channelId}, skipping`);
                 continue;
             }
 
             if (!this.shouldSendMessage(channelId)) {
+                console.log(`WebSocketTransport: Rate limit exceeded for channel ${channelId}, skipping`);
                 continue;
             }
 
@@ -400,10 +402,16 @@ export class WebSocketTransport implements IFroggerTransport {
 
             const subscriberGroups = this.groupSubscribersByFilters(channel);
 
+            console.log(`WebSocketTransport: Found ${subscriberGroups.size} subscriber groups for channel ${channelId}`);
+
             for (const [filterKey, subscriberGroup] of subscriberGroups.entries()) {
                 const { peers, filters } = subscriberGroup;
 
+                console.log(`WebSocketTransport: Processing filters for ${logs.length} logs: ${filterKey} for channel ${channelId}`);
+
                 const filteredLogs = this.filterLogBatch(logs, filters);
+                console.dir(logs, { depth: null });
+                console.log(`WebSocketTransport: Filter '${filterKey}' resulted in ${filteredLogs.length} logs for channel ${channelId}`);
 
                 if (filteredLogs.length === 0) {
                     continue;
@@ -419,10 +427,14 @@ export class WebSocketTransport implements IFroggerTransport {
                         });
                     }
 
+                    console.log(`WebSocketTransport: Preparing to send log batch to peer ${peerId} in channel ${channelId}`, peer);
+
                     if (!peer || !peer.websocket) {
                         channel.subscribers.delete(peerId);
                         return Promise.resolve();
                     }
+
+                    console.log(`WebSocketTransport: Sending log batch to peer ${peerId} in channel ${channelId} (filter: ${filterKey})`, peer);
 
                     return this.sendLogBatchToPeer(peer, filteredLogs, channelId, {
                         batchId,
@@ -528,11 +540,11 @@ export class WebSocketTransport implements IFroggerTransport {
 
     private passesFilter(logObj: LoggerObject, filters: SubscriptionFilter): boolean {
         if (filters.level !== undefined) {
-            if (!logObj.ctx || !logObj.ctx.type) {
+            if (logObj.lvl === undefined) {
                 return false;
             }
 
-            if (!LogLevelFilter.passesLevelFilter(logObj.ctx.type, filters.level)) {
+            if (!LogLevelFilter.passesLevelFilter(logObj.ctx.lvl, filters.level)) {
                 return false;
             }
         }

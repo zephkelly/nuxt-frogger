@@ -20,7 +20,7 @@ onMounted(() => {
 
     socket.connect('main', {
         filters: JSON.stringify({
-            level: ['1', '0'],
+            level: [1, 0],
         })
     });
 });

@@ -1,5 +1,46 @@
 # Changelog
 
+## v0.1.10
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.7...v0.1.10)
+
+### 🚀 Enhancements
+
+- Add regex rule cache to scrubber ([b3bad9d](https://github.com/zephkelly/nuxt-frogger/commit/b3bad9d))
+- Add nitro side global error capture ([1a4159c](https://github.com/zephkelly/nuxt-frogger/commit/1a4159c))
+- Log level parser utility ([1c900e5](https://github.com/zephkelly/nuxt-frogger/commit/1c900e5))
+- UseFroggerWebSocket composable with method-chaining syntax ([6be80e3](https://github.com/zephkelly/nuxt-frogger/commit/6be80e3))
+
+### 🩹 Fixes
+
+- Single pass string operation on maskPhone in scrubber ([43df426](https://github.com/zephkelly/nuxt-frogger/commit/43df426))
+- Websocket KV layer mutating stored object ([a6e3395](https://github.com/zephkelly/nuxt-frogger/commit/a6e3395))
+- Log dir build-time capture and websocket KV store now async loads ([d68c7a9](https://github.com/zephkelly/nuxt-frogger/commit/d68c7a9))
+
+### 🏡 Chore
+
+- Use built-in baseURL param in  over URL construction ([d1a3958](https://github.com/zephkelly/nuxt-frogger/commit/d1a3958))
+- Refactor websocket kv layer to use dep injection for storage ([fe87e26](https://github.com/zephkelly/nuxt-frogger/commit/fe87e26))
+- Improve client useFrogger and websocket  ergonomics ([64af9f4](https://github.com/zephkelly/nuxt-frogger/commit/64af9f4))
+- **release:** V0.1.8 ([b927a6d](https://github.com/zephkelly/nuxt-frogger/commit/b927a6d))
+- Update websocket transport to use new log level parser ([f22a940](https://github.com/zephkelly/nuxt-frogger/commit/f22a940))
+- Dependency inject storage and transport websocket layers ([9419f14](https://github.com/zephkelly/nuxt-frogger/commit/9419f14))
+- **release:** V0.1.9 ([478e725](https://github.com/zephkelly/nuxt-frogger/commit/478e725))
+- Update dependencies ([325552e](https://github.com/zephkelly/nuxt-frogger/commit/325552e))
+
+### ✅ Tests
+
+- Add test cases for log scrubber ([3e81bc9](https://github.com/zephkelly/nuxt-frogger/commit/3e81bc9))
+- Add test file for websocket storage layer ([6831dd1](https://github.com/zephkelly/nuxt-frogger/commit/6831dd1))
+- Add websocket kv layer test case with 80%+ coverage ([49b4849](https://github.com/zephkelly/nuxt-frogger/commit/49b4849))
+- Parse url parameters test file ([ed66552](https://github.com/zephkelly/nuxt-frogger/commit/ed66552))
+- Websocket log handler test file ([21719f3](https://github.com/zephkelly/nuxt-frogger/commit/21719f3))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+- Ekelly <masterevank@gmail.com>
+
 ## v0.1.9
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.8...v0.1.9)

@@ -2,7 +2,7 @@ import { ref, onMounted, onBeforeUnmount, nextTick, watch } from "vue"
 
 import { MessageType, type LogWebSocketMessage, WebSocketMessageAuthor, WebSocketStatus } from "../../websocket/types"
 
-
+import { useRuntimeConfig } from '#imports';
 
 interface WebSocketOptions {
     auto_connect?: boolean
@@ -80,7 +80,6 @@ export const useWebSocket = (
 
     const config = useRuntimeConfig()
 
-    //@ts-expect-error
     const configURL = config.public.frogger.websocket.route
 
     const {

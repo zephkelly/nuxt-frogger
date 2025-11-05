@@ -1,16 +1,14 @@
-import { WebSocketTransport } from '../../logger/_transports/websocket-transport'
-import { BatchTransport, createBatchTransport } from '../../logger/_transports/batch-transport'
-import { FileTransport } from '../../logger/_transports/file-transport'
+import { useRuntimeConfig } from '#imports'
 
 import type { IFroggerTransport } from '../../logger/_transports/types'
-
-import { LogScrubber } from '../../scrubber'
 import type { LoggerObject } from '../../shared/types/log'
 import type { LoggerObjectBatch } from '../../shared/types/batch'
 
-import { useRuntimeConfig } from '#imports'
-
-
+import { LogScrubber } from '../../scrubber'
+import { FileTransport } from '../../logger/_transports/file-transport'
+import { WebSocketTransport } from '../../logger/_transports/websocket-transport'
+import { createWebSocketStateKVLayer } from '../../websocket/state/factory'
+import { BatchTransport, createBatchTransport } from '../../logger/_transports/batch-transport'
 
 export class ServerLogQueueService {
     private static instance: ServerLogQueueService | null = null;
@@ -21,7 +19,6 @@ export class ServerLogQueueService {
 
     private scrubber: LogScrubber | null = null;
     private initialised: boolean = false
-
 
     /**
      * Private to prevent direct instantiation
@@ -46,13 +43,10 @@ export class ServerLogQueueService {
 
         const config = useRuntimeConfig()
 
-        //@ts-expect-error
         if (config.frogger.scrub) {
-            //@ts-ignore
             this.scrubber = new LogScrubber(config.frogger.scrub);
         }
 
-        //@ts-ignore
         const batchingEnabled = config.frogger.batch !== false;
 
         const fileTransporter = new FileTransport();
@@ -60,7 +54,14 @@ export class ServerLogQueueService {
         let websocketTransport: IFroggerTransport | undefined;
         //@ts-ignore
         if (config.frogger.websocket) {
-            websocketTransport = WebSocketTransport.getInstance();
+            try {
+                const stateLayer = createWebSocketStateKVLayer('frogger-websocket');
+                
+                // Pass storage to WebSocketTransport (can be null)
+                websocketTransport = WebSocketTransport.getInstance(stateLayer);
+            } catch (error) {
+                console.error('ServerLogQueueService: Failed to initialize WebSocket transport:', error);
+            }
         }
 
         if (batchingEnabled) {

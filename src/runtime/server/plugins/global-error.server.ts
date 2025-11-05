@@ -1,5 +1,5 @@
 //@ts-ignore
-import { defineNitroPlugin } from "#imports";
+import { defineNitroPlugin, useRuntimeConfig } from "#imports";
 import { H3Error } from "h3";
 import { getFrogger } from "../utils/auto";
 

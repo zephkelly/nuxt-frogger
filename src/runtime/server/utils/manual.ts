@@ -2,6 +2,8 @@
 
 import { defu } from 'defu';
 import type { H3Event } from "h3";
+import { useRuntimeConfig } from '#imports';
+import { useEvent } from 'nitropack/runtime/internal/context';
 
 import { ServerFroggerLogger } from "../../logger/server";
 
@@ -9,7 +11,6 @@ import type { IFroggerLogger } from '../../logger/types';
 import type { TraceContext } from "../../shared/types/trace-headers";
 import type { ServerLoggerOptions } from "../types/logger";
 
-import { useEvent } from 'nitropack/runtime/internal/context';
 
 /**
  * Get a Frogger logger instance

@@ -9,6 +9,7 @@ import { parseAppInfoConfig } from '../../app-info/parse';
 import type { TraceContext } from '../../shared/types/trace-headers';
 
 import { defu } from 'defu';
+import { useRuntimeConfig } from '#imports';
 
 export class ServerFroggerLogger extends BaseFroggerLogger {
     private options: ServerLoggerOptions;

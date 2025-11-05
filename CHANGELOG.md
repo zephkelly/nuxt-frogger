@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.11
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.10...v0.1.11)
+
+### 🩹 Fixes
+
+- Runtime config imports and server log queue not referencing kv storage layer ([dc00546](https://github.com/zephkelly/nuxt-frogger/commit/dc00546))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.10
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.7...v0.1.10)

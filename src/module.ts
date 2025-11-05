@@ -162,11 +162,7 @@ export default defineNuxtModule<ModuleOptions>({
 
         // Setup log directory
         const configuredDirectory = finalOptions.file?.directory || 'logs';
-        const logDir = isAbsolute(configuredDirectory)
-            ? configuredDirectory
-            : join(_nuxt.options.rootDir, configuredDirectory);
-
-
+        const logDir = configuredDirectory;
 
 
         // Set runtime config

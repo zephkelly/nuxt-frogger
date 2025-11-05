@@ -1,7 +1,6 @@
 import { Peer } from "crossws";
 
 import { type IWebSocketTransport } from "./types";
-import { WebSocketTransport } from "../logger/_transports/websocket-transport";
 import { parseUrlParams } from "./utils/parse-url-params";
 
 import type {

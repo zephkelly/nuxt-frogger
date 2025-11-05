@@ -1,7 +1,6 @@
 import { defu } from 'defu';
 import type { H3Event } from "h3";
 
-import { useRuntimeConfig } from '#imports';
 import { ServerFroggerLogger } from "../../logger/server";
 
 import type { IFroggerLogger } from '../../logger/types';
@@ -9,6 +8,7 @@ import type { TraceContext } from "../../shared/types/trace-headers";
 import type { ServerLoggerOptions } from "../types/logger";
 
 
+import { useEvent } from 'nitropack/runtime/internal/context';
 
 /**
  * Get a Frogger logger instance
@@ -28,7 +28,6 @@ export function getFrogger(
     let event = isEvent ? eventOrOptions as H3Event : undefined;
 
     if (!event) {
-        //@ts-ignore
         event = useEvent();
     }
 

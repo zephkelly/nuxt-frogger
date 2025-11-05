@@ -1,6 +1,5 @@
-import type { LogObject, LogType } from 'consola/basic';
+import type { LogObject } from 'consola/basic';
 
-import { useRuntimeConfig } from '#imports';
 import { BaseFroggerLogger } from '../base-frogger';
 import type { ServerLoggerOptions } from '../../server/types/logger';
 import type { LoggerObject, LogContext } from '../../shared/types/log';
@@ -21,8 +20,10 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         super(options);
         this.options = options;
 
+        //@ts-ignore
         const config = useRuntimeConfig();
-        const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
+        //@ts-ignore
+        const { isSet, name, version } = parseAppInfoConfig(config?.public?.frogger?.app);
 
         this.appInfo = isSet ? { 
             name: name,

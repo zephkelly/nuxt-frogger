@@ -18,6 +18,8 @@ export interface HttpTransportOptions {
     baseUrl?: string;
     vendor?: string;
     headers?: Record<string, string>;
+    /** Sent as the `x-api-key` header on every batch POST. */
+    apiKey?: string;
     timeout?: number;
     retryOnFailure?: boolean;
     maxRetries?: number;
@@ -32,6 +34,7 @@ export const defaultHttpTransportOptions: HttpTransportOptions = {
     endpoint: '',
     vendor: 'frogger',
     headers: {},
+    apiKey: '',
     timeout: 30000,
     retryOnFailure: true,
     maxRetries: 3,
@@ -73,6 +76,7 @@ export class HttpTransport implements IFroggerTransport {
             headers: {
                 ...options.headers
             },
+            apiKey: options.apiKey || '',
             timeout: options.timeout || 30000,
             retryOnFailure: options.retryOnFailure ?? true,
             maxRetries: options.maxRetries || 3,
@@ -148,12 +152,20 @@ export class HttpTransport implements IFroggerTransport {
         });
 
         const headers: Headers = new Headers({
+            // User-configured headers first, so Frogger's own trace/identity
+            // headers below always win over anything that would clobber them.
+            ...this.options.headers,
+
             'x-frogger-reporter-id': this.transportId,
             'x-frogger-processed': 'true',
 
             'traceparent': w3cHeaders.traceparent,
             ...(w3cHeaders.tracestate && { tracestate: w3cHeaders.tracestate })
         });
+
+        if (this.options.apiKey) {
+            headers.set('x-api-key', this.options.apiKey);
+        }
 
         if (this.options.appInfo) {
             headers.set('x-frogger-source', this.options.appInfo.name);

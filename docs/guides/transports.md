@@ -82,7 +82,8 @@ const transport = new HttpTransport({
     endpoint: '/ingest',                  // required
     baseUrl: 'https://logs.example.com',  // defaults to your app baseUrl
     vendor: 'my-app',
-    headers: { authorization: `Bearer ${token}` },
+    apiKey: process.env.LOGS_KEY,         // → sent as `x-api-key` on every batch
+    headers: { 'x-tenant': 'acme' },      // merged onto every request
     timeout: 30000,
     retryOnFailure: true,
     maxRetries: 3,
@@ -101,7 +102,8 @@ await transport.destroy()      // flush + clean up when done
 | `endpoint` | `string` | — | **Required.** Path to POST batches to |
 | `baseUrl` | `string` | app baseUrl | Prepended to `endpoint` |
 | `vendor` | `string` | `'frogger'` | Vendor name used in trace headers |
-| `headers` | `Record<string, string>` | `{}` | Extra request headers (auth, etc.) |
+| `apiKey` | `string` | — | Sent as the `x-api-key` header on every batch. Frogger's one auth header |
+| `headers` | `Record<string, string>` | `{}` | Extra request headers, merged onto each request |
 | `timeout` | `number` | `30000` | Per-request timeout (ms) |
 | `retryOnFailure` | `boolean` | `true` | Retry failed sends |
 | `maxRetries` | `number` | `3` | Max retry attempts |
@@ -110,3 +112,87 @@ await transport.destroy()      // flush + clean up when done
 
 It also exposes `setEndpoint(endpoint)` and `setAppInfo(name, version)` for reconfiguring an
 existing instance, plus `log(entry)` for sending a single record.
+
+::: tip `headers` and `apiKey` are always sent
+Both are merged into every request. Frogger sets its own trace/identity headers
+(`traceparent`, `x-frogger-*`) too, and those always win — so your custom headers
+can't accidentally clobber tracing. `apiKey` is always emitted as `x-api-key`;
+Frogger never uses `authorization` or a query param for a transport key.
+:::
+
+## Declarative `transports` — no code required
+
+For the common case — "forward every log to this collector" — you don't need to
+write a plugin. Declare a list of destinations in your config and Frogger builds
+the `HttpTransport`s and wires them into the right pipeline(s) for you:
+
+```ts
+// frogger.config.ts
+import { defineFroggerOptions } from '#frogger/config'
+
+export default defineFroggerOptions({
+    app: { name: 'marketing-site', version: '1.4.0' },
+
+    transports: [
+        // Ship logs to a self-hosted collector.
+        {
+            url: 'https://observe.example.com/api/observe/ingest',
+            apiKey: process.env.OBSERVE_INGEST_KEY, // → `x-api-key: <key>` on every batch
+            client: true,   // fan out directly from the browser (needed for static apps)
+            server: true,   // AND from the Nitro server queue
+        },
+        // A second destination, server-side only, no auth.
+        {
+            url: 'https://logs.internal/ingest',
+            // client defaults false, server defaults true
+        },
+    ],
+})
+```
+
+Each entry is a destination:
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `url` | `string` | — | Full ingest URL. Shorthand for `baseUrl` (origin) + `endpoint` (path). Wins over the split form |
+| `baseUrl` / `endpoint` | `string` | — | Split form, if you prefer it |
+| `apiKey` | `string` | — | Sent as `x-api-key` on every batch to this destination |
+| `headers` | `Record<string, string>` | `{}` | Extra headers merged onto each request |
+| `client` | `boolean` | `false` | Fan out **directly from the browser** log queue |
+| `server` | `boolean` | `true` | Fan out from the **Nitro server** log queue |
+| `name` | `string` | resolved url | Label for diagnostics |
+| `vendor`, `timeout`, `retryOnFailure`, `maxRetries`, `retryDelay` | | HttpTransport defaults | Per-destination tuning |
+
+- **`server: true`** (the default) constructs an `HttpTransport` in the Nitro
+  server queue that receives every ingested batch, alongside the file/websocket
+  transports.
+- **`client: true`** makes the **browser** POST each batch directly to that URL,
+  independent of your app's own ingest endpoint. This is what lets a **static
+  frontend with no backend** ship its logs somewhere.
+
+Declarative transports are independent of your [`preset`](/configuration) — they
+work under any preset, and default to no extra destinations.
+
+### Shipping logs to a collector
+
+A client-direct POST to a different origin with `x-api-key` + a JSON body
+triggers a CORS preflight (`OPTIONS`). The receiving collector must answer the
+preflight and allow the `x-api-key` header. Self-hosted collectors such as
+`nuxt-observe` handle this out of the box and read the [well-known `ctx`
+keys](/getting-started#well-known-ctx-keys) (`session`, `user`, `route`,
+`feature`) straight off each log.
+
+### ⚠️ Security: client transport keys are public
+
+Anything under a `client: true` transport — including its `apiKey` and `headers`
+— is compiled into the **browser bundle** and visible in DevTools. A client
+transport key is therefore **not a secret**. Only ever use a **write-only,
+per-service, rate-limited ingest key** there — never a key that grants read or
+admin. Frogger emits a build-time warning when a `client` transport carries an
+`apiKey` to remind you.
+
+Prefer `server: true` whenever your app has a backend: server transport keys live
+in `runtimeConfig.frogger` and never reach the client. Because both live in
+`runtimeConfig`, you can override keys per environment with
+`NUXT_FROGGER_*` (server) / `NUXT_PUBLIC_FROGGER_*` (client) — source `apiKey`
+from `process.env` rather than hardcoding it.

@@ -4,8 +4,11 @@ import type { IFroggerTransport } from '../../logger/_transports/types'
 import type { LoggerObject } from '../../shared/types/log'
 import type { LoggerObjectBatch } from '../../shared/types/batch'
 
+import type { ResolvedHttpTransport } from '../../shared/types/transports'
+
 import { LogScrubber } from '../../scrubber'
 import { FileTransport } from '../../logger/_transports/file-transport'
+import { HttpTransport } from '../../logger/_transports/http-transport'
 import { WebSocketTransport } from '../../logger/_transports/websocket-transport'
 import { createWebSocketStateKVLayer } from '../../websocket/state/factory'
 import { BatchTransport, createBatchTransport } from '../../logger/_transports/batch-transport'
@@ -65,11 +68,18 @@ export class ServerLogQueueService {
             }
         }
 
+        // Declarative config transports (transports: [{ url, apiKey, server }]).
+        // Constructed here so they join the fan-out before the batch transport
+        // is built. File stays first in each list so local disk persistence
+        // never depends on a remote being reachable.
+        const configuredTransports = this.buildConfiguredTransports(config);
+
         if (batchingEnabled) {
             this.downstreamTransporters.push(fileTransporter);
             if (websocketTransport) {
                 this.downstreamTransporters.push(websocketTransport);
             }
+            this.downstreamTransporters.push(...configuredTransports);
 
             const batchTransporter = createBatchTransport(this.downstreamTransporters);
             this.batchTransporter = batchTransporter;
@@ -79,7 +89,39 @@ export class ServerLogQueueService {
             if (websocketTransport) {
                 this.directTransporters.push(websocketTransport);
             }
+            this.directTransporters.push(...configuredTransports);
         }
+    }
+
+    /**
+     * Construct an `HttpTransport` for every declarative server transport from
+     * `runtimeConfig.frogger.transports`. Failures are isolated per-transport so
+     * one bad entry can't take down the whole queue.
+     */
+    private buildConfiguredTransports(config: ReturnType<typeof useRuntimeConfig>): IFroggerTransport[] {
+        //@ts-ignore — frogger.transports is injected by the module
+        const configured = (config.frogger.transports ?? []) as ResolvedHttpTransport[];
+
+        const transporters: IFroggerTransport[] = [];
+        for (const t of configured) {
+            try {
+                transporters.push(new HttpTransport({
+                    baseUrl: t.baseUrl,
+                    endpoint: t.endpoint,
+                    apiKey: t.apiKey,
+                    headers: t.headers,
+                    vendor: t.vendor,
+                    timeout: t.timeout,
+                    retryOnFailure: t.retryOnFailure,
+                    maxRetries: t.maxRetries,
+                    retryDelay: t.retryDelay,
+                }));
+            }
+            catch (err) {
+                froggerInternal.error('ServerLogQueueService: failed to construct configured transport', t.name, err);
+            }
+        }
+        return transporters;
     }
 
     private ensureInitialised(): boolean {

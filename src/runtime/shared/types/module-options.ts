@@ -6,6 +6,9 @@ import type { WebsocketOptions } from "../../websocket/types/options";
 import type { ScrubberOptions } from "../../scrubber/options";
 import type { GlobalErrorCaptureOptions } from "./global-error";
 import type { InternalLogLevel } from "../utils/internal-log";
+import type { HttpTransportConfig } from "./transports";
+
+export type { HttpTransportConfig, ResolvedHttpTransport } from "./transports";
 
 
 /**
@@ -92,6 +95,15 @@ export interface ModuleOptions {
         client?: GlobalErrorCaptureOptions['client'] | boolean
         server?: GlobalErrorCaptureOptions['server'] | boolean
     }
+
+    /**
+     * Extra log destinations. Each entry forwards every log batch to an HTTP
+     * ingest URL — from the server queue (`server`, default on) and/or directly
+     * from the browser (`client`, default off). Independent of `preset`.
+     *
+     * @default []
+     */
+    transports?: HttpTransportConfig[]
 
     public?: {
         endpoint?: string

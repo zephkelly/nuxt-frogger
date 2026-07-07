@@ -172,6 +172,34 @@ logger.info('User logged in',
 ```
 :::
 
+### Well-known `ctx` keys
+
+Frogger keeps `LoggerObject` deliberately lean — it does **not** promote
+`session`, `user`, `route` or `feature` to first-class fields. Instead, put them
+in `ctx` under these exact keys. Downstream collectors (e.g.
+[nuxt-observe](/guides/transports#shipping-logs-to-a-collector)) read them back
+out by the same names, so this is a stable contract:
+
+| Meaning | `ctx` key |
+| --- | --- |
+| Session id | `ctx.session` |
+| User (id or object) | `ctx.user` |
+| Route / path | `ctx.route` |
+| Feature / area | `ctx.feature` |
+
+```ts
+logger.info('checkout viewed', {
+    route: '/checkout',
+    feature: 'checkout',
+    session: sessionId,
+    user: userId,
+})
+```
+
+There's nothing special about these at runtime — they're ordinary context — but
+using the canonical names means a collector can index and filter by them without
+per-app configuration.
+
 
 ## Loggers
 Both client and server loggers implement the `IFroggerLogger` interface keeping your code consistent on front and back end:

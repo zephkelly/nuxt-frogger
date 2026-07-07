@@ -109,11 +109,16 @@ export default defineNuxtModule<ModuleOptions>({
                     scrub: resolved.scrub,
                     websocket: publicWebsocket,
                     errorCapture: resolved.errorCapture.client,
+                    // ⚠️ apiKeys on client transports are bundle-visible.
+                    transports: resolved.transports.client,
                 },
             },
             frogger: {
                 serverModule: resolved.serverModule,
                 logLevel: internalLogLevel,
+
+                // Server-only: keys stay out of the client bundle.
+                transports: resolved.transports.server,
 
                 file: {
                     directory: logDir,
@@ -159,6 +164,22 @@ export default defineNuxtModule<ModuleOptions>({
                     `You are using Frogger with \x1b[36mserverModule\x1b[0m set to \x1b[36mfalse\x1b[0m and no \x1b[36mpublic.endpoint\x1b[0m
                 set in your \x1b[36mfrogger.config.ts\x1b[0m. Your logs will never leave the client!`
                 );
+            }
+
+            // Client transports are compiled into the public bundle — any
+            // apiKey on one is therefore NOT a secret. Warn (once per keyed
+            // transport) so the author knows before it ships.
+            if (allowInternal('warn')) {
+                for (const t of resolved.transports.client) {
+                    if (t.apiKey) {
+                        console.warn(
+                            '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
+                            `Client transport \x1b[36m${t.name}\x1b[0m carries an \x1b[36mapiKey\x1b[0m that will be `
+                            + `compiled into the public browser bundle. Only use a write-only, per-service, `
+                            + `rate-limited ingest key here — never a read/admin key.`
+                        );
+                    }
+                }
             }
 
             // The single concise "ready" line: dev only, suppressed entirely at

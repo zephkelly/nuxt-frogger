@@ -1,0 +1,7 @@
+- Never use the commit or push commands in git, leave this to the developer.
+- Search for relevant documentation files after making changes to the codebase and update them accordingly.
+- Always ask the developer for clarification or present multiple options if you are unsure about next steps, do not assume implementation details.
+- Do not use em-dashes, do not use the word 'seam', do not use emojis unless in certain output readability contexts.
+- Do not write obvious or verbose comments in code, limit them to clarifying non-obvious details that explain the "why" behind decisions.
+- Always search for relevant test files after making changes to the codebase and update them accordingly. If a change is important or significant enough, create new test cases to cover the change
+- When working in nuxt projects, ALWAYS use the 'layers' directory when possible to organise all related code by domain. Ask the user if you are unsure about which layer to use, or what to name new layers if not clear.

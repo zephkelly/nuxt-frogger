@@ -246,6 +246,129 @@ describe('resolveFroggerOptions', () => {
         });
     });
 
+    describe('transports', () => {
+        it('defaults to empty client + server lists', () => {
+            const r = resolveFroggerOptions();
+            expect(r.transports).toEqual({ server: [], client: [] });
+        });
+
+        it('a bare { url } entry defaults to server-only (server:true, client:false)', () => {
+            const r = resolveFroggerOptions({
+                transports: [{ url: 'https://observe.example.com/api/observe/ingest' }],
+            });
+            expect(r.transports.server).toHaveLength(1);
+            expect(r.transports.client).toHaveLength(0);
+        });
+
+        it('splits url into origin baseUrl + path endpoint', () => {
+            const r = resolveFroggerOptions({
+                transports: [{ url: 'https://observe.example.com/api/observe/ingest?tenant=1' }],
+            });
+            const t = r.transports.server[0]!;
+            expect(t.baseUrl).toBe('https://observe.example.com');
+            expect(t.endpoint).toBe('/api/observe/ingest?tenant=1');
+        });
+
+        it('url wins over split baseUrl/endpoint when both are given', () => {
+            const r = resolveFroggerOptions({
+                transports: [{
+                    url: 'https://a.example.com/ingest',
+                    baseUrl: 'https://b.example.com',
+                    endpoint: '/other',
+                }],
+            });
+            const t = r.transports.server[0]!;
+            expect(t.baseUrl).toBe('https://a.example.com');
+            expect(t.endpoint).toBe('/ingest');
+        });
+
+        it('client:true puts the entry in BOTH lists', () => {
+            const r = resolveFroggerOptions({
+                transports: [{ url: 'https://x.dev/ingest', client: true }],
+            });
+            expect(r.transports.server).toHaveLength(1);
+            expect(r.transports.client).toHaveLength(1);
+        });
+
+        it('client:true + server:false is client-only', () => {
+            const r = resolveFroggerOptions({
+                transports: [{ url: 'https://x.dev/ingest', client: true, server: false }],
+            });
+            expect(r.transports.server).toHaveLength(0);
+            expect(r.transports.client).toHaveLength(1);
+        });
+
+        it('keeps apiKey discrete and never folds it into headers', () => {
+            const r = resolveFroggerOptions({
+                transports: [{ url: 'https://x.dev/ingest', apiKey: 'secret', headers: { 'x-custom': '1' } }],
+            });
+            const t = r.transports.server[0]!;
+            expect(t.apiKey).toBe('secret');
+            expect(t.headers).toEqual({ 'x-custom': '1' });
+            expect(t.headers).not.toHaveProperty('x-api-key');
+        });
+
+        it('names the transport by resolved url when no name is given', () => {
+            const r = resolveFroggerOptions({
+                transports: [{ url: 'https://x.dev/ingest' }],
+            });
+            expect(r.transports.server[0]!.name).toBe('https://x.dev/ingest');
+        });
+
+        it('respects an explicit name', () => {
+            const r = resolveFroggerOptions({
+                transports: [{ url: 'https://x.dev/ingest', name: 'observe' }],
+            });
+            expect(r.transports.server[0]!.name).toBe('observe');
+        });
+
+        it('accepts the split baseUrl/endpoint form without url', () => {
+            const r = resolveFroggerOptions({
+                transports: [{ baseUrl: 'https://x.dev', endpoint: '/ingest' }],
+            });
+            const t = r.transports.server[0]!;
+            expect(t.baseUrl).toBe('https://x.dev');
+            expect(t.endpoint).toBe('/ingest');
+        });
+
+        it('drops an entry with no url/baseUrl/endpoint', () => {
+            const r = resolveFroggerOptions({
+                transports: [{ apiKey: 'k' } as any, { url: 'https://ok.dev/ingest' }],
+            });
+            expect(r.transports.server).toHaveLength(1);
+            expect(r.transports.server[0]!.baseUrl).toBe('https://ok.dev');
+        });
+
+        it('drops an entry with an invalid url', () => {
+            const r = resolveFroggerOptions({
+                transports: [{ url: 'not a url' }, { url: 'https://ok.dev/ingest' }],
+            });
+            expect(r.transports.server).toHaveLength(1);
+            expect(r.transports.server[0]!.baseUrl).toBe('https://ok.dev');
+        });
+
+        it('carries through HttpTransport tuning fields', () => {
+            const r = resolveFroggerOptions({
+                transports: [{
+                    url: 'https://x.dev/ingest',
+                    vendor: 'v', timeout: 5000, retryOnFailure: false, maxRetries: 1, retryDelay: 250,
+                }],
+            });
+            expect(r.transports.server[0]!).toMatchObject({
+                vendor: 'v', timeout: 5000, retryOnFailure: false, maxRetries: 1, retryDelay: 250,
+            });
+        });
+
+        it('is independent of the preset (works under minimal)', () => {
+            const r = resolveFroggerOptions({
+                preset: 'minimal',
+                transports: [{ url: 'https://x.dev/ingest', client: true }],
+            });
+            expect(r.transports.server).toHaveLength(1);
+            expect(r.transports.client).toHaveLength(1);
+        });
+    });
+
     describe('public + passthrough', () => {
         it('custom endpoint + baseUrl pass through', () => {
             const r = resolveFroggerOptions({ public: { endpoint: '/logs', baseUrl: 'https://x.dev' } });

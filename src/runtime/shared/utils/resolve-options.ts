@@ -16,7 +16,9 @@ import type { ScrubberOptions } from '../../scrubber/options'
 import type { RateLimitingOptions } from '../../rate-limiter/types'
 import type { WebsocketOptions } from '../../websocket/types/options'
 import type { GlobalErrorCaptureOptions } from '../types/global-error'
+import type { HttpTransportConfig, ResolvedHttpTransport } from '../types/transports'
 import type { InternalLogLevel } from './internal-log'
+import { froggerInternal } from './internal-log'
 
 /**
  * Options resolution for Frogger.
@@ -168,12 +170,23 @@ export interface ResolvedFroggerOptions {
     rateLimit: RateLimitingOptions | false
     websocket: WebsocketOptions | false
     errorCapture: ResolvedErrorCapture
+    /**
+     * Extra HTTP log destinations, split by which side ships them. Server
+     * transports land in `runtimeConfig.frogger` (keys stay server-side); client
+     * transports land in `runtimeConfig.public.frogger` (⚠️ keys are bundled).
+     */
+    transports: {
+        server: ResolvedHttpTransport[]
+        client: ResolvedHttpTransport[]
+    }
     public: {
         endpoint: string
         baseUrl?: string
         batch: BatchOptions | false
     }
 }
+
+export type { ResolvedHttpTransport } from '../types/transports'
 
 // --- Normalisers -------------------------------------------------------------
 
@@ -207,6 +220,70 @@ function normalizeToggle<T extends object>(
     if (value === false || value === undefined) return false
     if (value === true) return structuredClone(defaults)
     return mergeConfig(value, structuredClone(defaults)) as T
+}
+
+/**
+ * Normalise a declarative transport entry into a `ResolvedHttpTransport`.
+ * Resolves the `url` shorthand into `baseUrl` + `endpoint`, keeps `apiKey`
+ * discrete (never folded into `headers`), and drops entries with no
+ * destination. Returns `null` for an unusable entry so the caller can filter.
+ */
+function normalizeTransport(t: HttpTransportConfig): ResolvedHttpTransport | null {
+    let baseUrl = t.baseUrl ?? ''
+    let endpoint = t.endpoint ?? ''
+
+    if (t.url) {
+        try {
+            const u = new URL(t.url)
+            baseUrl = u.origin
+            endpoint = u.pathname + u.search
+        }
+        catch {
+            froggerInternal.warn(`Invalid transport url "${t.url}" — skipping this transport.`)
+            return null
+        }
+    }
+
+    if (!endpoint && !baseUrl) {
+        froggerInternal.warn('Transport entry has no url/baseUrl/endpoint — skipping.')
+        return null
+    }
+
+    return {
+        name: t.name ?? (baseUrl + endpoint),
+        baseUrl,
+        endpoint,
+        apiKey: t.apiKey || undefined,
+        headers: { ...t.headers },
+        vendor: t.vendor,
+        timeout: t.timeout,
+        retryOnFailure: t.retryOnFailure,
+        maxRetries: t.maxRetries,
+        retryDelay: t.retryDelay,
+    }
+}
+
+/**
+ * Split the declarative `transports` list into server-bound and client-bound
+ * normalised transports. `server` defaults on, `client` defaults off; an entry
+ * can target both. Invalid entries are dropped.
+ */
+function resolveTransports(transports: HttpTransportConfig[] | undefined): {
+    server: ResolvedHttpTransport[]
+    client: ResolvedHttpTransport[]
+} {
+    const server: ResolvedHttpTransport[] = []
+    const client: ResolvedHttpTransport[] = []
+
+    for (const t of transports ?? []) {
+        const normalized = normalizeTransport(t)
+        if (!normalized) continue
+
+        if (t.server !== false) server.push(normalized)
+        if (t.client === true) client.push(normalized)
+    }
+
+    return { server, client }
 }
 
 type ErrorCaptureInput =
@@ -265,6 +342,7 @@ export function resolveFroggerOptions(options: ModuleOptions = {}): ResolvedFrog
         rateLimit: normalizeToggle(rateLimit, DEFAULT_RATE_LIMIT),
         websocket: normalizeToggle(websocket, DEFAULT_WEBSOCKET),
         errorCapture: normalizeErrorCapture(errorCapture),
+        transports: resolveTransports(options.transports),
         public: {
             endpoint: options.public?.endpoint ?? DEFAULT_LOGGING_ENDPOINT,
             baseUrl: options.public?.baseUrl,

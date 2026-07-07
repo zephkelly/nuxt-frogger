@@ -16,8 +16,19 @@ export function addGlobalTransport(transport: IFroggerTransport): void {
 }
 
 
+/**
+ * Create an `HttpTransport` from a bare endpoint string.
+ *
+ * For auth, pass the options form instead and set `apiKey` — it is sent as the
+ * `x-api-key` header on every batch (`headers` are merged in too).
+ */
 export function createHttpTransport(endpoint: string): HttpTransport;
 
+/**
+ * Create an `HttpTransport` from full options. Set `apiKey` to have Frogger send
+ * it as the `x-api-key` header on every batch POST; any `headers` are merged in
+ * as well.
+ */
 export function createHttpTransport(options: HttpTransportOptions): HttpTransport;
 
 export function createHttpTransport(endpointOrOptions: string | HttpTransportOptions): HttpTransport {

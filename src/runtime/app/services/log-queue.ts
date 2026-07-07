@@ -3,6 +3,7 @@ import { H3Error } from 'h3';
 import { LogScrubber } from '../../scrubber/index';
 import type { LoggerObject } from '../../shared/types/log';
 import type { LoggerObjectBatch } from '../../shared/types/batch';
+import type { ResolvedHttpTransport } from '../../shared/types/transports';
 
 import { useRuntimeConfig } from '#imports';
 import { uuidv7 } from '../../shared/utils/uuid';
@@ -33,6 +34,14 @@ export class LogQueueService {
 
     private endpoint: string;
     private readonly baseUrl: string;
+
+    /**
+     * Secondary sinks from `public.frogger.transports` (client:true entries).
+     * Each flush fans the same scrubbed batch out to these, independent of the
+     * primary self-endpoint. ⚠️ Their apiKeys are bundle-visible by design.
+     */
+    private readonly clientTransports: ResolvedHttpTransport[];
+
     private maxBatchSize: number | undefined;
     private maxBatchAge: number | undefined;
     private maxQueueSize: number | undefined;
@@ -74,6 +83,9 @@ export class LogQueueService {
         this.endpoint = config.public.frogger.endpoint;
         //@ts-ignore
         this.baseUrl = config.public.frogger.baseUrl || '';
+
+        //@ts-ignore
+        this.clientTransports = (config.public.frogger.transports ?? []) as ResolvedHttpTransport[];
 
         //@ts-expect-error
         this.batchingEnabled = config.public?.frogger?.batch !== false;
@@ -224,15 +236,35 @@ export class LogQueueService {
         }, this.maxBatchAge);
     }
 
+    /**
+     * Whether the primary self-endpoint should receive this flush. A static app
+     * (`serverModule:false`, default endpoint, no baseUrl) has no primary sink —
+     * but it can still fan out to `client` transports, so this gates ONLY the
+     * primary target, never the whole flush.
+     */
+    private shouldSendToPrimary(): boolean {
+        if (!this.endpoint) return false;
+        if (!this.serverModuleEnabled && this.endpoint === DEFAULT_LOGGING_ENDPOINT && !this.baseUrl) {
+            return false;
+        }
+        return true;
+    }
+
     private async sendLogs(): Promise<void> {
         if (!this.batchingEnabled || this.queue.length === 0 || this.sending) {
             return;
         }
 
-        if (!this.serverModuleEnabled && this.endpoint === DEFAULT_LOGGING_ENDPOINT && !this.baseUrl) {
+        const primaryEligible = this.shouldSendToPrimary();
+
+        // Nothing anywhere to send to — leave the queue untouched.
+        if (!primaryEligible && this.clientTransports.length === 0) {
             return;
         }
 
+        // The primary's rate-limit backoff defers the whole flush (secondaries
+        // piggyback on the primary's queue). A static app never advances the
+        // retry state, so this never blocks a client-only fan-out.
         if (this.isRateLimited()) {
             return;
         }
@@ -249,11 +281,6 @@ export class LogQueueService {
 
 
         try {
-            if (!this.endpoint) {
-                froggerInternal.warn('No endpoint specified for sending logs');
-                return;
-            }
-
             if (this.scrubber) {
                 this.scrubber.scrubBatch(logs);
             }
@@ -266,6 +293,17 @@ export class LogQueueService {
                     processChain: this.appInfo?.name ? [this.appInfo.name] : [],
                 }
             };
+
+            // Fan out to secondary sinks independently — their failures never
+            // touch the primary queue or its retry state.
+            for (const transport of this.clientTransports) {
+                void this.sendToClientTransport(transport, batch);
+            }
+
+            if (!primaryEligible) {
+                this.resetRetryState();
+                return;
+            }
 
             await $fetch(this.endpoint, {
                 baseURL: this.baseUrl || undefined,
@@ -306,15 +344,72 @@ export class LogQueueService {
         }
     }
 
-    private async sendLogImmediately(log: LoggerObject): Promise<void> {
-        if (!this.endpoint) return;
+    /**
+     * Send a batch to one secondary client transport with independent, bounded
+     * retry. Respects `Retry-After`/`429` with exponential backoff; a `4xx`
+     * (bad key/schema) drops the batch and stops retrying that sink. Never
+     * re-queues onto the shared primary queue or mutates the primary retry
+     * state — one remote's failure must not stall the app's own server.
+     */
+    private async sendToClientTransport(
+        transport: ResolvedHttpTransport,
+        batch: LoggerObjectBatch,
+        attempt = 0,
+    ): Promise<void> {
+        const url = transport.endpoint || transport.baseUrl;
+        if (!url) return;
 
-        if (!this.serverModuleEnabled && this.endpoint === DEFAULT_LOGGING_ENDPOINT) {
-            return;
+        const headers: Record<string, string> = {
+            ...transport.headers,
+            ...(transport.apiKey ? { 'x-api-key': transport.apiKey } : {}),
+        };
+
+        try {
+            await $fetch(url, {
+                baseURL: transport.baseUrl || undefined,
+                method: 'POST',
+                headers,
+                body: batch,
+            });
         }
+        catch (error: any) {
+            const status = error?.response?.status;
 
-        if (this.isRateLimited()) {
-            froggerInternal.debug('Dropping immediate log due to rate limiting');
+            // A non-429 4xx means the request itself is bad (auth/schema) —
+            // retrying won't help, so drop this sink for the batch.
+            if (typeof status === 'number' && status >= 400 && status < 500 && status !== 429) {
+                froggerInternal.warn(`Client transport "${transport.name}" rejected the batch (${status}). Dropping.`);
+                return;
+            }
+
+            const maxRetries = transport.maxRetries ?? 3;
+            if (attempt >= maxRetries) {
+                froggerInternal.warn(`Client transport "${transport.name}" failed after ${maxRetries} retries. Dropping batch.`);
+                return;
+            }
+
+            const retryAfterMs = this.parseRetryAfterMs(error);
+            const baseDelay = transport.retryDelay ?? 1000;
+            const backoff = Math.min(baseDelay * Math.pow(2, attempt), this.maxBackoffMs);
+            const delay = retryAfterMs ?? backoff;
+
+            await new Promise(resolve => setTimeout(resolve, delay));
+            await this.sendToClientTransport(transport, batch, attempt + 1);
+        }
+    }
+
+    /** Parse a `Retry-After` header (seconds) from a fetch error into ms. */
+    private parseRetryAfterMs(error: any): number | undefined {
+        const header = error?.response?.headers?.get?.('retry-after');
+        if (!header) return undefined;
+        const seconds = Number(header);
+        return Number.isFinite(seconds) ? seconds * 1000 : undefined;
+    }
+
+    private async sendLogImmediately(log: LoggerObject): Promise<void> {
+        const primaryEligible = this.shouldSendToPrimary();
+
+        if (!primaryEligible && this.clientTransports.length === 0) {
             return;
         }
 
@@ -326,6 +421,20 @@ export class LogQueueService {
             logs: [log],
             app: this.appInfo
         };
+
+        // Fan out to secondary sinks independently of the primary.
+        for (const transport of this.clientTransports) {
+            void this.sendToClientTransport(transport, batch);
+        }
+
+        if (!primaryEligible) {
+            return;
+        }
+
+        if (this.isRateLimited()) {
+            froggerInternal.debug('Dropping immediate log due to rate limiting');
+            return;
+        }
 
         try {
             await $fetch(this.endpoint, {

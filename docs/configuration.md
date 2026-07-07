@@ -50,7 +50,12 @@ export interface ModuleOptions {
         client?: ClientErrorCaptureOptions | boolean
         server?: ServerErrorCaptureOptions | boolean
     }
-    
+
+    // Extra log destinations. Each forwards every batch to an HTTP ingest URL,
+    // from the server queue (`server`, default on) and/or the browser
+    // (`client`, default off). See the Transports guide. Default: [].
+    transports?: HttpTransportConfig[]
+
     public?: {
         endpoint?: string
         baseUrl?: string
@@ -165,7 +170,28 @@ export interface ModuleOptions {
             includeStack?: boolean;
         } | boolean;
     }
-    
+
+    transports?: Array<{
+        // Full ingest URL — shorthand for `baseUrl` (origin) + `endpoint` (path).
+        url?: string
+        baseUrl?: string
+        endpoint?: string
+
+        // Sent as the `x-api-key` header on every batch to this destination.
+        apiKey?: string
+        headers?: Record<string, string>
+
+        client?: boolean   // fan out from the browser (default false)
+        server?: boolean   // fan out from the server queue (default true)
+
+        name?: string
+        vendor?: string
+        timeout?: number
+        retryOnFailure?: boolean
+        maxRetries?: number
+        retryDelay?: number
+    }>
+
     public?: {
         endpoint?: string
         baseUrl?: string
@@ -181,6 +207,12 @@ export interface ModuleOptions {
     }
 }
 ```
+:::
+
+::: warning Client transport keys are public
+A `client: true` transport's `apiKey` and `headers` are compiled into the
+browser bundle. Only ever use a write-only, per-service, rate-limited ingest key
+there. See [Transports → Security](/guides/transports#security-client-transport-keys-are-public).
 :::
 
 ## Presets

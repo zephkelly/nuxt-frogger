@@ -167,7 +167,7 @@ describe('LogDeduplicator', () => {
 
             expect(filtered1).toHaveLength(2);
             expect(filtered2).toHaveLength(1);
-            expect(filtered2[0].trace.spanId).toBe('span-3');
+            expect(filtered2[0]!.trace.spanId).toBe('span-3');
         });
 
         it('should update statistics correctly', () => {
@@ -653,7 +653,7 @@ describe('LogDeduplicator', () => {
             });
 
             it('should handle keys that could cause hash collisions', () => {
-                const problematicKeys = [
+                const problematicKeys: [string, string][] = [
                     ['a:b', 'c'],
                     ['a', 'b:c'],
                     [':', ':'],

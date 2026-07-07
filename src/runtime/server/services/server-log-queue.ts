@@ -5,6 +5,8 @@ import type { LoggerObject } from '../../shared/types/log'
 import type { LoggerObjectBatch } from '../../shared/types/batch'
 
 import type { ResolvedHttpTransport } from '../../shared/types/transports'
+import type { ScrubberOptions } from '../../scrubber/options'
+import type { BatchOptions } from '../../shared/types/batch'
 
 import { LogScrubber } from '../../scrubber'
 import { FileTransport } from '../../logger/_transports/file-transport'
@@ -47,11 +49,12 @@ export class ServerLogQueueService {
 
         const config = useRuntimeConfig()
 
-        if (config.frogger.scrub) {
-            this.scrubber = new LogScrubber(config.frogger.scrub);
+        const scrubConfig = config.frogger.scrub as ScrubberOptions | false;
+        if (scrubConfig) {
+            this.scrubber = new LogScrubber(scrubConfig);
         }
 
-        const batchingEnabled = config.frogger.batch !== false;
+        const batchingEnabled = (config.frogger.batch as BatchOptions | false) !== false;
 
         const fileTransporter = new FileTransport();
 

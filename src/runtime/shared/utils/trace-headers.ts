@@ -138,8 +138,8 @@ export function parseTraceparent(traceparent: string): TraceContext | null {
     if (version !== '00') return null;
     
     return {
-        traceId,
-        spanId,
+        traceId: traceId!,
+        spanId: spanId!,
         flags
     };
 }

@@ -150,8 +150,8 @@ export class UUID {
   toString(): string {
     let text = "";
     for (let i = 0; i < this.bytes.length; i++) {
-      text += DIGITS.charAt(this.bytes[i] >>> 4);
-      text += DIGITS.charAt(this.bytes[i] & 0xf);
+      text += DIGITS.charAt(this.bytes[i]! >>> 4);
+      text += DIGITS.charAt(this.bytes[i]! & 0xf);
       if (i === 3 || i === 5 || i === 7 || i === 9) {
         text += "-";
       }
@@ -166,8 +166,8 @@ export class UUID {
   toHex(): string {
     let text = "";
     for (let i = 0; i < this.bytes.length; i++) {
-      text += DIGITS.charAt(this.bytes[i] >>> 4);
-      text += DIGITS.charAt(this.bytes[i] & 0xf);
+      text += DIGITS.charAt(this.bytes[i]! >>> 4);
+      text += DIGITS.charAt(this.bytes[i]! & 0xf);
     }
     return text;
   }
@@ -192,7 +192,7 @@ export class UUID {
     | "VAR_RESERVED"
     | "NIL"
     | "MAX" {
-    const n = this.bytes[8] >>> 4;
+    const n = this.bytes[8]! >>> 4;
     if (n < 0) {
       throw new Error("unreachable");
     } else if (n <= 0b0111) {
@@ -213,7 +213,7 @@ export class UUID {
    * not have the variant field value of `0b10`.
    */
   getVersion(): number | undefined {
-    return this.getVariant() === "VAR_10" ? this.bytes[6] >>> 4 : undefined;
+    return this.getVariant() === "VAR_10" ? this.bytes[6]! >>> 4 : undefined;
   }
 
   /** Creates an object from `this`. */
@@ -232,7 +232,7 @@ export class UUID {
    */
   compareTo(other: UUID): number {
     for (let i = 0; i < 16; i++) {
-      const diff = this.bytes[i] - other.bytes[i];
+      const diff = this.bytes[i]! - other.bytes[i]!;
       if (diff !== 0) {
         return Math.sign(diff);
       }
@@ -396,8 +396,8 @@ export class V7Generator {
         this.random.nextUint32(),
       ).buffer,
     );
-    bytes[6] = 0x40 | (bytes[6] >>> 4);
-    bytes[8] = 0x80 | (bytes[8] >>> 2);
+    bytes[6] = 0x40 | (bytes[6]! >>> 4);
+    bytes[8] = 0x80 | (bytes[8]! >>> 2);
     return UUID.ofInner(bytes);
   }
 }
@@ -440,7 +440,7 @@ class BufferedCryptoRandom {
       this.cursor = 0;
     }
 
-    return this.buffer[this.cursor++];
+    return this.buffer[this.cursor++]!;
   }
 }
 

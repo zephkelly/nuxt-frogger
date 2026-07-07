@@ -28,12 +28,11 @@ export class SlidingWindowRateLimiter {
 
     constructor() {
         const runtimeConfig = useRuntimeConfig()
-        const rateLimiterConfig = runtimeConfig.frogger?.rateLimit
+        const rateLimiterConfig = runtimeConfig.frogger?.rateLimit as RateLimitingOptions | false | undefined
 
-        //@ts-ignore
-        this.isEnabled = rateLimiterConfig !== false
+        this.isEnabled = rateLimiterConfig !== false && rateLimiterConfig != null
 
-        if (!this.isEnabled) {
+        if (!this.isEnabled || typeof rateLimiterConfig !== 'object') {
             this.storage = undefined as unknown as IRateLimitStorage
             this.config = {} as RateLimitingOptions
             return
@@ -41,27 +40,7 @@ export class SlidingWindowRateLimiter {
 
         this.storage = new RateLimitKVLayer('frogger-rate-limiter')
 
-        this.config = {
-            limits: {
-                global: rateLimiterConfig.limits?.global,
-                perIp: rateLimiterConfig.limits?.perIp,
-                perReporter: rateLimiterConfig.limits?.perReporter,
-                perApp: rateLimiterConfig.limits?.perApp
-            },
-            windows: {
-                global: rateLimiterConfig.windows?.global,
-                perIp: rateLimiterConfig.windows?.perIp,
-                perReporter: rateLimiterConfig.windows?.perReporter,
-                perApp: rateLimiterConfig.windows?.perApp
-            },
-            blocking: {
-                enabled: rateLimiterConfig.blocking?.enabled,
-                escalationResetHours: rateLimiterConfig.blocking?.escalationResetHours,
-                timeouts: rateLimiterConfig.blocking?.timeouts,
-                violationsBeforeBlock: rateLimiterConfig.blocking?.violationsBeforeBlock,
-                finalBanHours: rateLimiterConfig.blocking?.finalBanHours
-            }
-        }
+        this.config = rateLimiterConfig
 
         setInterval(async () => {
             try {
@@ -188,11 +167,11 @@ export class SlidingWindowRateLimiter {
             const backoffTier = violationRecord.count - 1
             
             if (backoffTier < backoffTimeouts.length) {
-                timeoutDuration = backoffTimeouts[backoffTier]
+                timeoutDuration = backoffTimeouts[backoffTier]!
                 violationRecord.currentBackoffTier = backoffTier
             }
             else {
-                timeoutDuration = backoffTimeouts[backoffTimeouts.length - 1]
+                timeoutDuration = backoffTimeouts[backoffTimeouts.length - 1]!
                 violationRecord.currentBackoffTier = backoffTimeouts.length - 1
             }
         }
@@ -338,7 +317,7 @@ export class SlidingWindowRateLimiter {
         }
 
         if (failedResults.length > 0) {
-            const primaryFailure = failedResults[0]
+            const primaryFailure = failedResults[0]!
             const violationResponse = await this.recordViolation(identifier.ip, primaryFailure, now)
             return [violationResponse]
         }
@@ -376,7 +355,7 @@ export class SlidingWindowRateLimiter {
         const allowed = current < limit + 1
         
         const oldestRequest = validTimestamps.length > 0 
-            ? validTimestamps.reduce((min, timestamp) => Math.min(min, timestamp), validTimestamps[0])
+            ? validTimestamps.reduce((min, timestamp) => Math.min(min, timestamp), validTimestamps[0]!)
             : null
 
         const resetTime = oldestRequest ? oldestRequest + windowMs : now + windowMs
@@ -448,7 +427,7 @@ export class SlidingWindowRateLimiter {
             const validTimestamps = windowData.filter(timestamp => timestamp > windowStart)
             const current = windowData.filter(timestamp => timestamp > windowStart).length
             const oldestRequest = validTimestamps.length > 0 
-                ? validTimestamps.reduce((min, timestamp) => Math.min(min, timestamp), validTimestamps[0])
+                ? validTimestamps.reduce((min, timestamp) => Math.min(min, timestamp), validTimestamps[0]!)
                 : null
 
             const resetTime = oldestRequest ? oldestRequest + windowMs : now + windowMs
@@ -473,7 +452,7 @@ export class SlidingWindowRateLimiter {
             let primaryResult: RateLimitCheckResult;
             
             if (rateLimitResults.length === 1) {
-                primaryResult = rateLimitResults[0];
+                primaryResult = rateLimitResults[0]!;
             }
             else {
                 primaryResult = rateLimitResults.reduce((mostRestrictive, current) => {

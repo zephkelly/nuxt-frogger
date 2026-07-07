@@ -565,7 +565,7 @@ describe('WebSocketLogHandler', () => {
 
             await handler.sendMessage(peer, message);
 
-            const sentMessage = vi.mocked(peer.send).mock.calls[0][0] as string;
+            const sentMessage = vi.mocked(peer.send).mock.calls[0]![0] as string;
             expect(() => JSON.parse(sentMessage)).not.toThrow();
         });
     });

@@ -49,7 +49,7 @@ export class SimpleConsoleLogger implements IFroggerLogger {
             this.consola.addReporter({
                 log: (logObj: LogObject) => {
                     try {
-                        this.consoleReporter?.log(logObj);
+                        this.consoleReporter?.log(logObj as unknown as LoggerObject);
                     }
                     catch (err) {
                         console.log(`[${logObj.type.toUpperCase()}]`, logObj.args?.[0] || '', ...logObj.args?.slice(1) || []);

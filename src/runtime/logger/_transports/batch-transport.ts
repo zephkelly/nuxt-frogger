@@ -130,7 +130,7 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
             this.scheduleFlush(0);
         }
         else {
-            const oldestLog = this.logs[0];
+            const oldestLog = this.logs[0]!;
             const waitTime = Math.max(0, (oldestLog.time + this.options.sortingWindowMs) - now);
             this.scheduleFlush(waitTime);
         }
@@ -142,7 +142,7 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
         
         while (left < right) {
             const mid = Math.floor((left + right) / 2);
-            if (this.logs[mid].time <= log.time) {
+            if (this.logs[mid]!.time <= log.time) {
                 left = mid + 1;
             }
             else {

@@ -69,7 +69,7 @@ describe('WebSocketStateKVLayer', () => {
             await kvLayer.setChannel('channel-1', mockChannel, ttl)
 
             expect(mockStorage.setItem).toHaveBeenCalled()
-            const call = vi.mocked(mockStorage.setItem).mock.calls[0]
+            const call = vi.mocked(mockStorage.setItem).mock.calls[0]!
             expect(call[0]).toBe('test-storage:channels:channel-1')
             expect(call[1]).toHaveProperty('data', mockChannel)
             expect(call[1]).toHaveProperty('expiresAt')
@@ -240,7 +240,7 @@ describe('WebSocketStateKVLayer', () => {
             await kvLayer.updateChannelActivity('channel-1')
 
             expect(mockStorage.setItem).toHaveBeenCalled()
-            const call = vi.mocked(mockStorage.setItem).mock.calls[0]
+            const call = vi.mocked(mockStorage.setItem).mock.calls[0]!
             expect(call[1].last_activity).toBeGreaterThan(mockChannel.last_activity)
         })
 
@@ -276,7 +276,7 @@ describe('WebSocketStateKVLayer', () => {
             await kvLayer.updateSubscriptionActivity('peer-1')
 
             expect(mockStorage.setItem).toHaveBeenCalled()
-            const call = vi.mocked(mockStorage.setItem).mock.calls[0]
+            const call = vi.mocked(mockStorage.setItem).mock.calls[0]!
             expect(call[1].last_activity).toBeGreaterThan(mockSubscription.last_activity)
         })
 

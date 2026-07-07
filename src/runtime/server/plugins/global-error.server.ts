@@ -2,15 +2,16 @@
 import { defineNitroPlugin, useRuntimeConfig } from "#imports";
 import { H3Error } from "h3";
 import { getFrogger } from "../utils/auto";
+import type { GlobalErrorCaptureOptions } from "../../shared/types/global-error";
 
 //@ts-ignore
 export default defineNitroPlugin((nitroApp) => {
     const config = useRuntimeConfig();
 
     //@ts-ignore
-    const globalErrorCaptureConfig = config.frogger?.errorCapture;
+    const globalErrorCaptureConfig = config.frogger?.errorCapture as GlobalErrorCaptureOptions['server'] | false;
 
-    if (!globalErrorCaptureConfig || globalErrorCaptureConfig === false) {
+    if (!globalErrorCaptureConfig) {
         return;
     }
 

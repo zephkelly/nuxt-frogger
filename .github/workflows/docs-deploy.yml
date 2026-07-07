@@ -30,7 +30,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       
       - name: Setup package manager
         run: npm i -g --force corepack@latest && corepack enable

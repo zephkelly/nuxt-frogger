@@ -6,7 +6,7 @@ function extractClientIP(event: H3Event): string {
     let ip = getRequestIP(event, { xForwardedFor: true })
     
     if (ip) {
-        ip = ip.split(',')[0].trim()
+        ip = ip.split(',')[0]!.trim()
         if (isValidIP(ip)) {
             return ip
         }
@@ -26,7 +26,7 @@ function extractClientIP(event: H3Event): string {
     for (const header of fallbackHeaders) {
         const headerValue = getHeader(event, header)
         if (headerValue) {
-            ip = headerValue.split(',')[0].trim()
+            ip = headerValue.split(',')[0]!.trim()
             if (ip && isValidIP(ip)) {
                 return ip
             }

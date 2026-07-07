@@ -4,6 +4,8 @@ import { useFrogger } from "../composables/useFrogger";
 
 import { H3Error } from "h3";
 
+import type { GlobalErrorCaptureOptions } from "../../shared/types/global-error";
+
 
 export default defineNuxtPlugin((nuxtApp) => {
     const config = useRuntimeConfig();
@@ -12,10 +14,9 @@ export default defineNuxtPlugin((nuxtApp) => {
         const globalLogger = useFrogger();
 
         //@ts-ignore
-        const globalErrorCaptureConfig = config.public.frogger.errorCapture;
+        const globalErrorCaptureConfig = config.public.frogger.errorCapture as GlobalErrorCaptureOptions['client'] | boolean;
 
-        //@ts-ignore
-        if (!globalErrorCaptureConfig || globalErrorCaptureConfig === false) {
+        if (!globalErrorCaptureConfig) {
             return;
         }
 
@@ -28,16 +29,13 @@ export default defineNuxtPlugin((nuxtApp) => {
         if (typeof globalErrorCaptureConfig === 'object') {
             componentInformation = {};
 
-            //@ts-ignore
             if (globalErrorCaptureConfig.includeComponent && instance) {
                 componentInformation.name = instance?.$.type?.__name || undefined;
 
-                //@ts-ignore
                 if (globalErrorCaptureConfig.includeComponentOuterHTML && instance?.$el) {
                     componentInformation.outerHTML = instance.$el.outerHTML || null;
                 }
 
-                //@ts-ignore
                 if (globalErrorCaptureConfig.includeComponentProps) {
                     componentInformation.props = instance?.$props || {};
                 }
@@ -61,8 +59,8 @@ export default defineNuxtPlugin((nuxtApp) => {
         if (error instanceof Error) {
             globalLogger.error(error.message, {
                 component: componentInformation,
-                info: globalErrorCaptureConfig.includeInfo ? info : undefined,
-                stack: globalErrorCaptureConfig.includeStack ? error.stack : undefined,
+                info: (typeof globalErrorCaptureConfig === 'object' && globalErrorCaptureConfig.includeInfo) ? info : undefined,
+                stack: (typeof globalErrorCaptureConfig === 'object' && globalErrorCaptureConfig.includeStack) ? error.stack : undefined,
                 uncaught: true,
             });
         }
@@ -79,7 +77,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             globalLogger.error("An unknown error occurred", {
                 error: error,
                 component: componentInformation,
-                info: globalErrorCaptureConfig.includeInfo ? info : undefined,
+                info: (typeof globalErrorCaptureConfig === 'object' && globalErrorCaptureConfig.includeInfo) ? info : undefined,
                 uncaught: true,
             });
         }

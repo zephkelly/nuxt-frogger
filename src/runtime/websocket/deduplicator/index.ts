@@ -197,7 +197,7 @@ export class LogDeduplicator implements ILogDeduplicator {
             .sort((a, b) => a[1] - b[1]);
         
         for (let i = 0; i < toRemove && i < entries.length; i++) {
-            this.recentLogs.delete(entries[i][0]);
+            this.recentLogs.delete(entries[i]![0]);
         }
         
         this.stats.totalEntries = Math.max(0, this.stats.totalEntries - toRemove);
@@ -287,7 +287,7 @@ export class LogDeduplicator implements ILogDeduplicator {
                     .sort((a, b) => a[1] - b[1]);
                 
                 for (let i = 0; i < toRemove; i++) {
-                    this.recentLogs.delete(entries[i][0]);
+                    this.recentLogs.delete(entries[i]![0]);
                 }
                 
                 this.stats.totalEntries = Math.max(0, this.stats.totalEntries - toRemove);

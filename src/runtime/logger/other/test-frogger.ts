@@ -2,6 +2,8 @@ import type { LogObject } from 'consola/basic';
 import { BaseFroggerLogger } from '../../logger/base-frogger';
 import type { LoggerObject } from '../../shared/types/log';
 import type { TraceContext } from '../../shared/types/trace-headers';
+import type { IFroggerLogger } from '../types';
+import type { FroggerOptions } from '../../shared/types/options';
 import { Writable } from 'node:stream';
 
 export interface TestFroggerLoggerOptions {
@@ -127,10 +129,20 @@ export class TestFroggerLogger extends BaseFroggerLogger {
         return {
             lvl: logObj.level,
             time: timestamp,
+            type: logObj.type,
             msg: logObj.args?.[0] || '',
             ctx: mergedContext,
+            env: 'server',
             trace: traceContext
         };
+    }
+
+    child(_options: FroggerOptions): IFroggerLogger {
+        throw new Error('child() is not supported by TestFroggerLogger');
+    }
+
+    reactiveChild(_options: FroggerOptions): IFroggerLogger {
+        throw new Error('reactiveChild() is not supported by TestFroggerLogger');
     }
 
 

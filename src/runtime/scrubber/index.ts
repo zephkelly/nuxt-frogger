@@ -184,6 +184,7 @@ export class LogScrubber {
         if (!match) return email;
 
         const [, localPart, domain] = match;
+        if (!localPart) return email;
         if (localPart.length <= 1) return `*@${domain}`;
 
         return `${localPart[0]}***@${domain}`;
@@ -194,7 +195,7 @@ export class LogScrubber {
         const digitIndices: number[] = [];
 
         for (let i = 0; i < chars.length; i++) {
-            if (/\d/.test(chars[i])) {
+            if (/\d/.test(chars[i]!)) {
                 digitIndices.push(i);
             }
         }
@@ -202,7 +203,7 @@ export class LogScrubber {
         if (digitIndices.length < 4) return phone;
 
         for (let i = 1; i < digitIndices.length - 1; i++) {
-            chars[digitIndices[i]] = '*';
+            chars[digitIndices[i]!] = '*';
         }
 
         return chars.join('');

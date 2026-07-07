@@ -684,10 +684,10 @@ describe('LogScrubber', () => {
 
             const results = scrubber.scrubBatch(logs);
             expect(results).toHaveLength(2);
-            expect(results[0].scrubbed).toBe(true);
-            expect(results[1].scrubbed).toBe(true);
-            expect(logs[0].ctx.password).toBe('[REDACTED]');
-            expect(logs[1].ctx.password).toBe('[REDACTED]');
+            expect(results[0]!.scrubbed).toBe(true);
+            expect(results[1]!.scrubbed).toBe(true);
+            expect(logs[0]!.ctx.password).toBe('[REDACTED]');
+            expect(logs[1]!.ctx.password).toBe('[REDACTED]');
         });
 
         it('should handle empty batch', () => {

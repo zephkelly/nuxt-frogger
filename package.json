@@ -12,6 +12,7 @@
   "homepage": "https://zephkelly.github.io/nuxt-frogger",
   "license": "MIT",
   "type": "module",
+  "packageManager": "pnpm@10.34.3",
   "exports": {
     ".": {
       "types": "./dist/types.d.mts",

@@ -17,17 +17,33 @@ hero:
 features:
   - title: ✨ Zero Config
     details: Sit back and relax. With sensible defaults, Frogger works out of the box. Need to make changes? It's all configurable
+    link: /installation
+    linkText: Install
   - title: ⚡ Websocket
-    details: Get your logs broadcasted in realtime, build custom dashboards and live consoles, add your own auth anytime
+    details: "Opt-in dev live-stream — flip on with frogger: { websocket: true } (or preset: 'full'). Broadcast logs in realtime, build custom dashboards and live consoles, add your own auth anytime"
+    link: /guides/live-logs
+    linkText: Live Logs
   - title: 🌐 Universal Logging
     details: Auto-imported utilities for the client and server. SSR, CSR, SPA, or even static sites. Frogger works everywhere
+    link: /getting-started
+    linkText: Getting Started
   - title: 🏷️ Batched Operations
     details: Handle usage spikes with ease. Automated batching strategies on the server and client mean more performance, less stress
+    link: /configuration
+    linkText: Configure batching
   - title: 🧹 PII Scrubbing
-    details: Basic strategies to scrub PII from your logs configured by default. Need something more robust? Add your own custom strategies
+    details: "Opt-in basic strategies to scrub PII from your logs, flip on with frogger: { scrub: true }. Need something more robust? Add your own custom strategies"
+    link: /guides/scrubbing
+    linkText: Scrubbing
   - title: 🔎 W3C Trace Context
     details: Trace requests on their journey. From client to the server, across distributed systems, external services, and back again
+    link: /getting-started#trace-context
+    linkText: Trace Context
   - title: 🚦 Rate Limiting
-    details: Worried about excessive logs or targeted attacks? Frogger rate-limits by default, reducing abuse and keeping the pond clean
+    details: "Worried about excessive logs or targeted attacks? Opt-in rate limiting reduces abuse, flip on with frogger: { rateLimit: true } to keep the pond clean"
+    link: /guides/rate-limiting
+    linkText: Rate Limiting
   - title: 🔌 Extensible
     details: Child loggers, reactive context, pluggable client reporters, server transports. Frogger is built to handle almost any use case
+    link: /guides/transports
+    linkText: Transports

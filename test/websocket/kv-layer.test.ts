@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { WebSocketStateKVLayer } from '../../src/runtime/websocket/state/index'
+import { froggerInternal } from '../../src/runtime/shared/utils/internal-log'
 import type { StorageAdapter } from '../../src/runtime/websocket/state/index'
 import type { PersistedChannel, PersistedSubscription } from '../../src/runtime/websocket/types'
 
@@ -16,7 +17,7 @@ describe('WebSocketStateKVLayer', () => {
             getKeys: vi.fn()
         }
         kvLayer = new WebSocketStateKVLayer(mockStorage, 'test-storage')
-        consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => { })
+        consoleErrorSpy = vi.spyOn(froggerInternal, 'error').mockImplementation(() => { })
     })
 
     afterEach(() => {

@@ -9,6 +9,7 @@ import type { FroggerOptions } from "../shared/types/options";
 import type { LogContext } from "../shared/types/log";
 import type { TraceContext } from "../shared/types/trace-headers";
 import { ConsoleReporter } from "./_reporters/console-reporter";
+import { froggerInternal } from "../shared/utils/internal-log";
 
 import type { IFroggerReporter } from "./_reporters/types";
 import { LogScrubber } from "../scrubber";
@@ -298,7 +299,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             await this.processLoggerObject(loggerObject);
         }
         catch (error) {
-            console.error('Error in log handling pipeline:', error);
+            froggerInternal.error('Error in log handling pipeline:', error);
         }
     }
 
@@ -308,7 +309,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
                 await reporter.log(loggerObject);
             }
             catch (error) {
-                console.error('Error in custom reporter:', error);
+                froggerInternal.error('Error in custom reporter:', error);
             }
         });
 

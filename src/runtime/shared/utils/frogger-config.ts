@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 
 import type { ModuleOptions } from '../types/module-options'
+import { froggerInternal } from './internal-log'
 
 
 
@@ -33,10 +34,7 @@ export async function loadFroggerConfig(rootDir: string): Promise<ModuleOptions 
         return config
     }
     catch (error) {
-        console.log(
-            '%cFROGGER WARN', 'color: black; background-color: rgb(9, 195, 81); font-weight: bold; font-size: 1.15rem;',
-            '🐸 Failed to load frogger.config.ts file!'
-        )
+        froggerInternal.warn('Failed to load frogger.config.ts file!', error)
         return null
     }
 }

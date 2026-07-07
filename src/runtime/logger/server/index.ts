@@ -10,6 +10,7 @@ import type { TraceContext } from '../../shared/types/trace-headers';
 
 import { defu } from 'defu';
 import { useRuntimeConfig } from '#imports';
+import { froggerInternal } from '../../shared/utils/internal-log';
 
 export class ServerFroggerLogger extends BaseFroggerLogger {
     private options: ServerLoggerOptions;
@@ -37,7 +38,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
 
     protected createLoggerObject(logObj: LogObject): LoggerObject {
         if (!logObj || typeof logObj !== 'object') {
-            console.warn('Invalid log object:', logObj);
+            froggerInternal.warn('Invalid log object:', logObj);
             throw new Error('Invalid log object provided');
         }
         

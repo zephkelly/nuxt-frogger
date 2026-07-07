@@ -1,6 +1,7 @@
 //@ts-ignore
 import { useStorage } from '#imports'
 import type { IRateLimitStorage } from '../types/storage'
+import { froggerInternal } from '../../shared/utils/internal-log'
 
 
 
@@ -38,7 +39,7 @@ export class RateLimitKVLayer implements IRateLimitStorage {
             return value as T | null
         }
         catch (error) {
-            console.error(`Failed to get rate limit key ${key}:`, error)
+            froggerInternal.error(`Failed to get rate limit key ${key}:`, error)
             return null
         }
     }
@@ -62,7 +63,7 @@ export class RateLimitKVLayer implements IRateLimitStorage {
             }
         }
         catch (error) {
-            console.error(`Failed to set rate limit key ${key}:`, error)
+            froggerInternal.error(`Failed to set rate limit key ${key}:`, error)
             throw error
         }
     }
@@ -74,7 +75,7 @@ export class RateLimitKVLayer implements IRateLimitStorage {
             await useStorage().removeItem(fullKey)
         }
         catch (error) {
-            console.error(`Failed to delete rate limit key ${key}:`, error)
+            froggerInternal.error(`Failed to delete rate limit key ${key}:`, error)
         }
     }
     
@@ -85,7 +86,7 @@ export class RateLimitKVLayer implements IRateLimitStorage {
             await this.set(key, newValue, ttl)
             return newValue
         } catch (error) {
-            console.error(`Failed to increment rate limit key ${key}:`, error)
+            froggerInternal.error(`Failed to increment rate limit key ${key}:`, error)
             throw error
         }
     }
@@ -119,7 +120,7 @@ export class RateLimitKVLayer implements IRateLimitStorage {
             await Promise.all(cleanupPromises)
         }
         catch (error) {
-            console.error('Failed to cleanup expired rate limit keys:', error)
+            froggerInternal.error('Failed to cleanup expired rate limit keys:', error)
         }
     }
 }

@@ -56,8 +56,11 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             level: 3,
             context: {},
             consoleOutput: true,
+            // Scrub is opt-in: follow whatever the resolved runtime config says
+            // (`false` when off, a config object when on). A per-logger
+            // `useFrogger({ scrub: true })` in `...options` still overrides this.
             //@ts-ignore
-            scrub: config.public.frogger.scrub || true,
+            scrub: config.public.frogger.scrub ?? false,
             ...options
         }
 

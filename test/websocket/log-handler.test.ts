@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { WebSocketLogHandler } from '../../src/runtime/websocket/log-handler';
+import { froggerInternal } from '../../src/runtime/shared/utils/internal-log';
 import type { Peer } from 'crossws';
 import type { IWebSocketTransport, SubscriptionFilter } from '../../src/runtime/websocket/types';
 
@@ -50,7 +51,7 @@ describe('WebSocketLogHandler', () => {
     beforeEach(() => {
         mockTransport = createMockTransport();
         handler = new WebSocketLogHandler(mockTransport);
-        consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+        consoleErrorSpy = vi.spyOn(froggerInternal, 'error').mockImplementation(() => { });
     });
 
     afterEach(() => {
@@ -369,7 +370,7 @@ describe('WebSocketLogHandler', () => {
 
         it('should handle unknown message type', async () => {
             const peer = createMockPeer('peer-10');
-            const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
+            const consoleWarnSpy = vi.spyOn(froggerInternal, 'warn').mockImplementation(() => { });
             const message = { text: () => JSON.stringify({ type: 'unknown_type' }) };
 
             await handler.handleMessage(peer, message);

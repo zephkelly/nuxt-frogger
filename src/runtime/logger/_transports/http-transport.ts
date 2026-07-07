@@ -9,6 +9,7 @@ import type { LoggerObject } from "~/src/runtime/shared/types/log";
 import type { LoggerObjectBatch } from "~/src/runtime/shared/types/batch";
 
 import { uuidv7 } from '../../shared/utils/uuid';
+import { froggerInternal } from '../../shared/utils/internal-log';
 
 
 
@@ -178,10 +179,7 @@ export class HttpTransport implements IFroggerTransport {
         }
         catch (error) {
             if (error instanceof H3Error) {
-                console.log(
-                    '%cFROGGER ERROR', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
-                    `🐸 http reporter failed to send logs`
-                );
+                froggerInternal.error('HttpTransport: failed to send logs', error);
             }
         }
         finally {
@@ -193,7 +191,7 @@ export class HttpTransport implements IFroggerTransport {
         const retryCount = this.retries.get(batchId) || 0;
 
         if (retryCount >= this.options.maxRetries) {
-            console.error(`HttpReporter: Maximum retry attempts (${this.options.maxRetries}) reached for batch ${batchId}. Dropping ${batch.logs.length} logs.`);
+            froggerInternal.error(`HttpReporter: Maximum retry attempts (${this.options.maxRetries}) reached for batch ${batchId}. Dropping ${batch.logs.length} logs.`);
             this.retries.delete(batchId);
             throw new Error(`Max retries exceeded for batch ${batchId}`);
         }

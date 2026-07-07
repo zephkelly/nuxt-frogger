@@ -2,6 +2,7 @@ import { Peer } from "crossws";
 
 import { type IWebSocketTransport } from "./types";
 import { parseUrlParams } from "./utils/parse-url-params";
+import { froggerInternal } from "../shared/utils/internal-log";
 
 import type {
     LogWebSocketMessage,
@@ -40,7 +41,7 @@ export class WebSocketLogHandler {
             });
         }
         catch (error: any) {
-            console.error('[Frogger] Connection error:', error);
+            froggerInternal.error('[Frogger] Connection error:', error);
             await this.closeWithError(peer, error.message);
         }
     }
@@ -52,7 +53,7 @@ export class WebSocketLogHandler {
             await this.routeMessage(peer, msg);
         }
         catch (error) {
-            console.error('[Frogger] Message handling error:', error);
+            froggerInternal.error('[Frogger] Message handling error:', error);
             await this.sendMessage(peer, {
                 type: 'error',
                 data: { message: 'Invalid message format' }
@@ -75,7 +76,7 @@ export class WebSocketLogHandler {
                 await this.changeChannel(peer, msg);
                 break;
             default:
-                console.warn(`[Frogger] Unknown message type: ${msg.type}`);
+                froggerInternal.warn(`[Frogger] Unknown message type: ${msg.type}`);
         }
     }
 
@@ -84,17 +85,17 @@ export class WebSocketLogHandler {
             await this.transport.removeSubscription(peer.id);
         }
         catch (error) {
-            console.error('[Frogger] Close error:', error);
+            froggerInternal.error('[Frogger] Close error:', error);
         }
     }
 
     async handleError(peer: Peer, error: any) {
-        console.error('[Frogger] WebSocket error:', error);
+        froggerInternal.error('[Frogger] WebSocket error:', error);
         try {
             await this.transport.removeSubscription(peer.id);
         }
         catch (cleanupError) {
-            console.error('[Frogger] Cleanup error:', cleanupError);
+            froggerInternal.error('[Frogger] Cleanup error:', cleanupError);
         }
     }
 
@@ -121,7 +122,7 @@ export class WebSocketLogHandler {
             await peer.close(1011);
         }
         catch (error) {
-            console.error('[Frogger] Error closing peer:', error);
+            froggerInternal.error('[Frogger] Error closing peer:', error);
         }
     }
 

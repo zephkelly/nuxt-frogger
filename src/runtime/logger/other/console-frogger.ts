@@ -1,5 +1,6 @@
 import { type ConsolaInstance, createConsola } from "consola/core";
 import { ConsoleReporter } from "../_reporters/console-reporter";
+import { froggerInternal } from "../../shared/utils/internal-log";
 
 import type { LogObject, LogType } from 'consola';
 import type { LoggerObject } from "../../shared/types/log";
@@ -98,7 +99,7 @@ export class SimpleConsoleLogger implements IFroggerLogger {
 
             await this.emitToReporters(loggerObject);
         } catch (error) {
-            console.error('Error in log handling pipeline:', error);
+            froggerInternal.error('Error in log handling pipeline:', error);
         }
     }
 
@@ -124,7 +125,7 @@ export class SimpleConsoleLogger implements IFroggerLogger {
             try {
                 await reporter.log(loggerObject);
             } catch (error) {
-                console.error('Error in custom reporter:', error);
+                froggerInternal.error('Error in custom reporter:', error);
             }
         });
 

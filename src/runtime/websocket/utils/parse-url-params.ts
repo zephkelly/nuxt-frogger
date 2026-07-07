@@ -1,4 +1,5 @@
 import type { SubscriptionFilter, LogWebSocketParams } from "../types";
+import { froggerInternal } from "../../shared/utils/internal-log";
 
 /**
  * Parses URL search parameters to extract channel and filter information
@@ -34,7 +35,7 @@ export function parseUrlParams(url: URL): LogWebSocketParams {
             filters = JSON.parse(filtersParam);
         }
         catch {
-            console.warn('[Frogger] Invalid filters JSON, ignoring');
+            froggerInternal.warn('[Frogger] Invalid filters JSON, ignoring');
         }
     }
 

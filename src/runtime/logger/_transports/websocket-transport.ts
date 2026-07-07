@@ -11,6 +11,7 @@ import type {
 } from "../../websocket/types";
 
 import { LogLevelParser, type LogLevelInput } from "../../shared/utils/log-level-parser";
+import { froggerInternal } from "../../shared/utils/internal-log";
 import type { IFroggerTransport } from "./types";
 
 
@@ -69,7 +70,7 @@ export class WebSocketTransport implements IFroggerTransport {
             await this.loadPersistedData();
             this.persistedDataLoaded = true;
         } catch (error) {
-            console.error('WebSocketTransport: Failed to load persisted data:', error);
+            froggerInternal.error('WebSocketTransport: Failed to load persisted data:', error);
             // Mark as loaded even on failure to avoid retry loops
             this.persistedDataLoaded = true;
         }
@@ -77,7 +78,7 @@ export class WebSocketTransport implements IFroggerTransport {
 
     private async loadPersistedData(): Promise<void> {
         if (!this.state) {
-            console.warn('WebSocketTransport: Storage not available, skipping persisted data load');
+            froggerInternal.warn('WebSocketTransport: Storage not available, skipping persisted data load');
             return;
         }
 
@@ -100,15 +101,15 @@ export class WebSocketTransport implements IFroggerTransport {
             }
         }
         catch (error) {
-            console.error('WebSocketTransport: Error loading persisted data:', error);
+            froggerInternal.error('WebSocketTransport: Error loading persisted data:', error);
             throw error;
         }
     }
 
     public log(logObj: LoggerObject): void {
-        console.log('WebSocketTransport: Broadcasting log');
+        froggerInternal.debug('WebSocketTransport: Broadcasting log');
         this.broadcastLogBatch([logObj]).catch(error => {
-            console.error('WebSocketTransport: Error broadcasting log:', error);
+            froggerInternal.error('WebSocketTransport: Error broadcasting log:', error);
         });
     }
 
@@ -118,7 +119,7 @@ export class WebSocketTransport implements IFroggerTransport {
         }
 
         this.broadcastLogBatch(logs).catch(error => {
-            console.error('WebSocketTransport: Error broadcasting log batch:', error);
+            froggerInternal.error('WebSocketTransport: Error broadcasting log batch:', error);
         });
     }
 
@@ -152,7 +153,7 @@ export class WebSocketTransport implements IFroggerTransport {
             this.lastMessageTimes.clear();
         }
         catch (error) {
-            console.error('WebSocketTransport: Error during shutdown:', error);
+            froggerInternal.error('WebSocketTransport: Error during shutdown:', error);
             throw error;
         }
     }
@@ -191,7 +192,7 @@ export class WebSocketTransport implements IFroggerTransport {
             await Promise.allSettled(persistPromises);
         }
         catch (error) {
-            console.error('WebSocketTransport: Error persisting current state:', error);
+            froggerInternal.error('WebSocketTransport: Error persisting current state:', error);
         }
     }
 
@@ -228,14 +229,11 @@ export class WebSocketTransport implements IFroggerTransport {
                 await this.state.setChannel(channelId, persistedChannel);
             }
             catch (error) {
-                console.error(`WebSocketTransport: Failed to persist channel ${channelId}:`, error);
+                froggerInternal.error(`WebSocketTransport: Failed to persist channel ${channelId}:`, error);
             }
         }
 
-        console.log(
-            '🐸 \x1b[32mFROGGER\x1b[0m',
-            `Websocket channel '${channelId}' has been created`
-        );
+        froggerInternal.info(`Websocket channel '${channelId}' has been created`);
         return channel;
     }
 
@@ -263,7 +261,7 @@ export class WebSocketTransport implements IFroggerTransport {
                     try {
                         LogLevelParser.parse(level);
                     } catch (error) {
-                        console.error(`WebSocketTransport: Invalid log level '${level}':`, error);
+                        froggerInternal.error(`WebSocketTransport: Invalid log level '${level}':`, error);
                         return false;
                     }
                 }
@@ -305,21 +303,21 @@ export class WebSocketTransport implements IFroggerTransport {
                     ]);
                 }
                 catch (error) {
-                    console.error(`WebSocketTransport: Failed to persist subscription for ${peer.id}:`, error);
+                    froggerInternal.error(`WebSocketTransport: Failed to persist subscription for ${peer.id}:`, error);
                 }
             }
 
             return true;
         }
         catch (error) {
-            console.error('WebSocketTransport: Error subscribing admin to channel:', error);
+            froggerInternal.error('WebSocketTransport: Error subscribing admin to channel:', error);
             return false;
         }
     }
 
     public async reconnectSubscription(peer: Peer): Promise<boolean> {
         if (!this.state) {
-            console.warn('WebSocketTransport: Storage not available for reconnection');
+            froggerInternal.warn('WebSocketTransport: Storage not available for reconnection');
             return false;
         }
 
@@ -362,13 +360,13 @@ export class WebSocketTransport implements IFroggerTransport {
                 ]);
             }
             catch (error) {
-                console.error(`WebSocketTransport: Failed to update activities for reconnected admin ${peer.id}:`, error);
+                froggerInternal.error(`WebSocketTransport: Failed to update activities for reconnected admin ${peer.id}:`, error);
             }
 
             return true;
         }
         catch (error) {
-            console.error('WebSocketTransport: Error reconnecting admin:', error);
+            froggerInternal.error('WebSocketTransport: Error reconnecting admin:', error);
             return false;
         }
     }
@@ -395,7 +393,7 @@ export class WebSocketTransport implements IFroggerTransport {
                         await this.state.removePeerFromChannel(channelId, peerId);
                     }
                     catch (error) {
-                        console.error(`WebSocketTransport: Failed to remove peer from channel storage:`, error);
+                        froggerInternal.error(`WebSocketTransport: Failed to remove peer from channel storage:`, error);
                     }
                 }
             }
@@ -411,12 +409,12 @@ export class WebSocketTransport implements IFroggerTransport {
                     await this.state.deleteSubscription(peerId);
                 }
                 catch (error) {
-                    console.error(`WebSocketTransport: Failed to delete subscription from storage:`, error);
+                    froggerInternal.error(`WebSocketTransport: Failed to delete subscription from storage:`, error);
                 }
             }
         }
         catch (error) {
-            console.error('WebSocketTransport: Error unsubscribing admin:', error);
+            froggerInternal.error('WebSocketTransport: Error unsubscribing admin:', error);
             throw error;
         }
     }
@@ -446,7 +444,7 @@ export class WebSocketTransport implements IFroggerTransport {
 
             if (this.state && Math.random() < 0.1) {
                 this.state.updateChannelActivity(channelId).catch((error: unknown) => {
-                    console.error(`WebSocketTransport: Failed to update channel activity:`, error);
+                    froggerInternal.error(`WebSocketTransport: Failed to update channel activity:`, error);
                 });
             }
 
@@ -469,7 +467,7 @@ export class WebSocketTransport implements IFroggerTransport {
                         
                         if (this.state) {
                             this.state.updateSubscriptionActivity(peerId).catch((error: unknown) => {
-                                console.error(`WebSocketTransport: Failed to update subscription activity for ${peerId}:`, error);
+                                froggerInternal.error(`WebSocketTransport: Failed to update subscription activity for ${peerId}:`, error);
                             });
                         }
                     }
@@ -484,7 +482,7 @@ export class WebSocketTransport implements IFroggerTransport {
                         originalLength,
                         filtered: filteredLogs.length < originalLength
                     }).catch(error => {
-                        console.error(`WebSocketTransport: Error sending log batch to peer ${peerId}:`, error);
+                        froggerInternal.error(`WebSocketTransport: Error sending log batch to peer ${peerId}:`, error);
                     });
                 });
 
@@ -596,7 +594,7 @@ export class WebSocketTransport implements IFroggerTransport {
             await peer.send(JSON.stringify(message));
         }
         catch (error) {
-            console.error('WebSocketTransport: Failed to send batch message to peer:', error);
+            froggerInternal.error('WebSocketTransport: Failed to send batch message to peer:', error);
             throw error;
         }
     }
@@ -675,7 +673,7 @@ export class WebSocketTransport implements IFroggerTransport {
 
         this.cleanupInterval = setInterval(() => {
             this.cleanupStaleChannels().catch(err =>
-                console.error('WebSocketTransport: Error in cleanup interval:', err)
+                froggerInternal.error('WebSocketTransport: Error in cleanup interval:', err)
             );
         }, this.CLEANUP_INTERVAL);
     }
@@ -698,7 +696,7 @@ export class WebSocketTransport implements IFroggerTransport {
 
         if (this.state) {
             this.state.cleanup().catch((error: unknown) => {
-                console.error('WebSocketTransport: Storage cleanup failed:', error);
+                froggerInternal.error('WebSocketTransport: Storage cleanup failed:', error);
             });
         }
     }
@@ -714,10 +712,7 @@ export class WebSocketTransport implements IFroggerTransport {
         }
 
         if (orphanedKeys.length > 0) {
-            console.log(
-                '%cFROGGER', 'color: black; background-color: #0f8dcc; font-weight: bold; font-size: 1.15rem;',
-                `🐸 Cleaned up ${orphanedKeys.length} orphaned rate limit entries`
-            );
+            froggerInternal.debug(`Cleaned up ${orphanedKeys.length} orphaned rate limit entries`);
 
             for (const key of orphanedKeys) {
                 this.lastMessageTimes.delete(key);
@@ -747,17 +742,14 @@ export class WebSocketTransport implements IFroggerTransport {
                 try {
                     await this.state.deleteChannel(channelId);
                 } catch (error) {
-                    console.error(`WebSocketLogReporter: Failed to delete channel from state:`, error);
+                    froggerInternal.error(`WebSocketLogReporter: Failed to delete channel from state:`, error);
                 }
             }
 
-            console.log(
-                '🐸 \x1b[32mFROGGER\x1b[0m',
-                `Websocket channel '${channelId}' has been destroyed`
-            );
+            froggerInternal.info(`Websocket channel '${channelId}' has been destroyed`);
         }
         catch (error) {
-            console.error(`WebSocketTransport: Error cleaning up channel ${channelId}:`, error);
+            froggerInternal.error(`WebSocketTransport: Error cleaning up channel ${channelId}:`, error);
             this.channels.delete(channelId);
             this.lastMessageTimes.delete(channelId);
         }
@@ -770,7 +762,7 @@ export class WebSocketTransport implements IFroggerTransport {
             }
         }
         catch (error) {
-            console.error('WebSocketTransport: Error closing peer connection:', error);
+            froggerInternal.error('WebSocketTransport: Error closing peer connection:', error);
         }
 
         await this.removeSubscription(peerId);

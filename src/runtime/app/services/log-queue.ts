@@ -12,6 +12,7 @@ import { SimpleConsoleLogger } from '../../logger/other/console-frogger';
 
 import { parseAppInfoConfig } from '../../app-info/parse';
 import { DEFAULT_LOGGING_ENDPOINT } from '../../shared/types/module-options';
+import { froggerInternal } from '../../shared/utils/internal-log';
 
 
 interface RetryState {
@@ -101,7 +102,7 @@ export class LogQueueService {
 
         if (this.maxQueueSize && this.queue.length > this.maxQueueSize) {
             this.queue = this.queue.slice(-this.maxQueueSize);
-            console.warn(`Log queue exceeded maximum size of ${this.maxQueueSize}. Old logs have been discarded.`);
+            froggerInternal.warn(`Log queue exceeded maximum size of ${this.maxQueueSize}. Old logs have been discarded.`);
         }
 
         this.scheduleSend();
@@ -142,7 +143,7 @@ export class LogQueueService {
         this.retryState.nextRetryAt = Date.now() + delayMs;
 
         if (rateLimitInfo.isBlocked) {
-            console.error(`Dropping ${this.queue.length} logs due to IP block`);
+            froggerInternal.error(`Dropping ${this.queue.length} logs due to IP block`);
             this.queue = [];
             this.resetRetryState();
             return true;
@@ -163,7 +164,7 @@ export class LogQueueService {
             }, delayMs);
         }
         else if (this.retryState.count >= this.maxRetries) {
-            console.error(`Max retries reached for rate limiting. Dropping ${this.queue.length} logs.`);
+            froggerInternal.error(`Max retries reached for rate limiting. Dropping ${this.queue.length} logs.`);
             this.queue = [];
             this.resetRetryState();
         }
@@ -175,7 +176,7 @@ export class LogQueueService {
         this.retryState.count++;
 
         if (this.retryState.count >= this.maxRetries) {
-            console.error(`Max retries (${this.maxRetries}) reached. Dropping ${this.queue.length} logs.`);
+            froggerInternal.error(`Max retries (${this.maxRetries}) reached. Dropping ${this.queue.length} logs.`);
             this.queue = [];
             this.resetRetryState();
             return;
@@ -188,7 +189,7 @@ export class LogQueueService {
 
         this.retryState.nextRetryAt = Date.now() + backoffMs;
 
-        console.warn(
+        froggerInternal.warn(
             `Send failed (attempt ${this.retryState.count}/${this.maxRetries}). ` +
             `Retrying in ${Math.round(backoffMs / 1000)}s. Error:`,
             error.message || error
@@ -249,7 +250,7 @@ export class LogQueueService {
 
         try {
             if (!this.endpoint) {
-                console.warn('No endpoint specified for sending logs');
+                froggerInternal.warn('No endpoint specified for sending logs');
                 return;
             }
 
@@ -282,7 +283,7 @@ export class LogQueueService {
             }
 
             if (error.response?.status >= 400 && error.response?.status < 500) {
-                console.error(`Client error (${error.response.status}). Dropping logs to prevent retry loop.`);
+                froggerInternal.error(`Client error (${error.response.status}). Dropping logs to prevent retry loop.`);
                 this.resetRetryState();
                 return;
             }
@@ -291,7 +292,7 @@ export class LogQueueService {
             if (this.maxQueueSize && this.queue.length > this.maxQueueSize) {
                 const dropped = this.queue.length - this.maxQueueSize;
                 this.queue = this.queue.slice(0, this.maxQueueSize);
-                console.warn(`Dropped ${dropped} logs due to queue overflow during retry`);
+                froggerInternal.warn(`Dropped ${dropped} logs due to queue overflow during retry`);
             }
 
             this.handleGeneralError(error);
@@ -313,7 +314,7 @@ export class LogQueueService {
         }
 
         if (this.isRateLimited()) {
-            console.debug('Dropping immediate log due to rate limiting');
+            froggerInternal.debug('Dropping immediate log due to rate limiting');
             return;
         }
 
@@ -336,7 +337,7 @@ export class LogQueueService {
             this.resetRetryState();
         }
         catch (error: any) {
-            console.error('Failed to send log immediately:', error);
+            froggerInternal.error('Failed to send log immediately:', error);
 
             this.handleRateLimit(error);
         }

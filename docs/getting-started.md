@@ -25,6 +25,31 @@ Frogger uses [consola](https://github.com/unjs/consola) to ingest all logs, and 
 ## Creating logs
 Before we can create a log, we need to create a logger. Frogger provides both client-side and server-side utilities you can use to create logger instances.
 
+### Quick logging with `frogger` (drop-in for `console`)
+If you just want to log something without managing a logger instance, use the auto-imported **`frogger`** object. It's a drop-in replacement for `console.*` — the same method names (`log`, `info`, `warn`, `error`, `debug`, and the rest), available in both your app code and your server routes with no setup:
+
+```vue
+<script setup lang="ts">
+frogger.info('component mounted');            // [!code focus]
+frogger.error('checkout failed', err);        // [!code focus]
+frogger.log('cart total', total, { cartId }); // [!code focus]
+</script>
+```
+
+```ts
+export default defineEventHandler(async () => {
+    frogger.info('order created', { orderId }); // [!code focus]
+});
+```
+
+Unlike `console`, `frogger` is **variadic with structure**: a trailing plain object becomes the structured [`ctx`](#ctx), any remaining arguments are joined into the [`msg`](#msg), and an `Error` is lifted into `ctx.error` (with its stack). So `frogger.error('checkout failed', err, { orderId })` produces `msg: 'checkout failed …'` and `ctx: { orderId, error: { … } }`.
+
+::: tip One span per scope
+`frogger` is backed by a **single ambient logger** — one per app on the client, one per request on the server (so server logs stay correlated with the incoming client trace). All `frogger.*` calls in that scope form **one span chain**. When you want an independent span or scoped context, create a fresh logger with [`useFrogger()`](#client-side-logging) / [`getFrogger()`](#server-side-logging) instead.
+
+Per-request scoping on the server relies on `serverModule.autoEventCapture` (on by default).
+:::
+
 ### Client-side Logging
 In your app code, use the auto-imported `useFrogger` composable:
 ```vue
@@ -379,31 +404,28 @@ traceparent: '00-70729f2d10910d20c8a0ba9d34d09912-79d6a5bfe9349090-01'
 ```
 
 ### - `tracestate`
-The second header is `tracestate`, which lets you add additional vendor-specific trace information to request. This is useful to identify which systems the trace passed through. Frogger uses your `app.name` as the vendor and `app.version` from your module options as the trace data by default:
+The second header is `tracestate`, which carries vendor-specific trace information — useful to identify which systems the trace passed through. Frogger writes its data under the `frogger` token:
 
 ```http
 // In the format: {vendor}={trace data}
-tracestate: 'my-app-name=my-app-version'
+tracestate: 'frogger=79d6a5bfe9349090'
 ```
-Each service will then prepend its own trace data to the request (systems using Frogger handle this automatically), allowing you to trace the request as it passes through multiple systems:
+Each service prepends its own entry (systems using Frogger handle this automatically), so you can follow the request as it passes through multiple systems:
 
 ```http
-tracestate: 'my-app-name=my-app-version,my-other-service=12345-67890'
+tracestate: 'frogger=79d6a5bfe9349090,my-other-service=12345-67890'
 ```
 
-You can also customise it per-request by setting the `vendor` and `traceData` fields when calling `getHeaders()`:
+You can override the value Frogger writes by passing a vendor string to `getHeaders()`:
 ```ts
 const logger = useFrogger();
 
 const response = await $fetch('/api/some-endpoint', {
-    headers: logger.getHeaders({
-        vendor: 'my-custom-vendor', // [!code ++]
-        traceData: 'my-custom-trace-data-12345', // [!code ++]
-    })
+    headers: logger.getHeaders('my-custom-vendor'), // [!code ++]
 });
 
 // This will generate the following tracestate header:
-// tracestate: 'my-custom-vendor=my-custom-trace-data-12345'
+// tracestate: 'frogger=my-custom-vendor'
 ```
 
 ## Client to Server
@@ -453,3 +475,14 @@ This is why you should **NOT** create one logger instance that is shared across 
 ::: tip
 Creating a logger is cheap, so you can make new loggers for each component, route, or utility function.
 :::
+
+
+## Next steps
+Now that you can make logs, explore what Frogger does with them:
+
+- [Live Logs (WebSocket)](/guides/live-logs) — stream logs to a live console in development.
+- [Scrubbing & PII](/guides/scrubbing) — how sensitive fields are redacted, and how to add rules.
+- [Rate Limiting](/guides/rate-limiting) — protect the ingest endpoint from log floods.
+- [Error Capture](/guides/error-capture) — automatic capture of uncaught client and server errors.
+- [Transports & HttpTransport](/guides/transports) — file output, reporters, and forwarding logs.
+- [Logger API](/reference/logger-api) — the full `IFroggerLogger` reference.

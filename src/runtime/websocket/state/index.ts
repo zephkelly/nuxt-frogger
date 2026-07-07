@@ -1,5 +1,6 @@
 import type { IWebSocketStateStorage } from './types';
 import type { PersistedChannel, PersistedSubscription } from '../types';
+import { froggerInternal } from '../../shared/utils/internal-log';
 
 export interface StorageAdapter {
     getItem: <T = any>(key: string) => Promise<T | null>;
@@ -51,7 +52,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             return value as T | null;
         }
         catch (error) {
-            console.error(`Failed to get WebSocket storage key ${key}:`, error);
+            froggerInternal.error(`Failed to get WebSocket storage key ${key}:`, error);
             return null;
         }
     }
@@ -71,7 +72,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             }
         }
         catch (error) {
-            console.error(`Failed to set WebSocket storage key ${key}:`, error);
+            froggerInternal.error(`Failed to set WebSocket storage key ${key}:`, error);
             throw error;
         }
     }
@@ -81,7 +82,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             await this.storage.removeItem(key);
         }
         catch (error) {
-            console.error(`Failed to delete WebSocket storage key ${key}:`, error);
+            froggerInternal.error(`Failed to delete WebSocket storage key ${key}:`, error);
         }
     }
 
@@ -90,7 +91,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             return await this.storage.getKeys(prefix);
         }
         catch (error) {
-            console.error(`Failed to get keys with prefix ${prefix}:`, error);
+            froggerInternal.error(`Failed to get keys with prefix ${prefix}:`, error);
             return [];
         }
     }
@@ -130,7 +131,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             return channels;
         }
         catch (error) {
-            console.error('Failed to get all channels:', error);
+            froggerInternal.error('Failed to get all channels:', error);
             return [];
         }
     }
@@ -165,7 +166,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             return subscriptions;
         }
         catch (error) {
-            console.error('Failed to get all subscriptions:', error);
+            froggerInternal.error('Failed to get all subscriptions:', error);
             return [];
         }
     }
@@ -181,7 +182,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             }
         }
         catch (error) {
-            console.error(`Failed to add peer ${peerId} to channel ${channelId}:`, error);
+            froggerInternal.error(`Failed to add peer ${peerId} to channel ${channelId}:`, error);
         }
     }
 
@@ -199,7 +200,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             }
         }
         catch (error) {
-            console.error(`Failed to remove peer ${peerId} from channel ${channelId}:`, error);
+            froggerInternal.error(`Failed to remove peer ${peerId} from channel ${channelId}:`, error);
         }
     }
 
@@ -209,7 +210,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             return await this.get<string[]>(key) || [];
         }
         catch (error) {
-            console.error(`Failed to get peers for channel ${channelId}:`, error);
+            froggerInternal.error(`Failed to get peers for channel ${channelId}:`, error);
             return [];
         }
     }
@@ -226,7 +227,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             }
         }
         catch (error) {
-            console.error(`Failed to update activity for channel ${channelId}:`, error);
+            froggerInternal.error(`Failed to update activity for channel ${channelId}:`, error);
         }
     }
 
@@ -242,7 +243,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             }
         }
         catch (error) {
-            console.error(`Failed to update activity for subscription ${peerId}:`, error);
+            froggerInternal.error(`Failed to update activity for subscription ${peerId}:`, error);
         }
     }
 
@@ -283,7 +284,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             await this.cleanupEmptyChannels();
         }
         catch (error) {
-            console.error('Failed to cleanup WebSocket storage:', error);
+            froggerInternal.error('Failed to cleanup WebSocket storage:', error);
         }
     }
 
@@ -306,7 +307,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             }
         }
         catch (error) {
-            console.error('Failed to cleanup empty channels:', error);
+            froggerInternal.error('Failed to cleanup empty channels:', error);
         }
     }
 
@@ -348,7 +349,7 @@ export class WebSocketStateKVLayer implements IWebSocketStateStorage {
             };
         }
         catch (error) {
-            console.error('Failed to get storage stats:', error);
+            froggerInternal.error('Failed to get storage stats:', error);
             return {
                 totalChannels: 0,
                 totalSubscriptions: 0,

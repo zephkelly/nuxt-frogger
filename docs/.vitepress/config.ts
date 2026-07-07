@@ -11,17 +11,41 @@ export default defineConfig({
     themeConfig: {
         nav: [
             { text: 'Home', link: '/' },
-            { text: 'Installation', link: '/installation' },
+            { text: 'Getting Started', link: '/getting-started' },
+            { text: 'Guides', link: '/guides/live-logs' },
+            { text: 'Reference', link: '/reference/logger-api' },
         ],
 
         sidebar: [
             {
-                text: 'Overview',
+                text: 'Introduction',
                 items: [
+                    { text: 'Why Frogger', link: '/why-frogger' },
                     { text: 'Installation', link: '/installation' },
-                    { text: 'Configuration', link: '/configuration' },
                     { text: 'Getting Started', link: '/getting-started' },
-                    { text: 'Why Frogger', link: '/why-frogger.md' },
+                ]
+            },
+            {
+                text: 'Configuration',
+                items: [
+                    { text: 'Configuration', link: '/configuration' },
+                ]
+            },
+            {
+                text: 'Guides',
+                items: [
+                    { text: 'Live Logs (WebSocket)', link: '/guides/live-logs' },
+                    { text: 'Scrubbing & PII', link: '/guides/scrubbing' },
+                    { text: 'Rate Limiting', link: '/guides/rate-limiting' },
+                    { text: 'Error Capture', link: '/guides/error-capture' },
+                    { text: 'Transports & HttpTransport', link: '/guides/transports' },
+                ]
+            },
+            {
+                text: 'Reference',
+                items: [
+                    { text: 'Logger API', link: '/reference/logger-api' },
+                    { text: 'Log Levels', link: '/reference/log-levels' },
                 ]
             }
         ],

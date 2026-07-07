@@ -4,6 +4,7 @@ import type { LoggerObjectBatch } from '../../shared/types/batch';
 
 import { ServerLogQueueService } from '../services/server-log-queue';
 import { getFroggerRateLimiter } from '../../rate-limiter';
+import { froggerInternal } from '../../shared/utils/internal-log';
 
 
 
@@ -107,23 +108,16 @@ export default eventHandler(async (event) => {
 
         if (loopDetectionResult.isLoop || loopDetectionResult.shouldWarn) {
             if (loopDetectionResult.shouldWarn) {
-                console.warn(
-                    '%cFROGGER WARNING', 
-                    'color: black; background-color: #f59e0b; font-weight: bold; font-size: 1.1rem;',
-                    `⚠️    Potential loop risk: ${loopDetectionResult.reason}
-                            If you are seeing this, it is likely that your HttpReporter endpoint is misconfigured.
-                            Ensure your destination endpoint is correct. If you are using a custom reporter, ensure
-                            it is not pointing to the logging endpoint.
-                    `,
+                froggerInternal.warn(
+                    `⚠️  Potential loop risk: ${loopDetectionResult.reason}\n` +
+                    `    If you are seeing this, it is likely that your HttpReporter endpoint is misconfigured.\n` +
+                    `    Ensure your destination endpoint is correct. If you are using a custom reporter, ensure\n` +
+                    `    it is not pointing to the logging endpoint.`
                 );
             }
-            
+
             if (loopDetectionResult.isLoop) {
-                console.error(
-                    '%cFROGGER LOOP DETECTED', 
-                    'color: white; background-color: #dc2626; font-weight: bold; font-size: 1.2rem;',
-                    `🚨 ${loopDetectionResult.reason}`
-                );
+                froggerInternal.error(`🚨 LOOP DETECTED: ${loopDetectionResult.reason}`);
             }
             
             throw createError({

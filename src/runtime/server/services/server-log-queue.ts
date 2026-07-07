@@ -9,6 +9,7 @@ import { FileTransport } from '../../logger/_transports/file-transport'
 import { WebSocketTransport } from '../../logger/_transports/websocket-transport'
 import { createWebSocketStateKVLayer } from '../../websocket/state/factory'
 import { BatchTransport, createBatchTransport } from '../../logger/_transports/batch-transport'
+import { froggerInternal } from '../../shared/utils/internal-log'
 
 export class ServerLogQueueService {
     private static instance: ServerLogQueueService | null = null;
@@ -60,7 +61,7 @@ export class ServerLogQueueService {
                 // Pass storage to WebSocketTransport (can be null)
                 websocketTransport = WebSocketTransport.getInstance(stateLayer);
             } catch (error) {
-                console.error('ServerLogQueueService: Failed to initialize WebSocket transport:', error);
+                froggerInternal.error('ServerLogQueueService: Failed to initialize WebSocket transport:', error);
             }
         }
 
@@ -106,7 +107,7 @@ export class ServerLogQueueService {
                 this.batchTransporter.logBatch(logs);
             }
             catch (err) {
-                console.error(`Error in batch reporter:`, err);
+                froggerInternal.error(`Error in batch reporter:`, err);
             }
         }
         else {
@@ -126,7 +127,7 @@ export class ServerLogQueueService {
                 this.batchTransporter.log(logObj);
             }
             catch (err) {
-                console.error(`Error in batch reporter:`, err);
+                froggerInternal.error(`Error in batch reporter:`, err);
             }
         }
         else {
@@ -144,7 +145,7 @@ export class ServerLogQueueService {
         if (this.batchTransporter) {
             if (this.batchTransporter.forceFlush) {
                 flushPromises.push(this.batchTransporter.forceFlush().catch(err => {
-                    console.error(`Error flushing batch transporter:`, err);
+                    froggerInternal.error(`Error flushing batch transporter:`, err);
                 }));
             }
         }
@@ -152,7 +153,7 @@ export class ServerLogQueueService {
             for (const reporter of this.directTransporters) {
                 if (reporter.forceFlush) {
                     flushPromises.push(reporter.forceFlush().catch(err => {
-                        console.error(`Error flushing ${reporter.name}:`, err);
+                        froggerInternal.error(`Error flushing ${reporter.name}:`, err);
                     }));
                 }
             }
@@ -171,7 +172,7 @@ export class ServerLogQueueService {
         if (this.batchTransporter) {
             if (this.batchTransporter.destroy) {
                 destroyPromises.push(this.batchTransporter.destroy().catch(err => {
-                    console.error(`Error destroying batch reporter:`, err);
+                    froggerInternal.error(`Error destroying batch reporter:`, err);
                 }));
             }
         }
@@ -180,7 +181,7 @@ export class ServerLogQueueService {
             for (const reporter of this.directTransporters) {
                 if (reporter.destroy) {
                     destroyPromises.push(reporter.destroy().catch(err => {
-                        console.error(`Error destroying ${reporter.name}:`, err);
+                        froggerInternal.error(`Error destroying ${reporter.name}:`, err);
                     }));
                 }
             }
@@ -265,7 +266,7 @@ export class ServerLogQueueService {
                 }
             }
             catch (err) {
-                console.error(`Error in direct reporter ${reporter.name}:`, err);
+                froggerInternal.error(`Error in direct reporter ${reporter.name}:`, err);
             }
         }
     }

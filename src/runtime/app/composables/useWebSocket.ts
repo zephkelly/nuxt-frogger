@@ -3,6 +3,7 @@ import { ref, onMounted, onBeforeUnmount, nextTick, watch } from "vue"
 import { MessageType, type LogWebSocketMessage, WebSocketMessageAuthor, WebSocketStatus } from "../../websocket/types"
 
 import { useRuntimeConfig } from '#imports';
+import { froggerInternal } from '../../shared/utils/internal-log';
 
 interface WebSocketOptions {
     auto_connect?: boolean
@@ -207,7 +208,7 @@ export const useWebSocket = (
         }
 
         ws.onerror = (event) => {
-            console.log("Websocket error", event)
+            froggerInternal.error("Websocket error", event)
             onError?.(ws, event)
         }
 
@@ -297,7 +298,7 @@ export const useWebSocket = (
     }
 
     function handleHeartbeatTimeout() {
-        console.log("Heartbeat timeout")
+        froggerInternal.debug("Heartbeat timeout")
         close(1000, true)
     }
 

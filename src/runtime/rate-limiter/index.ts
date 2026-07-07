@@ -15,6 +15,7 @@ import type { ViolationRecord } from '../rate-limiter/types/index'
 import { RateLimitKVLayer } from './utils/kv-layer'
 import { RateLimitResponseFactory } from './utils/response-factory';
 import { extractRateLimitIdentifier } from './utils/identifiers'
+import { froggerInternal } from '../shared/utils/internal-log'
 
 
 
@@ -67,7 +68,7 @@ export class SlidingWindowRateLimiter {
                 await this.cleanup()
             }
             catch (error) {
-                console.error('Failed to cleanup expired rate limit keys:', error)
+                froggerInternal.error('Failed to cleanup expired rate limit keys:', error)
             }
         }, 5 * 60 * 1000)
     }
@@ -525,7 +526,7 @@ export class SlidingWindowRateLimiter {
                             }
                         }
                     } catch (error) {
-                        console.error(`Failed to cleanup key ${key}:`, error)
+                        froggerInternal.error(`Failed to cleanup key ${key}:`, error)
                     }
                 })
                 
@@ -533,7 +534,7 @@ export class SlidingWindowRateLimiter {
             }
         }
         catch (error) {
-            console.error('Failed to cleanup expired rate limit keys:', error)
+            froggerInternal.error('Failed to cleanup expired rate limit keys:', error)
         }
     }
 }

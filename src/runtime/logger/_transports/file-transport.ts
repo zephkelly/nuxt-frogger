@@ -4,6 +4,7 @@ import { existsSync, createWriteStream, WriteStream } from 'node:fs';
 
 import { useRuntimeConfig } from '#imports';
 import { uuidv7 } from '../../shared/utils/uuid';
+import { froggerInternal } from '../../shared/utils/internal-log';
 
 import { BaseTransport } from './base-transport';
 
@@ -39,7 +40,7 @@ export class FileTransport extends BaseTransport<Required<FileTransportOptions>>
         this.options = config.frogger.file
 
         this.ensureDirectoryExists().catch(err => {
-            console.error('Failed to create log directory:', err);
+            froggerInternal.error('Failed to create log directory:', err);
         });
     }
 
@@ -58,7 +59,7 @@ export class FileTransport extends BaseTransport<Required<FileTransportOptions>>
             }
         }
         catch (err) {
-            console.error('Error adding log to buffer:', err);
+            froggerInternal.error('Error adding log to buffer:', err);
         }
     }
 
@@ -91,7 +92,7 @@ export class FileTransport extends BaseTransport<Required<FileTransportOptions>>
                 return this.writeToFile(content, contentSize);
             }
             catch (err) {
-                console.error('Error writing batch to file:', err);
+                froggerInternal.error('Error writing batch to file:', err);
                 throw err;
             }
         });
@@ -142,7 +143,7 @@ export class FileTransport extends BaseTransport<Required<FileTransportOptions>>
             }
             
             this.writeStream.on('error', (err) => {
-                console.error('Write stream error:', err);
+                froggerInternal.error('Write stream error:', err);
             });
             
             this.writeStream.on('open', () => {
@@ -214,7 +215,7 @@ export class FileTransport extends BaseTransport<Required<FileTransportOptions>>
             this.flushTimer = setTimeout(() => {
                 this.flushTimer = null;
                 this.flush().catch(err => {
-                    console.error('Error during scheduled flush:', err);
+                    froggerInternal.error('Error during scheduled flush:', err);
                 });
             }, this.options.flushInterval);
         }
@@ -248,7 +249,7 @@ export class FileTransport extends BaseTransport<Required<FileTransportOptions>>
                 return this.writeToFile(bufferContent, bufferLength);
             }
             catch (err) {
-                console.error('Error writing logs to file:', err);
+                froggerInternal.error('Error writing logs to file:', err);
                 this.logBuffer = [...logsToWrite, ...this.logBuffer];
                 this.bufferSize += bufferLength;
                 this.scheduleFlush();
@@ -273,10 +274,10 @@ export class FileTransport extends BaseTransport<Required<FileTransportOptions>>
         if (!existsSync(this.options.directory)) {
             try {
                 await mkdir(this.options.directory, { recursive: true });
-                console.info(`Created log directory: ${this.options.directory}`);
+                froggerInternal.info(`Created log directory: ${this.options.directory}`);
             }
             catch (err) {
-                console.error(`Failed to create log directory ${this.options.directory}:`, err);
+                froggerInternal.error(`Failed to create log directory ${this.options.directory}:`, err);
                 throw err;
             }
         }

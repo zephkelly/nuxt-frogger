@@ -21,6 +21,9 @@ Use this to set things like the location of your log files, the configuration of
 Everything is optional, meaning what you don't configure will fallback to default values. The [Getting Started](./getting-started.md) guide will get you familiar with the most common options:
 ```ts
 export interface ModuleOptions {
+    // Subsystem preset — see "Presets" below. Default: 'minimal'.
+    preset?: 'minimal' | 'standard' | 'full'
+
     clientModule?: boolean
     serverModule?: {
         autoEventCapture?: boolean
@@ -32,25 +35,27 @@ export interface ModuleOptions {
     
     batch?: BatchOptions | false
 
-    rateLimit?: RateLimitingOptions | false
+    // Opt-in. `true` enables sensible tiers; an object tunes them.
+    rateLimit?: RateLimitingOptions | boolean
 
+    // Opt-in. `true` enables the dev live-stream on the default route.
     websocket?: WebsocketOptions | boolean
 
+    // Opt-in. `true` enables the built-in redaction rules.
     scrub?: ScrubberOptions | boolean
+
+    // Opt-in. `true` enables both sides; enable/tune each independently with
+    // `{ client, server }`.
+    errorCapture?: boolean | {
+        client?: ClientErrorCaptureOptions | boolean
+        server?: ServerErrorCaptureOptions | boolean
+    }
     
     public?: {
         endpoint?: string
         baseUrl?: string
         
         batch?: BatchOptions | false
-
-        globalErrorCapture?: {
-            includeComponent?: boolean
-            includeComponentOuterHTML?: boolean
-            includeComponentProps?: boolean
-            includeStack?: boolean
-            includeInfo?: boolean
-        } | boolean
 
         serverModule?: boolean
     }
@@ -60,6 +65,8 @@ export interface ModuleOptions {
 ::: details Click here to view the full interface
 ```ts
 export interface ModuleOptions {
+    preset?: 'minimal' | 'standard' | 'full'
+
     clientModule?: boolean
     serverModule?: {
         autoEventCapture?: boolean
@@ -115,7 +122,7 @@ export interface ModuleOptions {
             driver?: string;
             options?: Record<string, any>;
         };
-    } | false
+    } | boolean
 
     websocket?: {
         route: string;
@@ -141,6 +148,23 @@ export interface ModuleOptions {
         preserveTypes?: boolean;
         rules?: ScrubRule[];
     } | boolean
+
+    errorCapture?: boolean | {
+        client?: {
+            includeComponent?: boolean;
+            includeComponentProps?: boolean;
+            includeComponentOuterHTML?: boolean;
+            includeInfo?: boolean;
+            includeStack?: boolean;
+        } | boolean;
+        server?: {
+            includeRequestContext?: boolean;
+            includeHeaders?: boolean;
+            includeRejectionHandled?: boolean;
+            includeWarnings?: boolean;
+            includeStack?: boolean;
+        } | boolean;
+    }
     
     public?: {
         endpoint?: string
@@ -154,115 +178,114 @@ export interface ModuleOptions {
             retryDelay?: number
             sortingWindowMs?: number
         } | false
-
-        globalErrorCapture?: {
-            includeComponent?: boolean
-            includeComponentOuterHTML?: boolean
-            includeComponentProps?: boolean
-            includeStack?: boolean
-            includeInfo?: boolean
-        } | boolean
     }
 }
 ```
 :::
 
-::: details Click here to view all default values
+## Presets
+Frogger is **quiet by default**. A bare install logs to a file and the console, and nothing else — the heavier subsystems are opt-in. A `preset` is a shorthand for a group of those toggles:
+
+| Preset | scrub | rateLimit | errorCapture | websocket (dev live-stream) |
+| --- | :---: | :---: | :---: | :---: |
+| `minimal` *(default)* | ✗ | ✗ | ✗ | ✗ |
+| `standard` | ✓ | ✓ | ✓ | ✗ |
+| `full` | ✓ | ✓ | ✓ | ✓ |
+
+`file` + `console` output and client/server batching are always on (unless you disable them explicitly). Only the four columns above are preset-controlled.
+
 ```ts
-export default defineNuxtModule<ModuleOptions>({
-    defaults: {
-        clientModule: true,
-        serverModule: {
-            autoEventCapture: true
-        },
+export default defineNuxtConfig({
+    // A production-sensible safety net: redaction, ingest rate-limiting and
+    // global error capture, without the dev-only websocket live-stream.
+    frogger: { preset: 'standard' }
+})
+```
 
-        app: 'nuxt-frogger',
-        
-        batch: {
-            maxSize: 200,
-            maxAge: 15000,
-            retryOnFailure: true,
-            maxRetries: 5,
-            retryDelay: 10000,
-            sortingWindowMs: 3000,
-        },
-        
-        file: {
-            directory: 'logs',
-            fileNameFormat: 'YYYY-MM-DD.log',
-            maxSize: 10 * 1024 * 1024,
-            flushInterval: 1000,
-            bufferMaxSize: 1 * 1024 * 1024,
-            highWaterMark: 64 * 1024,
-        },
-        
-        rateLimit: {      
-            storage: {
-                driver: undefined,
-                options: {}
-            },
+Individual options **always win over the preset**, so you can start from a preset and flip one thing:
 
-            limits: {
-                global: 10000,
-                perIp: 100,
-                perReporter: 50,
-                perApp: 30
-            },
-            
-            windows: {
-                global: 60,
-                perIp: 60,
-                perReporter: 60,
-                perApp: 60
-            },
-            
-            blocking: {
-                enabled: true,
-                escalationResetHours: 24,
-                timeouts: [60, 300, 1800],
-                violationsBeforeBlock: 3,
-                finalBanHours: 12
-            },
-        },
-
-        scrub: {
-            maxDepth: 10,
-            deepScrub: true,
-            preserveTypes: true,
-        },
-
-        websocket: {
-            route: '/api/_frogger/dev-ws',
-            defaultChannel: 'main',
-            maxConcurrentQueries: 10,
-            maxQueryResults: 1000,
-            defaultQueryTimeout: 30000,
-        },
-
-        public: {
-            endpoint: '/api/_frogger/logs',
-            
-            globalErrorCapture: {
-                includeComponent: true,
-                includeComponentProps: false,
-                includeComponentOuterHTML: true,
-                includeStack: true,
-                includeInfo: true
-            },
-
-
-            batch: {
-                maxAge: 3000,
-                maxSize: 100,
-                retryOnFailure: true,
-                maxRetries: 3,
-                retryDelay: 3000,
-                sortingWindowMs: 1000,
-            },
-        }
+```ts
+export default defineNuxtConfig({
+    frogger: {
+        preset: 'standard',
+        scrub: false,        // turn one subsystem back off
+        websocket: true,     // ...or add one the preset left off
     }
 })
 ```
+
+Each opt-in option accepts `true` (enable with sensible defaults), an object (enable and customise), or `false`/omitted (off). `errorCapture` additionally accepts `{ client, server }` so you can enable each side independently.
+
+::: details Config applied when a subsystem is enabled
+These are the defaults each subsystem uses once switched on (via a preset, `true`, or an object). Pass an object to override any field — it deep-merges onto these.
+```ts
+// scrub: true  →
+{ maxDepth: 10, deepScrub: true, preserveTypes: true }
+
+// rateLimit: true  →
+{
+    limits:  { global: 10000, perIp: 100, perReporter: 50, perApp: 30 },
+    windows: { global: 60, perIp: 60, perReporter: 60, perApp: 60 },
+    blocking: {
+        enabled: true,
+        escalationResetHours: 24,
+        timeouts: [60, 300, 1800],
+        violationsBeforeBlock: 3,
+        finalBanHours: 12,
+    },
+}
+
+// websocket: true  →
+{
+    route: '/api/_frogger/dev-ws',
+    defaultChannel: 'main',
+    maxConcurrentQueries: 10,
+    maxQueryResults: 1000,
+    defaultQueryTimeout: 30000,
+}
+
+// errorCapture: true  →
+{
+    client: {
+        includeComponent: true,
+        includeComponentProps: true,
+        includeComponentOuterHTML: true,
+        includeInfo: true,
+        includeStack: true,
+    },
+    server: {
+        includeRequestContext: true,
+        includeHeaders: true,
+        includeRejectionHandled: false,
+        includeWarnings: false,
+        includeStack: true,
+    },
+}
+```
+:::
+
+::: details Always-on core defaults (file, batch)
+```ts
+// file  →
+{
+    directory: 'logs',
+    fileNameFormat: 'YYYY-MM-DD.log',
+    maxSize: 10 * 1024 * 1024,
+    flushInterval: 1000,
+    bufferMaxSize: 1 * 1024 * 1024,
+    highWaterMark: 64 * 1024,
+}
+
+// batch (server)  →
+{ maxSize: 200, maxAge: 15000, retryOnFailure: true, maxRetries: 5, retryDelay: 10000, sortingWindowMs: 3000 }
+
+// public.batch (client)  →
+{ maxSize: 100, maxAge: 3000, retryOnFailure: true, maxRetries: 3, retryDelay: 3000, sortingWindowMs: 1000 }
+```
+:::
+
+::: warning Upgrading from a version before presets
+Earlier versions enabled scrubbing, rate-limiting, the dev websocket and global error capture **by default**. They are now off unless you opt in. To keep the old behaviour, set `preset: 'full'` (or `preset: 'standard'` to skip the dev-only websocket). The vestigial `public.globalErrorCapture` option has been removed — use `errorCapture` instead.
 :::
 
 ## Frogger Config

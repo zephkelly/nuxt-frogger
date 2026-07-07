@@ -7,6 +7,7 @@ import type { LoggerObject } from '~/src/runtime/shared/types/log';
 import type { IFroggerTransport } from './types';
 
 import { uuidv7 } from '../../shared/utils/uuid';
+import { froggerInternal } from '../../shared/utils/internal-log';
 
 
 
@@ -58,7 +59,7 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
                         await reporter.logBatch(logs);
                     }
                     catch (err) {
-                        console.error(`Error in downstream reporter ${reporter.name}:`, err);
+                        froggerInternal.error(`Error in downstream reporter ${reporter.name}:`, err);
                         throw err;
                     }
                 });
@@ -83,7 +84,7 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
 
         const processedLogs = this.processLogs(logs);
         if (processedLogs.length === 0) {
-            console.debug('All logs in batch were filtered out');
+            froggerInternal.debug('All logs in batch were filtered out');
             return;
         }
         
@@ -176,7 +177,7 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
         const retryCount = this.retries.get(batchId) || 0;
         
         if (retryCount >= this.options.maxRetries) {
-            console.error(`Maximum retry attempts (${this.options.maxRetries}) reached for batch ${batchId}. Dropping ${logs.length} logs.`);
+            froggerInternal.error(`Maximum retry attempts (${this.options.maxRetries}) reached for batch ${batchId}. Dropping ${logs.length} logs.`);
             this.retries.delete(batchId);
             return;
         }
@@ -185,7 +186,7 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
         
         const backoffDelay = this.options.retryDelay * Math.pow(2, retryCount);
         
-        console.warn(`Scheduling retry #${retryCount + 1} for batch ${batchId} in ${backoffDelay}ms`);
+        froggerInternal.warn(`Scheduling retry #${retryCount + 1} for batch ${batchId} in ${backoffDelay}ms`);
         
         setTimeout(async () => {
         if (!this.retries.has(batchId)) {
@@ -194,11 +195,11 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
         
         try {
             await this.options.onFlush(logs);
-            console.log(`Retry #${retryCount + 1} for batch ${batchId} succeeded`);
+            froggerInternal.debug(`Retry #${retryCount + 1} for batch ${batchId} succeeded`);
             this.retries.delete(batchId);
         }
         catch (error) {
-            console.error(`Retry #${retryCount + 1} for batch ${batchId} failed:`, error);
+            froggerInternal.error(`Retry #${retryCount + 1} for batch ${batchId} failed:`, error);
             this.handleFlushFailure(batchId, logs);
         }
         }, backoffDelay);
@@ -257,13 +258,13 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
                 this.lastFlushTime = Date.now();
             }
             catch (error) {
-                console.error(`Failed to flush logs (batch ${batchId}):`, error);
+                froggerInternal.error(`Failed to flush logs (batch ${batchId}):`, error);
                 
                 if (this.options.retryOnFailure) {
                     this.handleFlushFailure(batchId, logsToFlush);
                 }
                 else {
-                    console.error(`Dropped ${logsToFlush.length} logs due to flush failure`);
+                    froggerInternal.error(`Dropped ${logsToFlush.length} logs due to flush failure`);
                 }
             }
         }

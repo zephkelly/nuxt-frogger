@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.1.13
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.12...v0.1.13)
+
+### 🚀 Enhancements
+
+- Quick external transport configuration for observability ([916486a](https://github.com/zephkelly/nuxt-frogger/commit/916486a))
+
+### 🩹 Fixes
+
+- Test and type errors in app ready for new release ([7b2c8ce](https://github.com/zephkelly/nuxt-frogger/commit/7b2c8ce))
+- Deployment workflow ([d21dffd](https://github.com/zephkelly/nuxt-frogger/commit/d21dffd))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.12
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.11...v0.1.12)

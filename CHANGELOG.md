@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.12
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.11...v0.1.12)
+
+### 🏡 Chore
+
+- Rework configuration to be quiet by default ([600585a](https://github.com/zephkelly/nuxt-frogger/commit/600585a))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.11
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.10...v0.1.11)

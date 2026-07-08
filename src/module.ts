@@ -19,6 +19,21 @@ import { loadFroggerConfig } from './runtime/shared/utils/frogger-config'
 import { resolveFroggerOptions } from './runtime/shared/utils/resolve-options'
 import { resolveInternalLogLevel, type InternalLogLevel } from './runtime/shared/utils/internal-log'
 
+// Re-export the declarative transport factories + config types so nuxt.config
+// users can `import { fileTransport } from 'nuxt-frogger'`. frogger.config.ts
+// users import the same names from '#frogger/config' (runtime/options.ts).
+export {
+    fileTransport,
+    httpTransport,
+    observeTransport,
+} from './runtime/shared/transports/factories'
+export type {
+    FroggerTransportConfig,
+    FileTransportConfig,
+    HttpTransportConfig,
+    ObserveTransportConfig,
+} from './runtime/shared/types/transports'
+
 // Mirror of the level ordering in internal-log.ts so build-time banner gating
 // can compare thresholds without importing runtime mutable state.
 const INTERNAL_LEVEL_WEIGHT: Record<InternalLogLevel, number> = {
@@ -82,9 +97,6 @@ export default defineNuxtModule<ModuleOptions>({
             internalLevelWeight >= INTERNAL_LEVEL_WEIGHT[level];
 
 
-        // Setup log directory
-        const logDir = resolved.file.directory || 'logs';
-
         // The client only needs to know the websocket route when the live-stream
         // is actually enabled; otherwise we don't advertise one.
         const publicWebsocket = resolved.websocket
@@ -117,17 +129,9 @@ export default defineNuxtModule<ModuleOptions>({
                 serverModule: resolved.serverModule,
                 logLevel: internalLogLevel,
 
-                // Server-only: keys stay out of the client bundle.
+                // Server-only (mixed file + http union): keys stay out of the
+                // client bundle. File logging is just a `fileTransport()` entry.
                 transports: resolved.transports.server,
-
-                file: {
-                    directory: logDir,
-                    fileNameFormat: resolved.file.fileNameFormat,
-                    maxSize: resolved.file.maxSize,
-                    flushInterval: resolved.file.flushInterval,
-                    bufferMaxSize: resolved.file.bufferMaxSize,
-                    highWaterMark: resolved.file.highWaterMark,
-                },
 
                 batch: resolved.batch,
                 rateLimit: resolved.rateLimit,
@@ -158,7 +162,14 @@ export default defineNuxtModule<ModuleOptions>({
         _nuxt.hook('nitro:build:before', () => {
             // Genuine misconfiguration warning (shown at warn level and above —
             // i.e. in dev by default, suppressed in production unless opted in).
-            if (allowInternal('warn') && !serverModuleEnabled && resolved.public.endpoint === DEFAULT_LOGGING_ENDPOINT) {
+            // Skipped when the app deliberately fans out to a client transport
+            // instead of its own backend (e.g. a static app → observe direct).
+            if (
+                allowInternal('warn')
+                && !serverModuleEnabled
+                && resolved.public.endpoint === DEFAULT_LOGGING_ENDPOINT
+                && resolved.transports.client.length === 0
+            ) {
                 console.warn(
                     '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
                     `You are using Frogger with \x1b[36mserverModule\x1b[0m set to \x1b[36mfalse\x1b[0m and no \x1b[36mpublic.endpoint\x1b[0m
@@ -168,10 +179,11 @@ export default defineNuxtModule<ModuleOptions>({
 
             // Client transports are compiled into the public bundle — any
             // apiKey on one is therefore NOT a secret. Warn (once per keyed
-            // transport) so the author knows before it ships.
+            // transport) so the author knows before it ships. observe browser
+            // keys are write-only public by design (`publicKeyOk`) — skipped.
             if (allowInternal('warn')) {
                 for (const t of resolved.transports.client) {
-                    if (t.apiKey) {
+                    if (t.apiKey && !t.publicKeyOk) {
                         console.warn(
                             '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
                             `Client transport \x1b[36m${t.name}\x1b[0m carries an \x1b[36mapiKey\x1b[0m that will be `
@@ -180,6 +192,21 @@ export default defineNuxtModule<ModuleOptions>({
                         );
                     }
                 }
+            }
+
+            // No persistent transport configured → logs reach console only and
+            // are never persisted. One-time dev nudge toward an explicit sink.
+            if (
+                allowInternal('warn')
+                && resolved.transports.server.length === 0
+                && resolved.transports.client.length === 0
+            ) {
+                console.warn(
+                    '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
+                    `No persistent transport is configured — logs go to the \x1b[36mconsole\x1b[0m only and are not persisted. `
+                    + `Add \x1b[36mfileTransport()\x1b[0m for local files, or \x1b[36mobserveTransport()\x1b[0m / \x1b[36mhttpTransport()\x1b[0m `
+                    + `to forward them. Ignore this if you register a transport imperatively via \x1b[36maddGlobalTransport()\x1b[0m.`
+                );
             }
 
             // The single concise "ready" line: dev only, suppressed entirely at

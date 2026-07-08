@@ -1,0 +1,142 @@
+// @vitest-environment nuxt
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mockNuxtImport } from '@nuxt/test-utils/runtime'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import type { ResolvedServerTransport } from '../../src/runtime/shared/types/transports'
+import type { IFroggerTransport } from '../../src/runtime/logger/_transports/types'
+
+const { useRuntimeConfigMock } = vi.hoisted(() => ({
+    useRuntimeConfigMock: vi.fn(),
+}))
+
+mockNuxtImport('useRuntimeConfig', () => useRuntimeConfigMock)
+
+// The queue service transitively imports the websocket state factory, which
+// references useStorage from #imports (unresolvable in this test env). Websocket
+// is disabled in every case here, so stub the factory to keep the graph clean.
+vi.mock('../../src/runtime/websocket/state/factory', () => ({
+    createWebSocketStateKVLayer: vi.fn(() => ({})),
+}))
+
+import { ServerLogQueueService } from '../../src/runtime/server/services/server-log-queue'
+import { DEFAULT_FILE } from '../../src/runtime/shared/types/file'
+
+function fileEntry(overrides: Partial<typeof DEFAULT_FILE> = {}): ResolvedServerTransport {
+    return {
+        type: 'file',
+        name: 'file',
+        options: { ...DEFAULT_FILE, directory: join(tmpdir(), 'frogger-test-logs'), ...overrides },
+    }
+}
+
+function httpEntry(name = 'http'): ResolvedServerTransport {
+    return {
+        type: 'http',
+        name,
+        baseUrl: 'https://x.dev',
+        endpoint: '/ingest',
+        headers: {},
+    }
+}
+
+function setConfig(transports: ResolvedServerTransport[], extra: Record<string, unknown> = {}) {
+    useRuntimeConfigMock.mockReturnValue({
+        public: { frogger: { app: 'test-app', baseUrl: '' } },
+        frogger: {
+            scrub: false,
+            batch: { maxSize: 200, maxAge: 15000 },
+            websocket: false,
+            transports,
+            ...extra,
+        },
+    })
+}
+
+function freshQueue(): ServerLogQueueService {
+    // Reset the singleton so each test builds its own transport set.
+    ;(ServerLogQueueService as unknown as { instance: unknown }).instance = null
+    return ServerLogQueueService.getInstance()
+}
+
+function downstreamNames(queue: ServerLogQueueService): string[] {
+    const info = queue.getReporterInfo()
+    const reporters = (info.downstreamReporters ?? []) as unknown as IFroggerTransport[]
+    return reporters.map(r => r.name)
+}
+
+beforeEach(() => {
+    vi.stubGlobal('$fetch', vi.fn().mockResolvedValue({}))
+})
+
+afterEach(() => {
+    ;(ServerLogQueueService as unknown as { instance: unknown }).instance = null
+    useRuntimeConfigMock.mockReset()
+    vi.unstubAllGlobals()
+})
+
+describe('ServerLogQueueService transport construction', () => {
+    it('constructs NO FileTransport for a bare (empty transports) config', () => {
+        setConfig([])
+        const queue = freshQueue()
+        expect(queue.getReporterInfo().mode).toBe('batched')
+        expect(downstreamNames(queue)).not.toContain('FroggerFileTransport')
+        expect(downstreamNames(queue)).toEqual([])
+    })
+
+    it('constructs a FileTransport for a file entry', () => {
+        setConfig([fileEntry()])
+        const queue = freshQueue()
+        expect(downstreamNames(queue)).toContain('FroggerFileTransport')
+    })
+
+    it('constructs an HttpTransport for an http entry', () => {
+        setConfig([httpEntry()])
+        const queue = freshQueue()
+        expect(downstreamNames(queue)).toContain('FroggerHttpTransport')
+    })
+
+    it('preserves user array order across mixed entries', () => {
+        setConfig([httpEntry('a'), fileEntry(), httpEntry('b')])
+        const queue = freshQueue()
+        expect(downstreamNames(queue)).toEqual([
+            'FroggerHttpTransport', 'FroggerFileTransport', 'FroggerHttpTransport',
+        ])
+    })
+
+    it('wraps transports in a BatchTransport when batching is enabled', () => {
+        setConfig([httpEntry()])
+        const queue = freshQueue()
+        expect(queue.getReporterInfo().mode).toBe('batched')
+    })
+
+    it('uses direct transporters when batching is disabled', () => {
+        setConfig([httpEntry()], { batch: false })
+        const queue = freshQueue()
+        const info = queue.getReporterInfo()
+        expect(info.mode).toBe('direct')
+        expect(info.directTransporters).toContain('FroggerHttpTransport')
+    })
+
+    it('isolates a bad entry so the rest still construct', () => {
+        // An http entry with no endpoint throws in the HttpTransport ctor.
+        const bad: ResolvedServerTransport = { type: 'http', name: 'bad', baseUrl: '', endpoint: '', headers: {} }
+        setConfig([bad, httpEntry('good')])
+        const queue = freshQueue()
+        expect(downstreamNames(queue)).toEqual(['FroggerHttpTransport'])
+    })
+
+    it('addTransport still registers a transport imperatively', () => {
+        setConfig([])
+        const queue = freshQueue()
+        const fake: IFroggerTransport = {
+            name: 'FakeTransport',
+            transportId: 'fake',
+            log: vi.fn(),
+            logBatch: vi.fn(),
+        } as unknown as IFroggerTransport
+        queue.addTransport(fake)
+        expect(downstreamNames(queue)).toContain('FakeTransport')
+    })
+})

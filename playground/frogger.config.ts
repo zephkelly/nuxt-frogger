@@ -20,16 +20,28 @@ export default defineFroggerOptions({
     serverModule: true,
     clientModule: true,
 
-    // Frogger ships quiet: a bare install (preset 'minimal') logs to file +
+    // Frogger ships quiet: a bare install (preset 'minimal') logs to the
     // console only. The heavy subsystems — scrubbing, rate limiting, the dev
-    // websocket live-stream and global error capture — are opt-in.
+    // websocket live-stream and global error capture — are opt-in via `preset`.
     //
     // The playground uses `full` so the /live-logs page (which needs the dev
     // websocket) and every other feature work out of the box. Other presets:
-    //   'minimal'  — file + console only
+    //   'minimal'  — console only
     //   'standard' — adds scrubbing, rate limiting and error capture (no websocket)
     //   'full'     — everything on, including the dev websocket live-stream
     preset: 'full',
+
+    // Persistent destinations are opt-in and orthogonal to the preset. Add a
+    // `fileTransport()` to restore rotated JSON-lines files under `logs/`, an
+    // `httpTransport()` to forward to any HTTP ingest, or an `observeTransport()`
+    // to ship to a nuxt-observe deployment. Import them from '#frogger/config':
+    //
+    //   import { fileTransport, observeTransport } from '#frogger/config';
+    //
+    //   transports: [
+    //     fileTransport(),                                             // logs/ on disk
+    //     observeTransport({ url: 'https://observe.app.com', key }),   // relay to observe
+    //   ],
 
     // Scrubbing is fully opt-in: enabling it (here via `preset: 'full'`) turns
     // the engine on but adds NO rules — nothing is scrubbed until you declare a

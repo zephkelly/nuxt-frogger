@@ -14,6 +14,7 @@ import { SimpleConsoleLogger } from '../../logger/other/console-frogger';
 import { parseAppInfoConfig } from '../../app-info/parse';
 import { DEFAULT_LOGGING_ENDPOINT } from '../../shared/types/module-options';
 import { froggerInternal } from '../../shared/utils/internal-log';
+import { splitLoggerBatch } from '../../shared/utils/split-batch';
 
 
 interface RetryState {
@@ -32,7 +33,7 @@ export class LogQueueService {
     private readonly serverModuleEnabled: boolean;
     private readonly reporterId: string;
 
-    private endpoint: string;
+    private endpoint: string | false;
     private readonly baseUrl: string;
 
     /**
@@ -243,6 +244,9 @@ export class LogQueueService {
      * primary target, never the whole flush.
      */
     private shouldSendToPrimary(): boolean {
+        // `public.endpoint: false` deliberately disables the client POST to the
+        // app's own route; client transports (if any) still fan out.
+        if (this.endpoint === false) return false;
         if (!this.endpoint) return false;
         if (!this.serverModuleEnabled && this.endpoint === DEFAULT_LOGGING_ENDPOINT && !this.baseUrl) {
             return false;
@@ -305,7 +309,7 @@ export class LogQueueService {
                 return;
             }
 
-            await $fetch(this.endpoint, {
+            await $fetch(this.endpoint as string, {
                 baseURL: this.baseUrl || undefined,
                 method: 'POST',
                 body: batch,
@@ -345,13 +349,38 @@ export class LogQueueService {
     }
 
     /**
-     * Send a batch to one secondary client transport with independent, bounded
+     * Fan a batch out to one secondary client transport. When the transport
+     * declares batch caps (observe: 500 events / ~1 MiB), the batch is split
+     * first and each chunk is delivered with its own independent retry.
+     */
+    private sendToClientTransport(
+        transport: ResolvedHttpTransport,
+        batch: LoggerObjectBatch,
+    ): void {
+        const chunks = (transport.maxBatchEvents || transport.maxBodyBytes)
+            ? splitLoggerBatch(batch, {
+                maxEvents: transport.maxBatchEvents,
+                maxBytes: transport.maxBodyBytes,
+            })
+            : [batch];
+
+        for (const chunk of chunks) {
+            void this.sendChunkToClientTransport(transport, chunk);
+        }
+    }
+
+    /**
+     * Send one chunk to a secondary client transport with independent, bounded
      * retry. Respects `Retry-After`/`429` with exponential backoff; a `4xx`
-     * (bad key/schema) drops the batch and stops retrying that sink. Never
+     * (bad key/schema) drops the chunk and stops retrying that sink. Never
      * re-queues onto the shared primary queue or mutates the primary retry
      * state — one remote's failure must not stall the app's own server.
+     *
+     * Auth follows `apiKeyLocation`: `'query'` sends a bare `$fetch` with
+     * `?key=` and no `x-api-key` header (what observe's CORS design expects);
+     * `'header'` (default) sends `x-api-key`.
      */
-    private async sendToClientTransport(
+    private async sendChunkToClientTransport(
         transport: ResolvedHttpTransport,
         batch: LoggerObjectBatch,
         attempt = 0,
@@ -359,9 +388,11 @@ export class LogQueueService {
         const url = transport.endpoint || transport.baseUrl;
         if (!url) return;
 
+        const queryAuth = transport.apiKeyLocation === 'query';
+
         const headers: Record<string, string> = {
             ...transport.headers,
-            ...(transport.apiKey ? { 'x-api-key': transport.apiKey } : {}),
+            ...(transport.apiKey && !queryAuth ? { 'x-api-key': transport.apiKey } : {}),
         };
 
         try {
@@ -369,6 +400,7 @@ export class LogQueueService {
                 baseURL: transport.baseUrl || undefined,
                 method: 'POST',
                 headers,
+                query: queryAuth && transport.apiKey ? { key: transport.apiKey } : undefined,
                 body: batch,
             });
         }
@@ -394,7 +426,7 @@ export class LogQueueService {
             const delay = retryAfterMs ?? backoff;
 
             await new Promise(resolve => setTimeout(resolve, delay));
-            await this.sendToClientTransport(transport, batch, attempt + 1);
+            await this.sendChunkToClientTransport(transport, batch, attempt + 1);
         }
     }
 
@@ -437,7 +469,7 @@ export class LogQueueService {
         }
 
         try {
-            await $fetch(this.endpoint, {
+            await $fetch(this.endpoint as string, {
                 baseURL: this.baseUrl || undefined,
                 method: 'POST',
                 body: batch,

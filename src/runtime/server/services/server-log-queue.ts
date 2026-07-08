@@ -4,7 +4,7 @@ import type { IFroggerTransport } from '../../logger/_transports/types'
 import type { LoggerObject } from '../../shared/types/log'
 import type { LoggerObjectBatch } from '../../shared/types/batch'
 
-import type { ResolvedHttpTransport } from '../../shared/types/transports'
+import type { ResolvedServerTransport } from '../../shared/types/transports'
 import type { ScrubberOptions } from '../../scrubber/options'
 import type { BatchOptions } from '../../shared/types/batch'
 
@@ -56,14 +56,12 @@ export class ServerLogQueueService {
 
         const batchingEnabled = (config.frogger.batch as BatchOptions | false) !== false;
 
-        const fileTransporter = new FileTransport();
-
         let websocketTransport: IFroggerTransport | undefined;
         //@ts-ignore
         if (config.frogger.websocket) {
             try {
                 const stateLayer = createWebSocketStateKVLayer('frogger-websocket');
-                
+
                 // Pass storage to WebSocketTransport (can be null)
                 websocketTransport = WebSocketTransport.getInstance(stateLayer);
             } catch (error) {
@@ -71,14 +69,12 @@ export class ServerLogQueueService {
             }
         }
 
-        // Declarative config transports (transports: [{ url, apiKey, server }]).
-        // Constructed here so they join the fan-out before the batch transport
-        // is built. File stays first in each list so local disk persistence
-        // never depends on a remote being reachable.
+        // All persistent destinations are now declarative (`transports`): a bare
+        // install has none and logs to console only. File logging is just a
+        // `fileTransport()` entry. User array order is preserved.
         const configuredTransports = this.buildConfiguredTransports(config);
 
         if (batchingEnabled) {
-            this.downstreamTransporters.push(fileTransporter);
             if (websocketTransport) {
                 this.downstreamTransporters.push(websocketTransport);
             }
@@ -88,7 +84,6 @@ export class ServerLogQueueService {
             this.batchTransporter = batchTransporter;
         }
         else {
-            this.directTransporters.push(fileTransporter);
             if (websocketTransport) {
                 this.directTransporters.push(websocketTransport);
             }
@@ -97,27 +92,37 @@ export class ServerLogQueueService {
     }
 
     /**
-     * Construct an `HttpTransport` for every declarative server transport from
-     * `runtimeConfig.frogger.transports`. Failures are isolated per-transport so
-     * one bad entry can't take down the whole queue.
+     * Construct a transport for every declarative server entry in
+     * `runtimeConfig.frogger.transports` — `file` entries become a
+     * `FileTransport`, everything else an `HttpTransport`. User array order is
+     * preserved; failures are isolated per-transport so one bad entry can't take
+     * down the whole queue.
      */
     private buildConfiguredTransports(config: ReturnType<typeof useRuntimeConfig>): IFroggerTransport[] {
         //@ts-ignore — frogger.transports is injected by the module
-        const configured = (config.frogger.transports ?? []) as ResolvedHttpTransport[];
+        const configured = (config.frogger.transports ?? []) as ResolvedServerTransport[];
 
         const transporters: IFroggerTransport[] = [];
         for (const t of configured) {
             try {
+                if (t.type === 'file') {
+                    transporters.push(new FileTransport(t.options));
+                    continue;
+                }
+
                 transporters.push(new HttpTransport({
                     baseUrl: t.baseUrl,
                     endpoint: t.endpoint,
                     apiKey: t.apiKey,
+                    apiKeyLocation: t.apiKeyLocation,
                     headers: t.headers,
                     vendor: t.vendor,
                     timeout: t.timeout,
                     retryOnFailure: t.retryOnFailure,
                     maxRetries: t.maxRetries,
                     retryDelay: t.retryDelay,
+                    maxBatchEvents: t.maxBatchEvents,
+                    maxBodyBytes: t.maxBodyBytes,
                 }));
             }
             catch (err) {

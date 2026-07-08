@@ -8,8 +8,10 @@
 
 `nuxt-frogger` is a **logging + W3C tracing module for Nuxt 3** (depends on `@nuxt/kit`/`nuxt` ^3.19). The pitch: log from anywhere —
 server (Nitro), SSR, or client (CSR) — and every log lands in the same place. Client logs are
-**batched and "beamed" back to the server** over HTTP, then written to rotated JSON-lines files (and
-optionally streamed to a dev WebSocket). Each logger instance is also a **trace span**, so logs from
+**batched and "beamed" back to the server** over HTTP. A bare install logs to **console only**;
+persistent destinations are opt-in via declarative `transports` (rotated JSON-lines files with
+`fileTransport()`, an external HTTP ingest with `httpTransport()`, or a nuxt-observe deployment with
+`observeTransport()`), and logs can optionally be streamed to a dev WebSocket. Each logger instance is also a **trace span**, so logs from
 one request/component are correlated, and trace context is propagated SSR→CSR and client→server using
 the [W3C Trace Context](https://www.w3.org/TR/trace-context/) standard.
 
@@ -56,10 +58,13 @@ Commands (pnpm lockfile present; scripts shell out to npm/nuxi):
    rate-limit ([src/runtime/rate-limiter/](src/runtime/rate-limiter/)) → loop detection (anti-feedback via
    `x-frogger-*` headers + batch `meta.processChain`) → `ServerLogQueueService.enqueueBatch`.
 6. `ServerLogQueueService` (singleton, [src/runtime/server/services/server-log-queue.ts](src/runtime/server/services/server-log-queue.ts)):
-   scrub → `BatchTransport` (timestamp-sorted buffering) → fan-out to transports.
-7. Transports ([src/runtime/logger/_transports/](src/runtime/logger/_transports/)):
-   `FileTransport` (append + date/size rotation, dir defaults to `logs/`) and, if enabled,
-   `WebSocketTransport` (live broadcast to subscribed peers, state persisted to Nitro KV).
+   scrub → `BatchTransport` (timestamp-sorted buffering) → fan-out to configured transports.
+7. Transports ([src/runtime/logger/_transports/](src/runtime/logger/_transports/)) are built from the
+   declarative `transports` list (server side) in `buildConfiguredTransports`: a `fileTransport()`
+   entry → `FileTransport` (append + date/size rotation, dir defaults to `logs/`), any http/observe
+   entry → `HttpTransport`. A bare install has none (console only). If the dev WebSocket is enabled,
+   `WebSocketTransport` (live broadcast to subscribed peers, state persisted to Nitro KV) joins the
+   fan-out. User array order is preserved.
 
 **Server-side direct logging:** `getFrogger()` → `ServerFroggerLogger`
 ([src/runtime/logger/server/index.ts](src/runtime/logger/server/index.ts)) enqueues straight into
@@ -87,8 +92,9 @@ parent of the first log on the server" (and vice-versa).
 | `rate-limiter/` | Multi-tier rate limiting + KV layer + escalating blocks | [index.ts](src/runtime/rate-limiter/index.ts) |
 | `app-info/` | Parse `app` option into `{ name, version }` | [parse.ts](src/runtime/app-info/parse.ts) |
 | `shared/types/` | `LoggerObject`, `LoggerObjectBatch`, options, trace types | [log.ts](src/runtime/shared/types/log.ts), [batch.ts](src/runtime/shared/types/batch.ts) |
-| `shared/utils/` | Trace headers, log-level parser, uuid (v7), config loader | [trace-headers.ts](src/runtime/shared/utils/trace-headers.ts) |
-| `options.ts` | Re-exports `defineFroggerOptions` (the `#frogger/config` alias) | [options.ts](src/runtime/options.ts) |
+| `shared/utils/` | Trace headers, log-level parser, uuid (v7), config loader, resolver, batch splitter | [resolve-options.ts](src/runtime/shared/utils/resolve-options.ts), [split-batch.ts](src/runtime/shared/utils/split-batch.ts) |
+| `shared/transports/` | Declarative transport factories (`fileTransport`/`httpTransport`/`observeTransport`) | [factories.ts](src/runtime/shared/transports/factories.ts) |
+| `options.ts` | Re-exports `defineFroggerOptions` + transport factories (the `#frogger/config` alias) | [options.ts](src/runtime/options.ts) |
 
 ## Public API
 
@@ -100,7 +106,14 @@ parent of the first log on the server" (and vice-versa).
 **Server (auto-imported, Nitro):**
 - `getFrogger(options?, event?): IFroggerLogger` — when `autoEventCapture` is on (default), the event is grabbed via `useEvent()`; otherwise pass it explicitly. NOTE the overload order differs between the two impls (see rough edges). Inside `frogger.span(...)` it returns a child of the active span logger (continues the tree) instead of re-branching from the request root.
 - `frogger` — auto-imported **ambient** logger; same drop-in `console.*` surface, backed by ONE per-request `ServerFroggerLogger` cached on `event.context.froggerAmbientLogger` (resolved via `useEvent()`, single span chain, trace-correlated with the client). Impl: [server/utils/frogger.ts](src/runtime/server/utils/frogger.ts). Resolution order: active span logger (see `span` below) → per-request cache → process-scoped fallback (outside a request / when `autoEventCapture` is off).
-- `HttpTransport` — class for forwarding logs to an external HTTP endpoint.
+- `HttpTransport` — class for forwarding logs to an external HTTP endpoint. Options gained `apiKeyLocation` (`'header'` default → `x-api-key`, `'query'` → `?key=`), `maxBatchEvents`/`maxBodyBytes` (outgoing batch splitting via [shared/utils/split-batch.ts](src/runtime/shared/utils/split-batch.ts)). Its retry loop is now live (see rough edges — the old body silently swallowed all send failures).
+- `addGlobalTransport(transport)` / `createHttpTransport(endpoint|options)` — imperative transport registration ([server/utils/transport.ts](src/runtime/server/utils/transport.ts)).
+
+**Declarative transport config** (importable from `#frogger/config` in `frogger.config.ts`, or from `nuxt-frogger` in `nuxt.config`; pure factories, no `#imports` — [shared/transports/factories.ts](src/runtime/shared/transports/factories.ts)):
+- `fileTransport(options?)` → `{ type: 'file', ... }` — server-only rotated JSON-lines files. **The only way to enable file logging** (no longer a default).
+- `httpTransport(options)` → `{ type: 'http', ... }` — a generic HTTP ingest destination.
+- `observeTransport({ url, key, client?, server? })` → `{ type: 'observe', ... }` — a nuxt-observe deployment; the resolver expands it to the observe ingest contract (path `/api/observe/ingest/frogger`, `x-api-key` server-side, `?key=` browser-side, 500-event / ~950 KiB caps).
+- Each factory returns a plain serializable tagged object (survives `structuredClone` / `runtimeConfig`). The resolver ([resolve-options.ts](src/runtime/shared/utils/resolve-options.ts)) switches on `type` (untagged = `http`, backward compat) and splits entries into `transports.server` (`ResolvedServerTransport` union of file + http) and `transports.client` (`ResolvedHttpTransport`). Untagged `{ url, apiKey }` objects still work.
 
 **The logger contract** — [`IFroggerLogger`](src/runtime/logger/types.ts) (identical on client + server):
 - Levels (consola-based): `fatal`/`error` (0), `warn` (1), `log` (2), `info`/`success`/`fail`/`ready`/`start` (3), `debug` (4), `trace` (5), plus `silent` (-999), `verbose` (999), and dynamic `logLevel(type, msg, ctx)`.
@@ -121,17 +134,24 @@ Sources, in precedence order: `frogger.config.ts` > `nuxt.config` `frogger` key 
 
 `ModuleOptions` top-level keys ([src/runtime/shared/types/module-options.ts](src/runtime/shared/types/module-options.ts)):
 `preset` (`'minimal' | 'standard' | 'full'`, default `minimal`), `clientModule`, `serverModule` (`{ autoEventCapture }`),
-`app` (string | `{ name, version }`), `file`, `batch`, `rateLimit`, `websocket`, `scrub`,
-`errorCapture` (`boolean | { client, server }`), and `public` (`endpoint`, `baseUrl`, `batch`). Minimal
-config is just adding `'nuxt-frogger'` to `modules` — but as of C1/C2 that yields **file + console only**
-(preset `minimal`); the heavy subsystems are opt-in (see invariants below).
+`app` (string | `{ name, version }`), `transports` (`FroggerTransportConfig[]`), `batch`, `rateLimit`, `websocket`, `scrub`,
+`errorCapture` (`boolean | { client, server }`), and `public` (`endpoint` — `string | false`, `false`
+disables the client POST to the app's own route; `baseUrl`, `batch`). Minimal config is just adding
+`'nuxt-frogger'` to `modules` — that yields **console only** (preset `minimal`, no persistent
+transport). File logging and remote forwarding are opt-in via `transports` (see invariants below).
+
+**Removed:** the top-level `file` module option (hard-removed). Use `fileTransport({...})` in
+`transports` instead; the resolver warns if a legacy `file` key is still present. `runtimeConfig.frogger.file`
+is gone too (nothing consumed it in the `getFrogger` utils — those reads were dead weight and were dropped).
 
 ## Key invariants & gotchas (read before changing behavior)
 
-- **Ingest route is `/api/_frogger/logs`** (registered in [src/module.ts](src/module.ts#L339)). The default public `endpoint` constant points at it.
+- **Ingest route is `/api/_frogger/logs`** (registered in [src/module.ts](src/module.ts#L339)). The default public `endpoint` constant points at it; the route stays registered even when `public.endpoint: false` disables the client POST (server-side `getFrogger`/relay still works).
+- **File logging is opt-in.** A bare install constructs NO `FileTransport` and writes no `logs/` directory — logs go to console only. Add `fileTransport()` to `transports` to restore file behaviour. When `transports.server` and `transports.client` are both empty, the module emits a one-time dev warning that logs aren't persisted (skippable if you register a transport imperatively via `addGlobalTransport()`).
+- **Presets never controlled file logging.** `FROGGER_PRESETS` only toggle scrub/rateLimit/websocket/errorCapture; the minimal→full ladder is orthogonal to `transports`.
 - **One logger instance = one trace span.** Docs explicitly tell users *not* to share a single logger app-wide; create one per component/route/util ([docs/getting-started.md](docs/getting-started.md#L451)). Span/parent IDs advance per log via `generateTraceContext` ([base-frogger.ts](src/runtime/logger/base-frogger.ts#L105)).
 - **The live-stream WebSocket handler is registered ONLY in dev** ([src/module.ts](src/module.ts#L345)). There is no production log-reading path — storage is rotated JSON-lines files on disk; there is no query/search API and no viewer UI.
-- **Heavy subsystems are OPT-IN (as of Theme C1/C2)**: rate-limiter, scrubber, websocket (the experimental Nitro `websocket` flag + dev handler), and client+server global error capture are **off** unless enabled (`true`/object, or via `preset: 'standard'`/`'full'`). A bare install / `preset: 'minimal'` = file + console + client+server batching only. The resolver normalizes each subsystem to `false`-or-full-object; `preset: 'full'` reproduces the old always-on behaviour. When off, a subsystem registers no plugin/handler/flag and constructs no singleton. (Note: client+server **batching** is core and stays on.)
+- **Heavy subsystems are OPT-IN (as of Theme C1/C2)**: rate-limiter, scrubber, websocket (the experimental Nitro `websocket` flag + dev handler), and client+server global error capture are **off** unless enabled (`true`/object, or via `preset: 'standard'`/`'full'`). A bare install / `preset: 'minimal'` = console + client+server batching only (no persistent transport). The resolver normalizes each subsystem to `false`-or-full-object; `preset: 'full'` reproduces the old always-on behaviour. When off, a subsystem registers no plugin/handler/flag and constructs no singleton. (Note: client+server **batching** is core and stays on.)
 - **Singletons + lazy init**: `ServerLogQueueService` and `WebSocketTransport` are process singletons; the WS KV state layer loads lazily and degrades gracefully to `null` if `useStorage()` isn't ready.
 - **Experimental Nitro flags** are enabled by the module: `asyncContext` (for `getFrogger()` event capture) and `tasks`; `websocket` when WS is on ([src/module.ts](src/module.ts#L222)).
 
@@ -142,7 +162,8 @@ These are the current pain points; an improvement plan lives in [ROADMAP.md](ROA
 - **Type debt:** ~63 `@ts-ignore`/`@ts-expect-error`, concentrated around untyped `useRuntimeConfig()` access ([src/module.ts](src/module.ts#L186), the `getFrogger` utils, `base-frogger`). `LogContext` / WS payloads are `any`.
 - **Duplication:** [server/utils/auto.ts](src/runtime/server/utils/auto.ts) and [server/utils/manual.ts](src/runtime/server/utils/manual.ts) have effectively identical bodies; only the public overload arg-order differs (`(options?, event?)` vs `(event?, options?)`).
 - **Misleading dead code (not a runtime bug):** `ServerFroggerLogger.createChild` sets `spanId: parentSpanId` ([server/index.ts](src/runtime/logger/server/index.ts#L103)), but `generateTraceContext` only consumes `traceId`/`parentId` and always mints a fresh `spanId` — so that field is never read.
-- **Test coverage is uneven:** strong on parsers/scrubber/websocket/trace utils; thin on the core logger classes, transports, and the end-to-end client→server flow.
+- ~~**HttpTransport silently swallowed send failures**~~ — **RESOLVED**. `performHttpRequest` caught every error and only logged `H3Error` (which `$fetch` never throws — it throws `FetchError`), never rethrowing, so `handleSendFailure` (the whole retry machinery) was dead code. It now rethrows; `sendChunk`/`handleSendFailure` classify: a non-429 4xx drops immediately (deterministic client error), 429/5xx/network back off up to `maxRetries`. Behavioral change (silent drop → retry-then-drop); covered by tests.
+- **Test coverage is uneven:** strong on parsers/scrubber/websocket/trace utils and now the resolver/transports/split-batch; still thin on the core logger classes and the end-to-end client→server flow.
 
 ## Conventions
 

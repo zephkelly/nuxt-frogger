@@ -142,4 +142,50 @@ describe('LogQueueService client transport fan-out', () => {
 
         expect(fetchMock).not.toHaveBeenCalled()
     })
+
+    it('endpoint:false suppresses the primary POST but still fans out to client transports', async () => {
+        setConfig({ serverModule: true, endpoint: false, transports: [OBSERVE] })
+
+        const queue = new LogQueueService()
+        queue.enqueueLog(makeLog())
+        await queue.flush()
+        await tick()
+
+        const calledUrls = fetchMock.mock.calls.map(c => c[0])
+        expect(calledUrls).not.toContain(DEFAULT_ENDPOINT)
+        expect(calledUrls).toContain('/api/observe/ingest')
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('query-auth client transport sends ?key= and no x-api-key header', async () => {
+        const queryTransport = { ...OBSERVE, apiKeyLocation: 'query' as const }
+        setConfig({ serverModule: false, transports: [queryTransport] })
+
+        const queue = new LogQueueService()
+        queue.enqueueLog(makeLog())
+        await queue.flush()
+        await tick()
+
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+        const [, opts] = fetchMock.mock.calls[0]!
+        expect(opts.query).toEqual({ key: 'ingest-key' })
+        expect(opts.headers).not.toHaveProperty('x-api-key')
+    })
+
+    it('splits a client-transport batch by caps into independent requests', async () => {
+        const capped = { ...OBSERVE, maxBatchEvents: 2 }
+        setConfig({ serverModule: false, transports: [capped] })
+
+        const queue = new LogQueueService()
+        queue.enqueueLog(makeLog('1'))
+        queue.enqueueLog(makeLog('2'))
+        queue.enqueueLog(makeLog('3'))
+        queue.enqueueLog(makeLog('4'))
+        queue.enqueueLog(makeLog('5'))
+        await queue.flush()
+        await tick()
+
+        // 5 logs / 2 per chunk = 3 requests to the observe sink
+        expect(fetchMock).toHaveBeenCalledTimes(3)
+    })
 })

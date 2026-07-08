@@ -11,21 +11,31 @@ import {
 
 import type { BatchOptions } from '../types/batch'
 import type { FileOptions } from '../types/file'
+import { DEFAULT_FILE } from '../types/file'
 import type { AppInfoOptions } from '../../app-info/types'
 import type { ScrubberOptions } from '../../scrubber/options'
 import { compileScrubRules } from '../../scrubber/compile'
 import type { RateLimitingOptions } from '../../rate-limiter/types'
 import type { WebsocketOptions } from '../../websocket/types/options'
 import type { GlobalErrorCaptureOptions } from '../types/global-error'
-import type { HttpTransportConfig, ResolvedHttpTransport } from '../types/transports'
+import type {
+    FroggerTransportConfig,
+    HttpTransportConfig,
+    FileTransportConfig,
+    ObserveTransportConfig,
+    ResolvedHttpTransport,
+    ResolvedFileTransport,
+    ResolvedServerTransport,
+} from '../types/transports'
 import type { InternalLogLevel } from './internal-log'
 import { froggerInternal } from './internal-log'
 
 /**
  * Options resolution for Frogger.
  *
- * Frogger ships "quiet by default": a bare install logs to file + console and
- * nothing else. The heavy subsystems — scrubbing, rate-limiting, the dev
+ * Frogger ships "quiet by default": a bare install logs to console only and
+ * nothing else (file logging is opt-in via `fileTransport()`). The heavy
+ * subsystems — scrubbing, rate-limiting, the dev
  * websocket live-stream, and global error capture — are **opt-in**, selected
  * either individually or via a {@link FroggerPreset}.
  *
@@ -47,7 +57,7 @@ interface PresetToggles {
 }
 
 export const FROGGER_PRESETS: Record<FroggerPreset, PresetToggles> = {
-    // file + console only — the bare-install default.
+    // console only — the bare-install default. Heavy subsystems all off.
     minimal: { scrub: false, rateLimit: false, websocket: false, errorCapture: false },
     // production-sensible safety net: redaction, ingest rate-limiting and error
     // capture on; the dev-only websocket live-stream stays off.
@@ -78,14 +88,9 @@ export const DEFAULT_PUBLIC_BATCH: BatchOptions = {
     sortingWindowMs: 1000,
 }
 
-export const DEFAULT_FILE: FileOptions = {
-    directory: 'logs',
-    fileNameFormat: 'YYYY-MM-DD.log',
-    maxSize: 10 * 1024 * 1024,
-    flushInterval: 1000,
-    bufferMaxSize: 1 * 1024 * 1024,
-    highWaterMark: 64 * 1024,
-}
+// DEFAULT_FILE now lives in ../types/file (a dependency-light module) so
+// FileTransport can share it; re-exported here for existing importers/tests.
+export { DEFAULT_FILE }
 
 // maxDepth is deliberately absent: undefined = unlimited recursion (the
 // scrubber is cycle-safe). Set a number to bound how deep nested ctx objects
@@ -167,29 +172,34 @@ export interface ResolvedFroggerOptions {
     app: AppInfoOptions
     verbose?: boolean
     logLevel?: InternalLogLevel
-    file: FileOptions
     batch: BatchOptions | false
     scrub: ScrubberOptions | false
     rateLimit: RateLimitingOptions | false
     websocket: WebsocketOptions | false
     errorCapture: ResolvedErrorCapture
     /**
-     * Extra HTTP log destinations, split by which side ships them. Server
-     * transports land in `runtimeConfig.frogger` (keys stay server-side); client
-     * transports land in `runtimeConfig.public.frogger` (⚠️ keys are bundled).
+     * Log destinations, split by which side ships them. Server transports
+     * (HTTP + file) land in `runtimeConfig.frogger` (keys stay server-side);
+     * client transports (HTTP only) land in `runtimeConfig.public.frogger`
+     * (⚠️ keys are bundled). A bare install has empty lists — console only.
      */
     transports: {
-        server: ResolvedHttpTransport[]
+        server: ResolvedServerTransport[]
         client: ResolvedHttpTransport[]
     }
     public: {
-        endpoint: string
+        /** `false` when the client POST to the app's own endpoint is disabled. */
+        endpoint: string | false
         baseUrl?: string
         batch: BatchOptions | false
     }
 }
 
-export type { ResolvedHttpTransport } from '../types/transports'
+export type {
+    ResolvedHttpTransport,
+    ResolvedFileTransport,
+    ResolvedServerTransport,
+} from '../types/transports'
 
 // --- Normalisers -------------------------------------------------------------
 
@@ -225,13 +235,18 @@ function normalizeToggle<T extends object>(
     return mergeConfig(value, structuredClone(defaults)) as T
 }
 
+// nuxt-observe ingest contract (verified against its source).
+const OBSERVE_INGEST_PATH = '/api/observe/ingest/frogger'
+const OBSERVE_MAX_BATCH_EVENTS = 500
+const OBSERVE_MAX_BODY_BYTES = 950 * 1024
+
 /**
- * Normalise a declarative transport entry into a `ResolvedHttpTransport`.
- * Resolves the `url` shorthand into `baseUrl` + `endpoint`, keeps `apiKey`
- * discrete (never folded into `headers`), and drops entries with no
- * destination. Returns `null` for an unusable entry so the caller can filter.
+ * Normalise an `http` (or untagged, backward-compat) transport entry into a
+ * `ResolvedHttpTransport`. Resolves the `url` shorthand into `baseUrl` +
+ * `endpoint`, keeps `apiKey` discrete (never folded into `headers`), carries
+ * `apiKeyLocation` (default `'header'`). Returns `null` for an unusable entry.
  */
-function normalizeTransport(t: HttpTransportConfig): ResolvedHttpTransport | null {
+function normalizeHttp(t: HttpTransportConfig): ResolvedHttpTransport | null {
     let baseUrl = t.baseUrl ?? ''
     let endpoint = t.endpoint ?? ''
 
@@ -253,10 +268,12 @@ function normalizeTransport(t: HttpTransportConfig): ResolvedHttpTransport | nul
     }
 
     return {
+        type: 'http',
         name: t.name ?? (baseUrl + endpoint),
         baseUrl,
         endpoint,
         apiKey: t.apiKey || undefined,
+        apiKeyLocation: t.apiKeyLocation ?? 'header',
         headers: { ...t.headers },
         vendor: t.vendor,
         timeout: t.timeout,
@@ -266,24 +283,102 @@ function normalizeTransport(t: HttpTransportConfig): ResolvedHttpTransport | nul
     }
 }
 
+/** Normalise a `file` entry into a `ResolvedFileTransport`. Server-only. */
+function normalizeFile(t: FileTransportConfig): ResolvedFileTransport {
+    const { type: _type, name, ...fileOptions } = t
+    return {
+        type: 'file',
+        name: name ?? 'file',
+        options: defu(fileOptions, DEFAULT_FILE) as Required<FileOptions>,
+    }
+}
+
 /**
- * Split the declarative `transports` list into server-bound and client-bound
- * normalised transports. `server` defaults on, `client` defaults off; an entry
- * can target both. Invalid entries are dropped.
+ * Expand an `observe` entry into per-side `ResolvedHttpTransport`s encoding the
+ * nuxt-observe contract: header auth server-side, query auth browser-side, and
+ * the ingest path + batch caps on both. Returns `null` on an invalid `url`.
  */
-function resolveTransports(transports: HttpTransportConfig[] | undefined): {
-    server: ResolvedHttpTransport[]
+function normalizeObserve(t: ObserveTransportConfig): {
+    server?: ResolvedHttpTransport
+    client?: ResolvedHttpTransport
+} | null {
+    let origin: string
+    try {
+        origin = new URL(t.url).origin
+    }
+    catch {
+        froggerInternal.warn(`Invalid observe url "${t.url}" — skipping this transport.`)
+        return null
+    }
+
+    // Key is never embedded in `name` (diagnostics may surface it).
+    const name = t.name ?? `observe (${origin})`
+
+    const base = {
+        type: 'http' as const,
+        name,
+        baseUrl: origin,
+        endpoint: OBSERVE_INGEST_PATH,
+        headers: {} as Record<string, string>,
+        timeout: t.timeout,
+        retryOnFailure: t.retryOnFailure,
+        maxRetries: t.maxRetries,
+        retryDelay: t.retryDelay,
+        maxBatchEvents: OBSERVE_MAX_BATCH_EVENTS,
+        maxBodyBytes: OBSERVE_MAX_BODY_BYTES,
+    }
+
+    const result: { server?: ResolvedHttpTransport; client?: ResolvedHttpTransport } = {}
+
+    if (t.server !== false) {
+        result.server = { ...base, apiKey: t.key, apiKeyLocation: 'header' }
+    }
+    if (t.client === true) {
+        result.client = { ...base, apiKey: t.key, apiKeyLocation: 'query', publicKeyOk: true }
+    }
+
+    return result
+}
+
+/**
+ * Split the declarative `transports` list into server-bound (HTTP + file) and
+ * client-bound (HTTP only) normalised transports. Switches on `type` (untagged
+ * = `http` for backward compat). `server` defaults on, `client` defaults off;
+ * an entry can target both. Invalid entries are dropped.
+ */
+function resolveTransports(transports: FroggerTransportConfig[] | undefined): {
+    server: ResolvedServerTransport[]
     client: ResolvedHttpTransport[]
 } {
-    const server: ResolvedHttpTransport[] = []
+    const server: ResolvedServerTransport[] = []
     const client: ResolvedHttpTransport[] = []
 
     for (const t of transports ?? []) {
-        const normalized = normalizeTransport(t)
-        if (!normalized) continue
+        const type = t.type ?? 'http'
 
-        if (t.server !== false) server.push(normalized)
-        if (t.client === true) client.push(normalized)
+        if (type === 'file') {
+            const file = t as FileTransportConfig
+            if ((file as { client?: boolean }).client === true) {
+                froggerInternal.warn('A `file` transport is server-only; `client: true` is ignored.')
+            }
+            server.push(normalizeFile(file))
+            continue
+        }
+
+        if (type === 'observe') {
+            const normalized = normalizeObserve(t as ObserveTransportConfig)
+            if (!normalized) continue
+            if (normalized.server) server.push(normalized.server)
+            if (normalized.client) client.push(normalized.client)
+            continue
+        }
+
+        // 'http' or untagged
+        const http = t as HttpTransportConfig
+        const normalized = normalizeHttp(http)
+        if (!normalized) continue
+        if (http.server !== false) server.push(normalized)
+        if (http.client === true) client.push(normalized)
     }
 
     return { server, client }
@@ -348,6 +443,20 @@ export function resolveFroggerOptions(options: ModuleOptions = {}): ResolvedFrog
     const websocket = options.websocket ?? toggles.websocket
     const errorCapture = (options.errorCapture ?? toggles.errorCapture) as ErrorCaptureInput
 
+    // The top-level `file` option was removed in favour of `fileTransport()`.
+    // Warn if a legacy config still sets it so the file logs aren't silently lost.
+    if ((options as { file?: unknown }).file !== undefined) {
+        froggerInternal.warn(
+            'The top-level `file` option was removed; add `fileTransport({...})` to `transports` instead.',
+        )
+    }
+
+    // `public.endpoint: false` deliberately disables the client POST to the
+    // app's own route; otherwise fall back to the default ingest endpoint.
+    const endpoint = options.public?.endpoint === false
+        ? false
+        : options.public?.endpoint ?? DEFAULT_LOGGING_ENDPOINT
+
     return {
         preset,
         clientModule: options.clientModule ?? true,
@@ -355,7 +464,6 @@ export function resolveFroggerOptions(options: ModuleOptions = {}): ResolvedFrog
         app: options.app ?? DEFAULT_APP,
         verbose: options.verbose,
         logLevel: options.logLevel,
-        file: defu(options.file, DEFAULT_FILE),
         batch: options.batch === false ? false : defu(options.batch, DEFAULT_BATCH),
         scrub: resolveScrub(scrub),
         rateLimit: normalizeToggle(rateLimit, DEFAULT_RATE_LIMIT),
@@ -363,7 +471,7 @@ export function resolveFroggerOptions(options: ModuleOptions = {}): ResolvedFrog
         errorCapture: normalizeErrorCapture(errorCapture),
         transports: resolveTransports(options.transports),
         public: {
-            endpoint: options.public?.endpoint ?? DEFAULT_LOGGING_ENDPOINT,
+            endpoint,
             baseUrl: options.public?.baseUrl,
             batch: options.public?.batch === false
                 ? false

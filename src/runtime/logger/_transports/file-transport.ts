@@ -2,7 +2,8 @@ import { join } from 'node:path';
 import { mkdir, stat } from 'node:fs/promises';
 import { existsSync, createWriteStream, WriteStream } from 'node:fs';
 
-import { useRuntimeConfig } from '#imports';
+import { defu } from 'defu';
+
 import { uuidv7 } from '../../shared/utils/uuid';
 import { froggerInternal } from '../../shared/utils/internal-log';
 
@@ -10,6 +11,7 @@ import { BaseTransport } from './base-transport';
 
 import type { LoggerObject } from '~/src/runtime/shared/types/log';
 import type { FileOptions } from "../../shared/types/file";
+import { DEFAULT_FILE } from "../../shared/types/file";
 
 
 
@@ -31,13 +33,18 @@ export class FileTransport extends BaseTransport<Required<FileTransportOptions>>
     private writePromise: Promise<void> = Promise.resolve();
     private isRotating: boolean = false;
     private bufferSize: number = 0;
-    
-    constructor() {
+
+    /**
+     * @param options File-logging options. The server queue passes a fully
+     * resolved `Required<FileOptions>` (from a `fileTransport()` entry). For
+     * imperative `new FileTransport()`, any omitted field falls back to
+     * {@link DEFAULT_FILE}.
+     */
+    constructor(options: FileOptions = {}) {
         super();
         this.transportId = `frogger-file-${uuidv7()}`;
-        const config = useRuntimeConfig()
 
-        this.options = config.frogger.file
+        this.options = defu(options, DEFAULT_FILE) as Required<FileTransportOptions>;
 
         this.ensureDirectoryExists().catch(err => {
             froggerInternal.error('Failed to create log directory:', err);

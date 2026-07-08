@@ -19,8 +19,6 @@ function buildServerLogger(event?: H3Event): IFroggerLogger {
     const config = useRuntimeConfig()
 
     const froggerOptions = {
-        //@ts-ignore - runtime config is untyped
-        file: config.frogger.file,
         //@ts-ignore
         batch: config.public.frogger.batch,
         //@ts-ignore

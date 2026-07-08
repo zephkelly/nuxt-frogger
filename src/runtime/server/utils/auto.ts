@@ -39,14 +39,11 @@ export function getFrogger(
     const config = useRuntimeConfig();
 
     //@ts-ignore
-    const runtimeFileOptions = config.frogger.file;
-    //@ts-ignore
     const runtimeBatchOptions = config.public.frogger.batch;
     //@ts-ignore
     const runtimeEndpoint = config.public.frogger.endpoint;
 
     const froggerOptions = {
-        file: runtimeFileOptions,
         batch: runtimeBatchOptions,
         endpoint: runtimeEndpoint,
     }

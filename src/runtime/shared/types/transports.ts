@@ -1,3 +1,5 @@
+import type { FileOptions } from './file'
+
 /**
  * Declarative log-transport destination. Each entry in `transports` forwards
  * every log batch to an HTTP ingest URL — from the Nitro server queue
@@ -11,6 +13,12 @@
  * imperative path.
  */
 export interface HttpTransportConfig {
+    /**
+     * Discriminator. Optional for backward compatibility — an untagged object
+     * (no `type`) is treated as an `http` transport.
+     */
+    type?: 'http'
+
     /**
      * Full ingest URL — the friendly shorthand. Equivalent to setting `baseUrl`
      * to its origin and `endpoint` to its path. If both `url` and
@@ -28,6 +36,15 @@ export interface HttpTransportConfig {
      * emits for a transport — for consistency across the fleet.
      */
     apiKey?: string
+
+    /**
+     * Where the API key is sent. `'header'` (default) sets `x-api-key`;
+     * `'query'` appends `?key=` to the request URL (for ingest APIs whose CORS
+     * design expects a bare browser `$fetch` with no custom headers).
+     *
+     * @default 'header'
+     */
+    apiKeyLocation?: 'header' | 'query'
 
     /** Extra headers merged onto each request (after `x-api-key`). */
     headers?: Record<string, string>
@@ -60,15 +77,66 @@ export interface HttpTransportConfig {
 }
 
 /**
- * A single normalised transport as emitted by `resolveFroggerOptions` into
+ * Declarative file-logging destination. Server-only: writes rotated JSON-lines
+ * files to disk. Add `fileTransport()` to `transports` to opt into persistent
+ * file logging (Frogger no longer writes files by default).
+ */
+export interface FileTransportConfig extends FileOptions {
+    type: 'file'
+    /** Optional label for diagnostics. */
+    name?: string
+}
+
+/**
+ * Declarative destination for a nuxt-observe deployment. Encodes the observe
+ * ingest contract (ingest path, header-vs-query auth, batch caps) so a single
+ * `observeTransport({ url, key })` entry is enough to ship logs there.
+ */
+export interface ObserveTransportConfig {
+    type: 'observe'
+    /** Observe deployment origin, e.g. `https://observe.app.com`. */
+    url: string
+    /** Ingest API key. Sent as `x-api-key` (server) or `?key=` (browser). */
+    key: string
+    /**
+     * Fan out directly from the browser. The key becomes bundle-visible; observe
+     * write keys are public by design, so no build warning is emitted.
+     *
+     * @default false
+     */
+    client?: boolean
+    /**
+     * Fan out from the Nitro server queue.
+     *
+     * @default true
+     */
+    server?: boolean
+    name?: string
+    timeout?: number
+    retryOnFailure?: boolean
+    maxRetries?: number
+    retryDelay?: number
+}
+
+/** Any declarative transport entry, tagged by `type`. */
+export type FroggerTransportConfig =
+    | HttpTransportConfig
+    | FileTransportConfig
+    | ObserveTransportConfig
+
+/**
+ * A single normalised HTTP transport as emitted by `resolveFroggerOptions` into
  * `runtimeConfig`. `apiKey` is kept discrete (never folded into `headers`) so
- * send-site code applies `x-api-key` uniformly and diagnostics can redact it.
+ * send-site code applies auth uniformly and diagnostics can redact it.
  */
 export interface ResolvedHttpTransport {
+    type: 'http'
     name: string
     baseUrl: string
     endpoint: string
     apiKey?: string
+    /** Where `apiKey` is applied at send time. @default 'header' */
+    apiKeyLocation?: 'header' | 'query'
     /** Does NOT include `x-api-key`; that's applied at send time from `apiKey`. */
     headers: Record<string, string>
     vendor?: string
@@ -76,4 +144,26 @@ export interface ResolvedHttpTransport {
     retryOnFailure?: boolean
     maxRetries?: number
     retryDelay?: number
+    /** Max events per outgoing batch chunk (observe: 500). Unset = no cap. */
+    maxBatchEvents?: number
+    /** Max serialized body bytes per chunk (observe: ~950 KiB). Unset = no cap. */
+    maxBodyBytes?: number
+    /**
+     * Suppresses the bundle-visible-apiKey build warning for a client entry.
+     * Set for observe browser keys (write-only public by design).
+     */
+    publicKeyOk?: boolean
 }
+
+/**
+ * A single normalised file transport as emitted into `runtimeConfig.frogger`.
+ * Server-only — never lands in the client bundle.
+ */
+export interface ResolvedFileTransport {
+    type: 'file'
+    name: string
+    options: Required<FileOptions>
+}
+
+/** A server-bound transport is either an HTTP or a file destination. */
+export type ResolvedServerTransport = ResolvedHttpTransport | ResolvedFileTransport

@@ -1,14 +1,21 @@
 import type { BatchOptions } from "./batch"
-import type { FileOptions } from "./file";
 import type { RateLimitingOptions } from "../../rate-limiter/types";
 import type { AppInfoOptions } from "../../app-info/types";
 import type { WebsocketOptions } from "../../websocket/types/options";
 import type { ScrubberOptions } from "../../scrubber/options";
 import type { GlobalErrorCaptureOptions } from "./global-error";
 import type { InternalLogLevel } from "../utils/internal-log";
-import type { HttpTransportConfig } from "./transports";
+import type { FroggerTransportConfig } from "./transports";
 
-export type { HttpTransportConfig, ResolvedHttpTransport } from "./transports";
+export type {
+    FroggerTransportConfig,
+    HttpTransportConfig,
+    FileTransportConfig,
+    ObserveTransportConfig,
+    ResolvedHttpTransport,
+    ResolvedFileTransport,
+    ResolvedServerTransport,
+} from "./transports";
 
 
 /**
@@ -64,8 +71,6 @@ export interface ModuleOptions {
 
     app?: AppInfoOptions,
 
-    file?: FileOptions
-
     batch?: BatchOptions | false
 
     /**
@@ -97,16 +102,24 @@ export interface ModuleOptions {
     }
 
     /**
-     * Extra log destinations. Each entry forwards every log batch to an HTTP
-     * ingest URL — from the server queue (`server`, default on) and/or directly
-     * from the browser (`client`, default off). Independent of `preset`.
+     * Log destinations. Each entry is a tagged transport config, most easily
+     * built with the `fileTransport()`, `httpTransport()` and
+     * `observeTransport()` factories. HTTP/observe entries fan out from the
+     * server queue (`server`, default on) and/or the browser (`client`, default
+     * off); file entries are server-only. A bare install has no transports and
+     * logs to console only. Independent of `preset`.
      *
      * @default []
      */
-    transports?: HttpTransportConfig[]
+    transports?: FroggerTransportConfig[]
 
     public?: {
-        endpoint?: string
+        /**
+         * The app's own ingest route the browser POSTs to. `false` disables the
+         * client POST entirely (client logs then only reach `client:true`
+         * transports); the server route stays registered.
+         */
+        endpoint?: string | false
         baseUrl?: string
 
         batch?: BatchOptions | false

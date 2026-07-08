@@ -20,7 +20,7 @@ features:
     link: /installation
     linkText: Install
   - title: ⚡ Websocket
-    details: "Opt-in dev live-stream — flip on with frogger: { websocket: true } (or preset: 'full'). Broadcast logs in realtime, build custom dashboards and live consoles, add your own auth anytime"
+    details: "Opt-in dev live-stream. Broadcast logs in realtime, build custom dashboards and live consoles, add your own auth anytime"
     link: /guides/live-logs
     linkText: Live Logs
   - title: 🌐 Universal Logging
@@ -32,7 +32,7 @@ features:
     link: /configuration
     linkText: Configure batching
   - title: 🧹 PII Scrubbing
-    details: "Fully opt-in PII scrubbing: compose rules from built-in strategies and field-name lists with the defineScrub() builder, or pull in the RECOMMENDED_RULES bundle for sensible coverage."
+    details: "Fully opt-in PII scrubbing. Compose rules from built-in strategies and field-name lists for sensible coverage"
     link: /guides/scrubbing
     linkText: Scrubbing
   - title: 🔎 W3C Trace Context
@@ -40,7 +40,7 @@ features:
     link: /getting-started#trace-context
     linkText: Trace Context
   - title: 🚦 Rate Limiting
-    details: "Worried about excessive logs or targeted attacks? Opt-in rate limiting reduces abuse, flip on with frogger: { rateLimit: true } to keep the pond clean"
+    details: "Worried about excessive logs or targeted attacks? Opt-in rate limiting reduces abuse, keeping the pond clean"
     link: /guides/rate-limiting
     linkText: Rate Limiting
   - title: 🔌 Extensible

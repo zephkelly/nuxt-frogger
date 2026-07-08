@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.1.14
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.13...v0.1.14)
+
+### 🚀 Enhancements
+
+- Rebuild PII scruber with API builder and declerative rule sets ([f6c5957](https://github.com/zephkelly/nuxt-frogger/commit/f6c5957))
+- Ambient span resolvers on loggers for tracing ([0613c11](https://github.com/zephkelly/nuxt-frogger/commit/0613c11))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.13
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.12...v0.1.13)

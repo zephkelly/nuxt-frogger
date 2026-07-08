@@ -1,6 +1,6 @@
 {
   "name": "nuxt-frogger",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "Logging and tracing module for Nuxt applications",
   "repository": {
     "type": "git",
@@ -35,7 +35,7 @@
     "dev": "nuxi dev playground",
     "dev:build": "nuxi build playground",
     "dev:prepare": "nuxt-module-build build --stub && nuxt-module-build prepare && nuxi prepare playground",
-    "release": "npm run test && npm run prepack && changelogen --release && npm publish && git push --follow-tags",
+    "release": "bash scripts/release.sh",
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:types": "vue-tsc --noEmit && cd playground && vue-tsc --noEmit",

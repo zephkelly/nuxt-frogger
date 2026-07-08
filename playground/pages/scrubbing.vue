@@ -2,9 +2,10 @@
   <div>
     <h1 class="page-title">Scrubbing</h1>
     <p class="page-intro">
-      Frogger scrubs PII from your logs before they're stored — on by default. Fields like
-      <code>password</code>, <code>email</code>, <code>phone</code>, <code>creditCard</code> and
-      names are matched by the built-in rules and masked, redacted, or hashed. The redaction
+      Frogger scrubs PII from your logs before they're stored — but scrubbing is fully opt-in: you
+      compose rules from the provided strategies and field-name lists. This playground opts into the
+      <code>RECOMMENDED_RULES</code> bundle, so fields like <code>password</code>, <code>email</code>,
+      <code>phone</code> and <code>creditCard</code> are masked, redacted, or hashed. The redaction
       happens server-side on the stored record; log the object below and inspect
       <code>playground/logs/</code> to see the result.
     </p>
@@ -21,11 +22,12 @@
     </section>
 
     <section class="demo-section">
-      <h2>Custom rules</h2>
+      <h2>Composing rules</h2>
       <p>
-        Extend the defaults with your own rules in <code>frogger.config.ts</code> — match by field
-        name or RegExp, choose an action (<code>redact_full</code>, <code>mask_partial</code>,
-        <code>mask_email</code>, <code>hash_value</code>, …) and a <code>priority</code>.
+        Build your own rule set in <code>frogger.config.ts</code> with the <code>defineScrub()</code>
+        builder — one method per strategy (<code>redact</code>, <code>maskEmail</code>,
+        <code>keepEnds</code>, <code>maskCard</code>, …), field arguments as literal names, a RegExp,
+        or a provided field-name list.
       </p>
       <pre class="sample">{{ customRuleExample }}</pre>
     </section>
@@ -49,15 +51,13 @@ const sample = {
 const samplePretty = JSON.stringify(sample, null, 2)
 
 const customRuleExample = `// frogger.config.ts
-scrub: {
-  rules: [
-    {
-      action: 'redact_full',
-      fieldPatterns: ['authToken', /.*secret.*/i],
-      priority: 100,
-    },
-  ],
-}`
+import { defineScrub, fields, RECOMMENDED_RULES } from '#frogger/config'
+
+scrub: defineScrub()
+  .use(...RECOMMENDED_RULES)              // sensible baseline
+  .redact('authToken', /.*secret.*/i)    // app-specific secrets
+  .maskEmail(fields.emails)
+  .build()`
 
 const logger = useFrogger({ context: { page: 'scrubbing' } })
 function logFromClient() {

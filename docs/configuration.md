@@ -251,8 +251,10 @@ Each opt-in option accepts `true` (enable with sensible defaults), an object (en
 ::: details Config applied when a subsystem is enabled
 These are the defaults each subsystem uses once switched on (via a preset, `true`, or an object). Pass an object to override any field — it deep-merges onto these.
 ```ts
-// scrub: true  →
-{ maxDepth: 10, deepScrub: true, preserveTypes: true }
+// scrub: true  →  engine on, but ZERO rules (nothing is scrubbed until you
+// declare rules — see the Scrubbing guide). Only the knobs below are defaulted;
+// maxDepth is unset = unlimited recursion:
+{ deepScrub: true, preserveTypes: true }
 
 // rateLimit: true  →
 {
@@ -318,6 +320,8 @@ These are the defaults each subsystem uses once switched on (via a preset, `true
 
 ::: warning Upgrading from a version before presets
 Earlier versions enabled scrubbing, rate-limiting, the dev websocket and global error capture **by default**. They are now off unless you opt in. To keep the old behaviour, set `preset: 'full'` (or `preset: 'standard'` to skip the dev-only websocket). The vestigial `public.globalErrorCapture` option has been removed — use `errorCapture` instead.
+
+Note that scrubbing changed further: enabling it no longer applies any built-in rules. Even with `preset: 'full'`, nothing is scrubbed until you declare rules. To restore the old default coverage, opt into the `RECOMMENDED_RULES` bundle — see the [Scrubbing guide](/guides/scrubbing).
 :::
 
 ## Frogger Config

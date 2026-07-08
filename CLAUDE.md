@@ -1,5 +1,6 @@
 - Never use the commit or push commands in git, leave this to the developer.
-- Search for relevant documentation files after making changes to the codebase and update them accordingly.
+- Search for relevant documentation files, README.md files, and AGENTS.md files after making changes to the codebase and update them accordingly.
+- Never adjust Vitepress documentation without first asking the developer for clarification on what changes are needed or what changes you will make.
 - Always ask the developer for clarification or present multiple options if you are unsure about next steps, do not assume implementation details.
 - Do not use em-dashes, do not use the word 'seam', do not use emojis unless in certain output readability contexts.
 - Do not write obvious or verbose comments in code, limit them to clarifying non-obvious details that explain the "why" behind decisions.

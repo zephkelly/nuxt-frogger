@@ -155,7 +155,8 @@ describe('resolveFroggerOptions', () => {
 
         it('does not mutate the shared default objects', () => {
             resolveFroggerOptions({ scrub: { maxDepth: 1 } });
-            expect(DEFAULT_SCRUB.maxDepth).toBe(10);
+            // DEFAULT_SCRUB deliberately has no maxDepth (undefined = unlimited)
+            expect(DEFAULT_SCRUB.maxDepth).toBeUndefined();
         });
     });
 
@@ -184,14 +185,14 @@ describe('resolveFroggerOptions', () => {
         it('mutating one resolved config does not poison the next resolve', () => {
             const a = resolveFroggerOptions({ preset: 'full' });
             if (a.rateLimit) a.rateLimit.limits!.perIp = 999;
-            if (a.scrub) (a.scrub as any).maxDepth = 1;
+            if (a.scrub) (a.scrub as any).deepScrub = false;
 
             const b = resolveFroggerOptions({ preset: 'full' });
             expect(b.rateLimit && b.rateLimit.limits?.perIp).toBe(DEFAULT_RATE_LIMIT.limits?.perIp);
-            expect(b.scrub && (b.scrub as any).maxDepth).toBe(10);
+            expect(b.scrub && (b.scrub as any).deepScrub).toBe(true);
             // and the const itself is intact
             expect(DEFAULT_RATE_LIMIT.limits?.perIp).toBe(100);
-            expect(DEFAULT_SCRUB.maxDepth).toBe(10);
+            expect(DEFAULT_SCRUB.deepScrub).toBe(true);
         });
     });
 

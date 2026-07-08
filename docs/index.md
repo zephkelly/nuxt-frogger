@@ -32,7 +32,7 @@ features:
     link: /configuration
     linkText: Configure batching
   - title: 🧹 PII Scrubbing
-    details: "Opt-in basic strategies to scrub PII from your logs, flip on with frogger: { scrub: true }. Need something more robust? Add your own custom strategies"
+    details: "Fully opt-in PII scrubbing: compose rules from built-in strategies and field-name lists with the defineScrub() builder, or pull in the RECOMMENDED_RULES bundle for sensible coverage."
     link: /guides/scrubbing
     linkText: Scrubbing
   - title: 🔎 W3C Trace Context

@@ -1,4 +1,4 @@
-import { defineFroggerOptions } from '#frogger/config';
+import { defineFroggerOptions, defineScrub, RECOMMENDED_RULES } from '#frogger/config';
 
 /**
  * Playground Frogger config.
@@ -31,20 +31,15 @@ export default defineFroggerOptions({
     //   'full'     — everything on, including the dev websocket live-stream
     preset: 'full',
 
-    // Individual options always win over the preset. Pass custom scrub rules to
-    // extend the defaults:
-    // scrub: {
-    //     maxDepth: 10,
-    //     deepScrub: true,
-    //     rules: [
-    //         {
-    //             action: 'redact_full',
-    //             fieldPatterns: ['authToken', /.*secret.*/i],
-    //             priority: 100,
-    //             description: 'Redact app-specific secrets',
-    //         },
-    //     ],
-    // },
+    // Scrubbing is fully opt-in: enabling it (here via `preset: 'full'`) turns
+    // the engine on but adds NO rules — nothing is scrubbed until you declare a
+    // rule. Compose rules with the `defineScrub()` builder, pulling in the
+    // ready-made `RECOMMENDED_RULES` bundle and adding app-specific redactions.
+    // The /scrubbing demo relies on these rules being active.
+    scrub: defineScrub()
+        .use(...RECOMMENDED_RULES)
+        .redact('authToken', /.*secret.*/i)
+        .build(),
 
     // Tune the per-IP / per-app rate-limit tiers here:
     // rateLimit: {

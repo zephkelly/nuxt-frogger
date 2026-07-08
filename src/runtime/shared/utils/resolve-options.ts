@@ -13,6 +13,7 @@ import type { BatchOptions } from '../types/batch'
 import type { FileOptions } from '../types/file'
 import type { AppInfoOptions } from '../../app-info/types'
 import type { ScrubberOptions } from '../../scrubber/options'
+import { compileScrubRules } from '../../scrubber/compile'
 import type { RateLimitingOptions } from '../../rate-limiter/types'
 import type { WebsocketOptions } from '../../websocket/types/options'
 import type { GlobalErrorCaptureOptions } from '../types/global-error'
@@ -86,8 +87,10 @@ export const DEFAULT_FILE: FileOptions = {
     highWaterMark: 64 * 1024,
 }
 
+// maxDepth is deliberately absent: undefined = unlimited recursion (the
+// scrubber is cycle-safe). Set a number to bound how deep nested ctx objects
+// are scrubbed.
 export const DEFAULT_SCRUB: ScrubberOptions = {
-    maxDepth: 10,
     deepScrub: true,
     preserveTypes: true,
 }
@@ -310,6 +313,22 @@ function normalizeErrorCapture(value: ErrorCaptureInput | undefined): ResolvedEr
 }
 
 /**
+ * Normalise scrub config, then compile every rule's field patterns into a
+ * serialisation-safe form (RegExp → `{ source, flags }`) so the rule set
+ * survives being written into Nuxt runtime config and JSON-serialised across the
+ * SSR→client boundary. Enabling scrubbing never injects rules — an enabled
+ * scrubber with no user rules is a deliberate no-op.
+ */
+function resolveScrub(value: ScrubberOptions | boolean | undefined): ScrubberOptions | false {
+    const normalized = normalizeToggle(value, DEFAULT_SCRUB)
+    if (normalized === false) return false
+    if (normalized.rules?.length) {
+        normalized.rules = compileScrubRules(normalized.rules)
+    }
+    return normalized
+}
+
+/**
  * Resolve raw (already user-merged) module options into a fully-normalised
  * config. `options` should be the result of merging `frogger.config.ts` over
  * the `nuxt.config` `frogger` key — NOT pre-filled with subsystem defaults, or
@@ -338,7 +357,7 @@ export function resolveFroggerOptions(options: ModuleOptions = {}): ResolvedFrog
         logLevel: options.logLevel,
         file: defu(options.file, DEFAULT_FILE),
         batch: options.batch === false ? false : defu(options.batch, DEFAULT_BATCH),
-        scrub: normalizeToggle(scrub, DEFAULT_SCRUB),
+        scrub: resolveScrub(scrub),
         rateLimit: normalizeToggle(rateLimit, DEFAULT_RATE_LIMIT),
         websocket: normalizeToggle(websocket, DEFAULT_WEBSOCKET),
         errorCapture: normalizeErrorCapture(errorCapture),

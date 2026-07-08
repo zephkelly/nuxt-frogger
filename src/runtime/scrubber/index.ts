@@ -1,5 +1,6 @@
 import type { LoggerObject } from "../shared/types/log";
-import { type ScrubberConfig, type ScrubRule, type ScrubResult, type ScrubAction, SCRUB_ACTION } from "./types";
+import { type ScrubberConfig, type ScrubRule, type ScrubResult, type FieldPattern } from "./types";
+import { applyStrategy } from "./strategies";
 
 import { defu } from "defu";
 
@@ -13,66 +14,42 @@ export class LogScrubber {
     private readonly MAX_CACHE_SIZE = 1000;
 
     constructor(config: Partial<ScrubberConfig> = {}) {
+        // No default rules: scrubbing is fully opt-in. An enabled scrubber with
+        // an empty rule set is a deliberate no-op (see the dev-time notice).
+        // maxDepth has no default: undefined = unlimited recursion (cycle-safe
+        // via the WeakSet guard in scrubObject).
         this.config = defu(config, {
             enabled: true,
-            rules: this.getDefaultRules(),
+            rules: [] as ScrubRule[],
             deepScrub: true,
             preserveTypes: true,
-            maxDepth: 10
         }) as ScrubberConfig;
 
         this.fieldRuleMap = new Map();
         this.regexRules = [];
-        this.fieldRuleCache = new Map()
+        this.fieldRuleCache = new Map();
         this.scrubStats = { totalProcessed: 0, totalScrubbed: 0 };
 
         this.buildRuleMaps();
     }
 
-    private getDefaultRules(): ScrubRule[] {
-        return [
-            {
-                action: SCRUB_ACTION.REDACT_FULL,
-                fieldPatterns: ['password', 'passwd', 'pwd', 'secret', 'token', 'key', 'apikey', 'api_key'],
-                priority: 100,
-                description: 'Remove passwords and secrets completely'
-            },
-            {
-                action: SCRUB_ACTION.MASK_EMAIL,
-                fieldPatterns: ['email', 'e_mail', 'emailAddress', 'userEmail', /.*email.*/i],
-                priority: 90,
-                description: 'Mask email addresses'
-            },
-            {
-                action: SCRUB_ACTION.MASK_PHONE,
-                fieldPatterns: ['phone', 'phoneNumber', 'mobile', 'cell', /.*phone.*/i],
-                priority: 90,
-                description: 'Mask phone numbers'
-            },
-            {
-                action: SCRUB_ACTION.MASK_PARTIAL,
-                fieldPatterns: ['name', 'firstName', 'lastName', 'fullName', 'username', 'userId'],
-                priority: 80,
-                description: 'Partially mask names and user identifiers'
-            },
-            {
-                action: SCRUB_ACTION.HASH_VALUE,
-                fieldPatterns: ['ssn', 'socialSecurity', 'creditCard', 'cardNumber', 'accountNumber'],
-                priority: 95,
-                description: 'Hash sensitive numeric identifiers'
-            },
-            {
-                action: SCRUB_ACTION.MASK_PARTIAL,
-                fieldPatterns: ['address', 'street', 'city', 'zipCode', 'postalCode'],
-                priority: 70,
-                description: 'Mask address information'
+    private toRegExp(pattern: FieldPattern): RegExp | null {
+        if (pattern instanceof RegExp) return pattern;
+        if (typeof pattern === 'object' && pattern !== null && typeof pattern.source === 'string') {
+            try {
+                return new RegExp(pattern.source, pattern.flags);
             }
-        ];
+            catch {
+                return null;
+            }
+        }
+        return null;
     }
 
     private buildRuleMaps(): void {
         this.fieldRuleMap.clear();
         this.regexRules = [];
+        this.fieldRuleCache.clear();
 
         const sortedRules = [...this.config.rules].sort((a, b) => b.priority - a.priority);
 
@@ -83,8 +60,9 @@ export class LogScrubber {
                         this.fieldRuleMap.set(pattern.toLowerCase(), rule);
                     }
                 }
-                else if (pattern instanceof RegExp) {
-                    this.regexRules.push({ pattern, rule });
+                else {
+                    const regex = this.toRegExp(pattern);
+                    if (regex) this.regexRules.push({ pattern: regex, rule });
                 }
             }
         }
@@ -125,102 +103,12 @@ export class LogScrubber {
         this.fieldRuleCache.set(fieldName, rule);
     }
 
-    private isEmptyValue(value: any): boolean {
-        if (typeof value === 'string') {
-            return value.trim() === '';
-        }
-
-        if (Array.isArray(value)) {
-            return value.length === 0;
-        }
-
-        if (typeof value === 'object' && value !== null) {
-            return Object.keys(value).length === 0;
-        }
-
-        return false;
-    }
-
-    private applyScrubAction(value: any, action: ScrubAction): any {
-        if (value === null || value === undefined) return value;
-
-        if (this.isEmptyValue(value)) return value;
-
-        const strValue = String(value);
-
-        switch (action) {
-            case SCRUB_ACTION.REDACT_FULL:
-                return this.config.preserveTypes && typeof value === 'number' ? 0 : '[REDACTED]';
-
-            case SCRUB_ACTION.MASK_FIRST_ONLY:
-                if (strValue.length <= 1) return '*';
-                return strValue[0] + '*'.repeat(strValue.length - 1);
-
-            case SCRUB_ACTION.MASK_PARTIAL:
-                if (strValue.length < 2) return '*';
-                if (strValue.length < 7) {
-                    return strValue[0] + '*'.repeat(strValue.length - 1);
-                }
-                return strValue[0] + '*'.repeat(5) + strValue[strValue.length - 1];
-
-            case SCRUB_ACTION.HASH_VALUE:
-                return this.simpleHash(strValue);
-
-            case SCRUB_ACTION.MASK_EMAIL:
-                return this.maskEmail(strValue);
-
-            case SCRUB_ACTION.MASK_PHONE:
-                return this.maskPhone(strValue);
-
-            default:
-                return value;
-        }
-    }
-
-    private maskEmail(email: string): string {
-        const emailRegex = /^([^@]+)@(.+)$/;
-        const match = email.match(emailRegex);
-
-        if (!match) return email;
-
-        const [, localPart, domain] = match;
-        if (!localPart) return email;
-        if (localPart.length <= 1) return `*@${domain}`;
-
-        return `${localPart[0]}***@${domain}`;
-    }
-
-    private maskPhone(phone: string): string {
-        const chars = phone.split('');
-        const digitIndices: number[] = [];
-
-        for (let i = 0; i < chars.length; i++) {
-            if (/\d/.test(chars[i]!)) {
-                digitIndices.push(i);
-            }
-        }
-
-        if (digitIndices.length < 4) return phone;
-
-        for (let i = 1; i < digitIndices.length - 1; i++) {
-            chars[digitIndices[i]!] = '*';
-        }
-
-        return chars.join('');
-    }
-
-    private simpleHash(input: string): string {
-        let hash = 0;
-        for (let i = 0; i < input.length; i++) {
-            const char = input.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash;
-        }
-        return `[HASH:${Math.abs(hash).toString(16)}]`;
+    private applyScrubAction(value: any, rule: ScrubRule): any {
+        return applyStrategy(value, rule.action, { preserveTypes: this.config.preserveTypes });
     }
 
     private scrubObject(obj: any, depth: number = 0, visited = new WeakSet()): { modified: boolean; fieldsModified: string[] } {
-        if (!obj || depth > this.config.maxDepth) {
+        if (!obj || (this.config.maxDepth !== undefined && depth > this.config.maxDepth)) {
             return { modified: false, fieldsModified: [] };
         }
 
@@ -255,7 +143,7 @@ export class LogScrubber {
                     const rule = this.findRule(key);
 
                     if (rule) {
-                        const scrubbedValue = this.applyScrubAction(value, rule.action);
+                        const scrubbedValue = this.applyScrubAction(value, rule);
                         if (scrubbedValue !== value) {
                             obj[key] = scrubbedValue;
                             modified = true;

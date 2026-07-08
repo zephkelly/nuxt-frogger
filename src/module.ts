@@ -189,6 +189,17 @@ export default defineNuxtModule<ModuleOptions>({
                     '🐸 \x1b[32mFROGGER\x1b[0m',
                     `Ready to log`
                 );
+
+                // Scrubbing is fully opt-in: enabling it does not add any rules.
+                // Surface the active rule count so `0 rules active` is visible
+                // rather than silently doing nothing.
+                if (resolved.scrub) {
+                    const ruleCount = resolved.scrub.rules?.length ?? 0;
+                    console.log(
+                        '🐸 \x1b[32mFROGGER\x1b[0m',
+                        `scrubbing enabled: ${ruleCount} rule${ruleCount === 1 ? '' : 's'} active`
+                    );
+                }
             }
         })
 

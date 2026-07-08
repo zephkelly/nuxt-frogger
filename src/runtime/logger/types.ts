@@ -87,6 +87,36 @@ export interface IFroggerLogger {
      */
     reactiveChild(options: FroggerOptions): IFroggerLogger;
 
+    /**
+     * Run `fn` inside a named span. Every log emitted while `fn` runs —
+     * including logs from nested utils that use the ambient `frogger` —
+     * automatically nests under this span. The previous active logger is
+     * restored when `fn` settles, and nested `span()` calls create deeper
+     * levels of the same trace tree.
+     * @param name The span name, stored on each log's context as `span`
+     * @param fn The function to run inside the span
+     * @returns `fn`'s return value
+     *
+     * @example
+     * ```ts
+     * await frogger.span('processOrder', async () => {
+     *   frogger.info('validating');   // nests under processOrder
+     *   await chargeCard();           // its frogger.* logs nest too
+     * });
+     * ```
+     */
+    span<T>(name: string, fn: () => T | Promise<T>): Promise<T>;
+
+    /**
+     * Create a named child logger parented under the current span, to hold on
+     * to and pass around manually. Unlike `span()` it does not change the
+     * ambient active logger — only logs made through the returned instance
+     * nest under it.
+     * @param name The span name, stored on each log's context as `span`
+     * @param options Optional logger options for the child
+     */
+    startSpan(name: string, options?: FroggerOptions): IFroggerLogger;
+
 
         // Log Levels ------------------------------------------
     

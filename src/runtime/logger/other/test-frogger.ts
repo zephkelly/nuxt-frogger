@@ -145,6 +145,14 @@ export class TestFroggerLogger extends BaseFroggerLogger {
         throw new Error('reactiveChild() is not supported by TestFroggerLogger');
     }
 
+    span<T>(_name: string, _fn: () => T | Promise<T>): Promise<T> {
+        throw new Error('span() is not supported by TestFroggerLogger');
+    }
+
+    startSpan(_name: string, _options?: FroggerOptions): IFroggerLogger {
+        throw new Error('startSpan() is not supported by TestFroggerLogger');
+    }
+
 
     protected processLoggerObject(loggerObject: LoggerObject): void {
         const serialized = this.serializeLoggerObject(loggerObject);

@@ -43,6 +43,10 @@ export interface IFroggerLogger {
     child(options: FroggerOptions): IFroggerLogger
     reactiveChild(options: FroggerOptions): IFroggerLogger
 
+    // Spans
+    span<T>(name: string, fn: () => T | Promise<T>): Promise<T>
+    startSpan(name: string, options?: FroggerOptions): IFroggerLogger
+
     // Tracing & lifecycle
     getHeaders(customVendor?: string): Record<string, string>
     reset(): void
@@ -81,6 +85,18 @@ Context is appended to **every** log this logger makes. See
 | `reactiveChild(options)` | A child that **live-inherits** later parent context changes |
 
 See [Getting Started → Child Loggers](/getting-started#child-loggers).
+
+## Spans
+
+| Method | Behaviour |
+| --- | --- |
+| `span(name, fn)` | Runs `fn` with a named child installed as the **active logger** — every ambient `frogger.*` call (and `getFrogger()`) made while `fn` runs nests under the span. Restored when `fn` settles; returns `fn`'s result |
+| `startSpan(name, options?)` | Returns the same named child (with `ctx.span = name`) to hold and pass around manually, without changing the active logger |
+
+On the server, spans are backed by `AsyncLocalStorage`, so concurrent requests never mix their
+trees. In the browser they are best-effort: sequential `await` chains are always correct, but two
+spans awaiting concurrently can observe each other. See
+[Getting Started → Nested Spans](/getting-started#nested-spans).
 
 ## Reporters
 

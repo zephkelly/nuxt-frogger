@@ -80,6 +80,12 @@ export class SimpleConsoleLogger implements IFroggerLogger {
     reactiveChild(options: FroggerOptions): IFroggerLogger {
         throw new Error("Method not implemented.");
     }
+    span<T>(name: string, fn: () => T | Promise<T>): Promise<T> {
+        throw new Error("Method not implemented.");
+    }
+    startSpan(name: string, options?: FroggerOptions): IFroggerLogger {
+        throw new Error("Method not implemented.");
+    }
     silent(message: string, context?: Object): void {
         throw new Error("Method not implemented.");
     }

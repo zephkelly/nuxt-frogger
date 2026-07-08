@@ -40,6 +40,24 @@
     </section>
 
     <section class="demo-section">
+      <h2>Spans</h2>
+      <p>
+        <code>frogger.span(name, fn)</code> nests everything logged inside <code>fn</code> —
+        including helpers that never receive a logger — under one named span.
+        <code>frogger.startSpan(name)</code> returns a span logger you hold and pass around.
+      </p>
+      <div class="demo-actions">
+        <button class="btn" @click="runClientSpan">frogger.span('checkout', ...)</button>
+        <button class="btn" @click="runStartSpan">frogger.startSpan('audit')</button>
+        <button class="btn btn-primary" @click="callServerSpans">GET /api/demo/spans</button>
+      </div>
+      <p class="hint">
+        Watch the beamed logs: span logs share the trace and chain their
+        <code>parentId</code> under the enclosing span, with the span name on <code>ctx.span</code>.
+      </p>
+    </section>
+
+    <section class="demo-section">
       <h2>Server ambient</h2>
       <p>
         The same <code>frogger</code> object is auto-imported in Nitro. Hit the endpoint to see a
@@ -79,5 +97,24 @@ const serverReply = ref<string | null>(null)
 async function callServerAmbient() {
   const res = await $fetch<{ ok: boolean }>('/api/demo/ambient')
   serverReply.value = JSON.stringify(res)
+}
+
+async function runClientSpan() {
+  await frogger.span('checkout', async () => {
+    frogger.info('validating cart')
+    await addLoyaltyPoints()
+    frogger.info('checkout complete')
+  })
+}
+
+// No logger parameter — inside a span the ambient frogger resolves to the
+// span's child logger, so this helper's logs nest automatically.
+async function addLoyaltyPoints() {
+  frogger.info('adding loyalty points', { points: 50 })
+}
+
+function runStartSpan() {
+  const audit = frogger.startSpan('audit')
+  audit.info('audit entry recorded')
 }
 </script>

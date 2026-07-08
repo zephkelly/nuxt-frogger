@@ -3,6 +3,7 @@ import { useNuxtApp, useState } from '#imports'
 
 import { ClientFrogger } from '../logger/client'
 import { createAmbientFrogger } from '../logger/ambient'
+import { getActiveLogger } from '../logger/active-context.client'
 import type { FroggerAmbient } from '../logger/ambient'
 import type { IFroggerLogger } from '../logger/types'
 
@@ -14,6 +15,13 @@ import { APP_MOUNTED_STATE_KEY } from '../shared/types/module-options'
 const AMBIENT_KEY = '$froggerAmbientLogger'
 
 function getAmbientClientLogger(): IFroggerLogger {
+    // Inside frogger.span(...), every ambient call resolves to the span's
+    // child logger so nested utils auto-nest (best-effort in the browser).
+    const active = getActiveLogger()
+    if (active) {
+        return active
+    }
+
     const nuxtApp = useNuxtApp() as Record<string, any>
 
     if (!nuxtApp[AMBIENT_KEY]) {

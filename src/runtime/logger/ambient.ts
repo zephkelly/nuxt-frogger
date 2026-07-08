@@ -40,6 +40,8 @@ export interface FroggerAmbient {
     clearContext(): void
     child(options: FroggerOptions): IFroggerLogger
     reactiveChild(options: FroggerOptions): IFroggerLogger
+    span<T>(name: string, fn: () => T | Promise<T>): Promise<T>
+    startSpan(name: string, options?: FroggerOptions): IFroggerLogger
     addReporter(reporter: IFroggerReporter): void
     removeReporter(reporter: IFroggerReporter): void
     getReporters(): readonly IFroggerReporter[]
@@ -91,6 +93,8 @@ export function createAmbientFrogger(resolve: () => IFroggerLogger): FroggerAmbi
     facade.clearContext = () => resolve().clearContext()
     facade.child = (options: FroggerOptions) => resolve().child(options)
     facade.reactiveChild = (options: FroggerOptions) => resolve().reactiveChild(options)
+    facade.span = <T>(name: string, fn: () => T | Promise<T>) => resolve().span(name, fn)
+    facade.startSpan = (name: string, options?: FroggerOptions) => resolve().startSpan(name, options)
     facade.addReporter = (reporter: IFroggerReporter) => resolve().addReporter(reporter)
     facade.removeReporter = (reporter: IFroggerReporter) => resolve().removeReporter(reporter)
     facade.getReporters = () => resolve().getReporters()

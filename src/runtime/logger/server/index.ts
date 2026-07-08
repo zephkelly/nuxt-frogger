@@ -11,6 +11,9 @@ import type { TraceContext } from '../../shared/types/trace-headers';
 import { defu } from 'defu';
 import { useRuntimeConfig } from '#imports';
 import { froggerInternal } from '../../shared/utils/internal-log';
+import { runWithLogger } from '../active-context.server';
+import type { FroggerOptions } from '../../shared/types/options';
+import type { IFroggerLogger } from '../types';
 
 export class ServerFroggerLogger extends BaseFroggerLogger {
     private options: ServerLoggerOptions;
@@ -93,9 +96,11 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
 
         const childOptions: ServerLoggerOptions = {
             ...defu(this.options, options),
-            context: reactive 
+            context: reactive
                 ? options.context
-                : (defu(childContext, options.context) as LogContext),
+                // Explicit child context overrides inherited keys (a nested
+                // startSpan must be able to replace the parent's `span`).
+                : (defu(options.context, childContext) as LogContext),
         };
 
         const childTraceContext: TraceContext = {
@@ -105,6 +110,12 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         };
 
         const child = new ServerFroggerLogger(childOptions, childTraceContext);
+
+        // Mirror ClientFrogger: seed the child's live trace immediately so a
+        // grandchild created before the child's first log (e.g. a nested span
+        // opened right away) stays on the same trace instead of branching
+        // onto the child's fresh random trace ID.
+        child.setTraceContext(traceId, parentSpanId);
 
         if (reactive) {
             child.parentGlobalContext = this.globalContext;
@@ -123,5 +134,13 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
 
     public reactiveChild(options: ServerLoggerOptions): ServerFroggerLogger {
         return this.createChild(options, true);
+    }
+
+    public startSpan(name: string, options: FroggerOptions = {}): IFroggerLogger {
+        return this.child(defu({ context: { span: name } }, options));
+    }
+
+    public span<T>(name: string, fn: () => T | Promise<T>): Promise<T> {
+        return runWithLogger(this.startSpan(name), fn);
     }
 }

@@ -4,6 +4,7 @@ import { useEvent } from 'nitropack/runtime/internal/context'
 
 import { ServerFroggerLogger } from '../../logger/server'
 import { createAmbientFrogger } from '../../logger/ambient'
+import { getActiveLogger } from '../../logger/active-context.server'
 import type { FroggerAmbient } from '../../logger/ambient'
 
 import type { IFroggerLogger } from '../../logger/types'
@@ -36,6 +37,14 @@ function buildServerLogger(event?: H3Event): IFroggerLogger {
 }
 
 function getAmbientServerLogger(): IFroggerLogger {
+    // Inside frogger.span(...), every ambient call resolves to the span's
+    // child logger so nested utils auto-nest. Must short-circuit before
+    // useEvent(): the span child already carries the request's trace.
+    const active = getActiveLogger()
+    if (active) {
+        return active
+    }
+
     let event: H3Event | undefined
     try {
         // Resolved via Nitro asyncContext (enabled when autoEventCapture is on,

@@ -12,6 +12,8 @@ function createMockLogger() {
         addContext: vi.fn(), setContext: vi.fn(), clearContext: vi.fn(),
         child: vi.fn(() => ({}) as IFroggerLogger),
         reactiveChild: vi.fn(() => ({}) as IFroggerLogger),
+        span: vi.fn((_name: string, fn: () => unknown) => Promise.resolve(fn())),
+        startSpan: vi.fn(() => ({}) as IFroggerLogger),
         addReporter: vi.fn(), removeReporter: vi.fn(),
         getReporters: vi.fn(() => []), clearReporters: vi.fn(),
         reset: vi.fn(),
@@ -71,6 +73,21 @@ describe('createAmbientFrogger', () => {
 
         frogger.reset()
         expect(logger.reset).toHaveBeenCalled()
+    })
+
+    it('delegates span to the resolved logger and returns its result', async () => {
+        const fn = vi.fn(async () => 'result')
+
+        await expect(frogger.span('checkout', fn)).resolves.toBe('result')
+        expect(logger.span).toHaveBeenCalledWith('checkout', fn)
+        expect(resolve).toHaveBeenCalled()
+    })
+
+    it('delegates startSpan to the resolved logger', () => {
+        const options = { level: 4 }
+        frogger.startSpan('checkout', options)
+
+        expect(logger.startSpan).toHaveBeenCalledWith('checkout', options)
     })
 
     describe('console parity', () => {

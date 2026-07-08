@@ -175,6 +175,13 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
 
     public abstract reactiveChild(options: FroggerOptions): IFroggerLogger;
 
+    // Implemented per-runtime: each concrete logger binds the span child to
+    // its runtime's active-logger context (real ALS on the server, a
+    // best-effort synchronous stack in the browser).
+    public abstract span<T>(name: string, fn: () => T | Promise<T>): Promise<T>;
+
+    public abstract startSpan(name: string, options?: FroggerOptions): IFroggerLogger;
+
 
     // Logging Methods ---------------------------------------------
     public logLevel(level: LogType, message: string, context?: Object): void {

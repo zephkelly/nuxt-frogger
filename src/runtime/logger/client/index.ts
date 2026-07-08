@@ -12,6 +12,8 @@ import type { LoggerObjectBatch } from '../../shared/types/batch';
 import { parseAppInfoConfig } from '../../app-info/parse';
 
 import { DEFAULT_LOGGING_ENDPOINT } from '../../shared/types/module-options';
+import { runWithLogger } from '../active-context.client';
+import type { FroggerOptions } from '../../shared/types/options';
 
 import { defu } from 'defu';
 
@@ -185,7 +187,9 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             ...defu(this.options, options),
             context: reactive
                 ? options.context
-                : (defu(childContext, options.context) as LogContext),
+                // Explicit child context overrides inherited keys (a nested
+                // startSpan must be able to replace the parent's `span`).
+                : (defu(options.context, childContext) as LogContext),
         };
 
         const child = new ClientFrogger(this.hasMounted, childOptions);
@@ -205,5 +209,13 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
     public reactiveChild(options: ClientLoggerOptions): ClientFrogger {
         return this.createChild(options, true);
+    }
+
+    public startSpan(name: string, options: FroggerOptions = {}): IFroggerLogger {
+        return this.child(defu({ context: { span: name } }, options));
+    }
+
+    public span<T>(name: string, fn: () => T | Promise<T>): Promise<T> {
+        return runWithLogger(this.startSpan(name), fn);
     }
 }

@@ -6,6 +6,7 @@ import { useRuntimeConfig } from '#imports';
 import { useEvent } from 'nitropack/runtime/internal/context';
 
 import { ServerFroggerLogger } from "../../logger/server";
+import { getActiveLogger } from '../../logger/active-context.server';
 
 import type { IFroggerLogger } from '../../logger/types';
 import type { TraceContext } from "../../shared/types/trace-headers";
@@ -57,7 +58,14 @@ export function getFrogger(
     }
 
     const mergedOptions = defu(froggerOptions, options) as ServerLoggerOptions;
-    
+
+    // Inside frogger.span(...), continue the span tree instead of re-branching
+    // from the request root. Outside a span, behavior is unchanged.
+    const active = getActiveLogger();
+    if (active) {
+        return active.child(mergedOptions);
+    }
+
     let traceContext: TraceContext | undefined;
     if (event?.context?.frogger) {
         traceContext = event.context.frogger;

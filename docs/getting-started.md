@@ -505,6 +505,32 @@ Creating a logger is cheap, so you can make new loggers for each component, rout
 :::
 
 
+### Nested Spans
+Sometimes a flat chain of logs isn't enough — you want everything that happens inside one logical operation grouped under a name. `frogger.span()` runs a function inside a named span; every log made while it runs, even from helpers that never receive a logger, automatically nests under it:
+
+```ts
+await frogger.span('processOrder', async () => {
+    frogger.info('validating order');  // nests under processOrder
+    await chargeCard();                // its frogger.* logs nest too
+});
+```
+
+The span name is recorded on each log's context as `ctx.span`, and each log's `parentId` chains under the enclosing span — so the whole operation reads as one tree in your log output.
+
+Spans nest: a `span()` opened inside another becomes its child. Calls to `getFrogger()` inside a span continue the tree too, instead of starting a new branch from the request root.
+
+::: info
+On the server, spans are backed by `AsyncLocalStorage`, so two concurrent requests never mix their trees. In the browser they are best-effort: sequential `await` chains are always correct, but two spans awaiting concurrently can observe each other.
+:::
+
+Prefer to hold on to the logger instead? `frogger.startSpan()` returns a named child logger parented under the current span, which you can pass around like any logger:
+
+```ts
+const audit = frogger.startSpan('audit');
+audit.info('order recorded');
+```
+
+
 ## Next steps
 Now that you can make logs, explore what Frogger does with them:
 

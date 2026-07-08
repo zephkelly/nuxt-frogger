@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.15
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.14...v0.1.15)
+
+### 🚀 Enhancements
+
+- Rework transport layer to factory config pattern ([ede6fbf](https://github.com/zephkelly/nuxt-frogger/commit/ede6fbf))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.14
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.13...v0.1.14)

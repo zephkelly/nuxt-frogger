@@ -2,7 +2,7 @@ import { type Ref } from 'vue';
 import { useNuxtApp, useState, useRuntimeConfig } from '#imports';
 
 import { BaseFroggerLogger } from '../base-frogger';
-import { LogQueueService } from '../../app/services/log-queue';
+import { getLogQueue } from '../../app/services/get-log-queue';
 
 import type { IFroggerLogger } from '../types';
 import type { ClientLoggerOptions, SSRTraceState } from './types';
@@ -164,10 +164,15 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
     protected async processLoggerObject(loggerObject: LoggerObject): Promise<void> {
         if (import.meta.client) {
             if (this.batchingEnabled) {
-                const nuxtApp = useNuxtApp();
-
-                const logQueue = nuxtApp.$logQueue as LogQueueService;
-                logQueue.enqueueLog(loggerObject);
+                try {
+                    const nuxtApp = useNuxtApp();
+                    getLogQueue(nuxtApp).enqueueLog(loggerObject);
+                }
+                catch (error) {
+                    // A customer log must never be silently dropped because the
+                    // queue path failed. Fall back to a direct send.
+                    await this.deliverFallback(loggerObject, error);
+                }
                 return;
             }
 
@@ -176,6 +181,26 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         }
 
         await this.sendLogImmediate(loggerObject);
+    }
+
+    /**
+     * Last-resort delivery when the batching queue path throws. Tries a direct
+     * send; if that also fails, surfaces the drop on the console UNGATED — the
+     * internal diagnostics channel (`froggerInternal`) is silent in production,
+     * and losing a customer's log without a trace is the worst failure a logger
+     * can have.
+     */
+    private async deliverFallback(loggerObject: LoggerObject, cause: unknown): Promise<void> {
+        try {
+            await this.sendLogImmediate(loggerObject);
+        }
+        catch (fallbackError) {
+            // eslint-disable-next-line no-console
+            console.error(
+                '🐸 Frogger: failed to deliver a log (queue and direct send both failed).',
+                { cause, fallbackError, log: loggerObject },
+            );
+        }
     }
 
 

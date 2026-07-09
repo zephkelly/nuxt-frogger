@@ -17,6 +17,12 @@ export default defineFroggerOptions({
         version: '1.0.0',
     },
 
+    // Static base context stamped onto every ambient `frogger.*` log at boot,
+    // no plugin required. Must be serializable (no functions). For runtime-only
+    // values (tenant, per-deployment env) register a client plugin that taps the
+    // `frogger:init` hook and calls `frogger.addContext(...)`.
+    // context: { service: 'playground', region: 'local' },
+
     serverModule: true,
     clientModule: true,
 

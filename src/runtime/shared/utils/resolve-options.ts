@@ -10,6 +10,7 @@ import {
 } from '../types/module-options'
 
 import type { BatchOptions } from '../types/batch'
+import type { LogContext } from '../types/log'
 import type { FileOptions } from '../types/file'
 import { DEFAULT_FILE } from '../types/file'
 import type { AppInfoOptions } from '../../app-info/types'
@@ -170,6 +171,8 @@ export interface ResolvedFroggerOptions {
     clientModule: boolean
     serverModule: boolean | { autoEventCapture?: boolean }
     app: AppInfoOptions
+    /** Static base context stamped onto every ambient log (serializable only). */
+    context?: LogContext
     verbose?: boolean
     logLevel?: InternalLogLevel
     batch: BatchOptions | false
@@ -462,6 +465,7 @@ export function resolveFroggerOptions(options: ModuleOptions = {}): ResolvedFrog
         clientModule: options.clientModule ?? true,
         serverModule: options.serverModule ?? { autoEventCapture: true },
         app: options.app ?? DEFAULT_APP,
+        context: options.context,
         verbose: options.verbose,
         logLevel: options.logLevel,
         batch: options.batch === false ? false : defu(options.batch, DEFAULT_BATCH),

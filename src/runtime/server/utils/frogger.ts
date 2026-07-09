@@ -23,6 +23,11 @@ function buildServerLogger(event?: H3Event): IFroggerLogger {
         batch: config.public.frogger.batch,
         //@ts-ignore
         endpoint: config.public.frogger.endpoint,
+        // Static boot-context from `frogger.config.ts`, applied to the ambient
+        // server logger to match the client. Dynamic per-request context still
+        // comes from the event/trace scope.
+        //@ts-ignore
+        context: config.public.frogger.context,
     } as ServerLoggerOptions
 
     // event.context.frogger is populated by the trace-headers server plugin from

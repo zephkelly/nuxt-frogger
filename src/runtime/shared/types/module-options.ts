@@ -6,6 +6,7 @@ import type { ScrubberOptions } from "../../scrubber/options";
 import type { GlobalErrorCaptureOptions } from "./global-error";
 import type { InternalLogLevel } from "../utils/internal-log";
 import type { FroggerTransportConfig } from "./transports";
+import type { LogContext } from "./log";
 
 export type {
     FroggerTransportConfig,
@@ -70,6 +71,21 @@ export interface ModuleOptions {
     logLevel?: InternalLogLevel
 
     app?: AppInfoOptions,
+
+    /**
+     * Base context stamped onto every ambient `frogger.*` log at boot, without
+     * needing a plugin. Use it for static, build-time-known fields shared by all
+     * logs (service name, region, build/version metadata).
+     *
+     * Because `frogger.config.ts` is evaluated at build time and serialized into
+     * runtime config, this must be a plain, serializable object — no functions.
+     * For values only known at runtime (per-session tenant, per-deployment env),
+     * register a client plugin that taps the `frogger:init` hook and calls
+     * `frogger.addContext(...)`; hook context merges on top of this.
+     *
+     * @default undefined
+     */
+    context?: LogContext
 
     batch?: BatchOptions | false
 

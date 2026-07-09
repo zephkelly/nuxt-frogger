@@ -48,8 +48,13 @@ Commands (pnpm lockfile present; scripts shell out to npm/nuxi):
    build `LoggerObject` → optional scrub → emit to reporters (console) → `processLoggerObject`.
 3. On the client, `processLoggerObject` enqueues into the client `LogQueueService`
    ([src/runtime/app/services/log-queue.ts](src/runtime/app/services/log-queue.ts)) — in-memory batching,
-   retry with exponential backoff, 429-aware. Registered as `nuxtApp.$logQueue` by
-   [src/runtime/app/plugins/log-queue.client.ts](src/runtime/app/plugins/log-queue.client.ts).
+   retry with exponential backoff, 429-aware. The queue is resolved lazily and cached on the app via
+   `getLogQueue(nuxtApp)` ([src/runtime/app/services/get-log-queue.ts](src/runtime/app/services/get-log-queue.ts)),
+   NOT injected by a plugin — so `frogger.*` can never dereference an unready queue regardless of boot order.
+   [src/runtime/app/plugins/log-queue.client.ts](src/runtime/app/plugins/log-queue.client.ts) (`enforce: 'pre'`)
+   is now lifecycle-only: internal-log level, the `app:mounted` flag, and flush-on-`pagehide`.
+   If the queue path throws, `processLoggerObject` falls back to a direct send and, only if that also fails,
+   an **ungated** `console.error` — a customer log is never silently dropped.
    (During SSR, logs are sent immediately instead of queued.)
 4. The queue POSTs a `LoggerObjectBatch` to **`/api/_frogger/logs`**.
 
@@ -100,7 +105,7 @@ parent of the first log on the server" (and vice-versa).
 
 **Client (auto-imported composables):**
 - `useFrogger(options?: ClientLoggerOptions): IFroggerLogger` — main logger factory (fresh instance = fresh span).
-- `frogger` — auto-imported **ambient** logger; a drop-in for `console.*` (variadic `log`/`info`/`warn`/`error`/`debug`/… plus `getHeaders`/`child`/`span`/`startSpan`/etc.). Backed by ONE app-scoped `ClientFrogger` (single span chain); inside `frogger.span(...)` it resolves to the active span's child instead. Impl: [app/frogger.ts](src/runtime/app/frogger.ts); shared facade [logger/ambient.ts](src/runtime/logger/ambient.ts); arg reconciliation [shared/utils/normalize-log-args.ts](src/runtime/shared/utils/normalize-log-args.ts) (trailing plain object → `ctx`, leading args → `msg`, `Error` → `ctx.error`).
+- `frogger` — auto-imported **ambient** logger; a drop-in for `console.*` (variadic `log`/`info`/`warn`/`error`/`debug`/… plus `getHeaders`/`child`/`span`/`startSpan`/etc.). Backed by ONE app-scoped `ClientFrogger` (single span chain); inside `frogger.span(...)` it resolves to the active span's child instead. Impl: [app/frogger.ts](src/runtime/app/frogger.ts) (`getAmbientClientLogger`); shared facade [logger/ambient.ts](src/runtime/logger/ambient.ts); arg reconciliation [shared/utils/normalize-log-args.ts](src/runtime/shared/utils/normalize-log-args.ts) (trailing plain object → `ctx`, leading args → `msg`, `Error` → `ctx.error`). **Boot-context:** on first construction it stamps the static `context` object from `frogger.config.ts` (serialized into `public.frogger.context`), then fires the one-time `frogger:init` Nuxt hook with the logger so a client plugin can add dynamic base context (`frogger.addContext(...)`) that can't be serialized. The server ambient logger applies the same static `context` (per-request; no `frogger:init` hook there).
 - `useFroggerWebSocket()` — fluent dev-only live-log subscriber (`.channel().levels().types().sources().tags().onMessage().connect()`). Only registered when `websocket` **and** `serverModule` are enabled.
 
 **Server (auto-imported, Nitro):**

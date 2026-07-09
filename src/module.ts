@@ -112,6 +112,7 @@ export default defineNuxtModule<ModuleOptions>({
             public: {
                 frogger: {
                     app: resolved.app,
+                    context: resolved.context,
                     logLevel: internalLogLevel,
                     clientModule: resolved.clientModule,
                     serverModule: serverModuleEnabled,
@@ -127,6 +128,7 @@ export default defineNuxtModule<ModuleOptions>({
             },
             frogger: {
                 serverModule: resolved.serverModule,
+                context: resolved.context,
                 logLevel: internalLogLevel,
 
                 // Server-only (mixed file + http union): keys stay out of the

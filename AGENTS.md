@@ -30,6 +30,9 @@ zero-setup logger, not a distributed-microservice observability stack.
 | Docs (VitePress) | [docs/](docs/) |
 | Tests (Vitest) | [test/](test/) |
 | Dev sandbox | [playground/](playground/) |
+| Testing helpers subpath (`nuxt-frogger/testing`) | [src/testing/index.ts](src/testing/index.ts) |
+| Playwright fixtures subpath (`nuxt-frogger/playwright`) | [src/playwright/index.ts](src/playwright/index.ts) |
+| Extra build entries for the subpaths | [build.config.ts](build.config.ts) |
 
 Commands (pnpm lockfile present; scripts shell out to npm/nuxi):
 - `npm run dev` — run the playground with the module linked.
@@ -87,7 +90,7 @@ parent of the first log on the server" (and vice-versa).
 | Dir | What lives here | Start at |
 | --- | --- | --- |
 | `logger/` | Abstract base + client/server loggers; the `IFroggerLogger` contract | [base-frogger.ts](src/runtime/logger/base-frogger.ts), [types.ts](src/runtime/logger/types.ts) |
-| `logger/_transports/` | `base`, `batch`, `file`, `http`, `websocket` transports | [file-transport.ts](src/runtime/logger/_transports/file-transport.ts) |
+| `logger/_transports/` | `base`, `batch`, `file`, `http`, `memory`, `websocket` transports | [file-transport.ts](src/runtime/logger/_transports/file-transport.ts) |
 | `logger/_reporters/` | Console reporter (terminal/devtools output) | [console-reporter.ts](src/runtime/logger/_reporters/console-reporter.ts) |
 | `logger/other/` | `console-frogger`, `test-frogger` (lightweight variants) | [console-frogger.ts](src/runtime/logger/other/console-frogger.ts) |
 | `app/` | Client composables, the client log queue, client plugins | [composables/useFrogger.ts](src/runtime/app/composables/useFrogger.ts) |
@@ -98,7 +101,7 @@ parent of the first log on the server" (and vice-versa).
 | `app-info/` | Parse `app` option into `{ name, version }` | [parse.ts](src/runtime/app-info/parse.ts) |
 | `shared/types/` | `LoggerObject`, `LoggerObjectBatch`, options, trace types | [log.ts](src/runtime/shared/types/log.ts), [batch.ts](src/runtime/shared/types/batch.ts) |
 | `shared/utils/` | Trace headers, log-level parser, uuid (v7), config loader, resolver, batch splitter | [resolve-options.ts](src/runtime/shared/utils/resolve-options.ts), [split-batch.ts](src/runtime/shared/utils/split-batch.ts) |
-| `shared/transports/` | Declarative transport factories (`fileTransport`/`httpTransport`/`observeTransport`) | [factories.ts](src/runtime/shared/transports/factories.ts) |
+| `shared/transports/` | Declarative transport factories (`fileTransport`/`httpTransport`/`observeTransport`/`memoryTransport`) | [factories.ts](src/runtime/shared/transports/factories.ts) |
 | `options.ts` | Re-exports `defineFroggerOptions` + transport factories (the `#frogger/config` alias) | [options.ts](src/runtime/options.ts) |
 
 ## Public API
@@ -118,7 +121,13 @@ parent of the first log on the server" (and vice-versa).
 - `fileTransport(options?)` → `{ type: 'file', ... }` — server-only rotated JSON-lines files. **The only way to enable file logging** (no longer a default).
 - `httpTransport(options)` → `{ type: 'http', ... }` — a generic HTTP ingest destination.
 - `observeTransport({ url, key, client?, server? })` → `{ type: 'observe', ... }` — a nuxt-observe deployment; the resolver expands it to the observe ingest contract (path `/api/observe/ingest/frogger`, `x-api-key` server-side, `?key=` browser-side, 500-event / ~950 KiB caps).
-- Each factory returns a plain serializable tagged object (survives `structuredClone` / `runtimeConfig`). The resolver ([resolve-options.ts](src/runtime/shared/utils/resolve-options.ts)) switches on `type` (untagged = `http`, backward compat) and splits entries into `transports.server` (`ResolvedServerTransport` union of file + http) and `transports.client` (`ResolvedHttpTransport`). Untagged `{ url, apiKey }` objects still work.
+- `memoryTransport({ name?, server?, client? })` → `{ type: 'memory', ... }` — server-only in-memory capture for tests. `MemoryTransport` ([memory-transport.ts](src/runtime/logger/_transports/memory-transport.ts)) pushes every log into an array; a `name` shares that array through a `globalThis.__FROGGER_MEMORY_STORE__` registry so `getCapturedLogs({ name })` from `nuxt-frogger/testing` reads the same captures. `client: true` warns and is ignored (server-only for v1, matching `file`).
+- Each factory returns a plain serializable tagged object (survives `structuredClone` / `runtimeConfig`). The resolver ([resolve-options.ts](src/runtime/shared/utils/resolve-options.ts)) switches on `type` (untagged = `http`, backward compat) and splits entries into `transports.server` (`ResolvedServerTransport` union of file + http + memory) and `transports.client` (`ResolvedHttpTransport`). Untagged `{ url, apiKey }` objects still work.
+
+**Testing subpaths** (not auto-imported; imported directly by test files, packaged as separate `dist/` entries via [build.config.ts](build.config.ts); the tooling deps are optional peers):
+- `nuxt-frogger/testing` ([src/testing/index.ts](src/testing/index.ts)) — Vitest helpers built on the memory transport. Pure at import time (Nuxt `#imports` and `vitest` are reached only via dynamic import). Exports `MemoryTransport`/`memoryTransport` (re-export), `getCapturedLogs(opts?)` + `clearCapturedLogs(name?)` (read/clear the named registry store), `filterLogs(logs, matcher)` (the shared `{ level, type, msg, ctx, traceId }` predicate), `flushFrogger()` (drains `ServerLogQueueService` — pair with `batch: false`), `registerFroggerMatchers()` (opt-in `expect.extend({ toHaveLogged })` + a `vitest` type augmentation), and `froggerTestRuntimeConfig()`/`stubFroggerFetch()` (the `useRuntimeConfig()` value + `$fetch` stub the in-repo `*.nuxt.test.ts` files build by hand — note `mockNuxtImport` is a compile-time macro that must stay at the test-file top level).
+- `nuxt-frogger/playwright` ([src/playwright/index.ts](src/playwright/index.ts)) — Playwright fixtures. Imports only `@playwright/test` + the pure `filterLogs`. Exports `FROGGER_INTERNAL_PREFIX` (the stable `🐸 Frogger` tripwire string from [internal-log.ts](src/runtime/shared/utils/internal-log.ts)), `useFroggerCapture(page, opts?)` (routes the client→server batch POSTs, `route.continue()`s, and exposes `getLogs`/`getBatches`/`waitForLog`/`expectLog`/`clear`), and an extended `test`/`expect` with a `froggerCapture` fixture plus an opt-in `failOnFroggerInternalErrors` tripwire fixture.
+- Cross-dir imports in these two files carry explicit `.js` extensions on purpose: mkdist leaves out-of-entry specifiers verbatim, and the built output must resolve under plain Node ESM (Playwright loads it that way).
 
 **The logger contract** — [`IFroggerLogger`](src/runtime/logger/types.ts) (identical on client + server):
 - Levels (consola-based): `fatal`/`error` (0), `warn` (1), `log` (2), `info`/`success`/`fail`/`ready`/`start` (3), `debug` (4), `trace` (5), plus `silent` (-999), `verbose` (999), and dynamic `logLevel(type, msg, ctx)`.
@@ -168,7 +177,7 @@ These are the current pain points; an improvement plan lives in [ROADMAP.md](ROA
 - **Duplication:** [server/utils/auto.ts](src/runtime/server/utils/auto.ts) and [server/utils/manual.ts](src/runtime/server/utils/manual.ts) have effectively identical bodies; only the public overload arg-order differs (`(options?, event?)` vs `(event?, options?)`).
 - **Misleading dead code (not a runtime bug):** `ServerFroggerLogger.createChild` sets `spanId: parentSpanId` ([server/index.ts](src/runtime/logger/server/index.ts#L103)), but `generateTraceContext` only consumes `traceId`/`parentId` and always mints a fresh `spanId` — so that field is never read.
 - ~~**HttpTransport silently swallowed send failures**~~ — **RESOLVED**. `performHttpRequest` caught every error and only logged `H3Error` (which `$fetch` never throws — it throws `FetchError`), never rethrowing, so `handleSendFailure` (the whole retry machinery) was dead code. It now rethrows; `sendChunk`/`handleSendFailure` classify: a non-429 4xx drops immediately (deterministic client error), 429/5xx/network back off up to `maxRetries`. Behavioral change (silent drop → retry-then-drop); covered by tests.
-- **Test coverage is uneven:** strong on parsers/scrubber/websocket/trace utils and now the resolver/transports/split-batch; still thin on the core logger classes and the end-to-end client→server flow.
+- **Test coverage is uneven:** strong on parsers/scrubber/websocket/trace utils and now the resolver/transports/split-batch/memory-transport (+ the `toHaveLogged` matcher and the memory fan-out in the server-queue nuxt test); still thin on the core logger classes and the end-to-end client→server flow.
 
 ## Conventions
 

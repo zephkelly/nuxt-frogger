@@ -6,12 +6,14 @@ export {
     fileTransport,
     httpTransport,
     observeTransport,
+    memoryTransport,
 } from "./shared/transports/factories";
 export type {
     FroggerTransportConfig,
     FileTransportConfig,
     HttpTransportConfig,
     ObserveTransportConfig,
+    MemoryTransportConfig,
 } from "./shared/types/transports";
 
 // Scrub primitives — provided for composition, never applied automatically.

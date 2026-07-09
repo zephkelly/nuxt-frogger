@@ -17,6 +17,14 @@
     ".": {
       "types": "./dist/types.d.mts",
       "import": "./dist/module.mjs"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js"
+    },
+    "./playwright": {
+      "types": "./dist/playwright/index.d.ts",
+      "import": "./dist/playwright/index.js"
     }
   },
   "main": "./dist/module.mjs",
@@ -24,6 +32,12 @@
     "*": {
       ".": [
         "./dist/types.d.mts"
+      ],
+      "testing": [
+        "./dist/testing/index.d.ts"
+      ],
+      "playwright": [
+        "./dist/playwright/index.d.ts"
       ]
     }
   },
@@ -49,12 +63,29 @@
     "defu": "^6.1.4",
     "vitepress-plugin-group-icons": "^1.6.4"
   },
+  "peerDependencies": {
+    "@nuxt/test-utils": "^3.0.0",
+    "@playwright/test": "^1.0.0",
+    "vitest": "^2.0.0 || ^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@nuxt/test-utils": {
+      "optional": true
+    },
+    "@playwright/test": {
+      "optional": true
+    },
+    "vitest": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@nuxt/devtools": "^3.2.4",
     "@nuxt/eslint-config": "^1.16.0",
     "@nuxt/module-builder": "^1.0.2",
     "@nuxt/schema": "^4.4.8",
     "@nuxt/test-utils": "^3.23.0",
+    "@playwright/test": "^1.61.1",
     "@types/node": "latest",
     "@vitest/coverage-v8": "^3.2.4",
     "@vue/test-utils": "^2.4.6",

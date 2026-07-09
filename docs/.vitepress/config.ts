@@ -39,6 +39,7 @@ export default defineConfig({
                     { text: 'Rate Limiting', link: '/guides/rate-limiting' },
                     { text: 'Error Capture', link: '/guides/error-capture' },
                     { text: 'Transports & HttpTransport', link: '/guides/transports' },
+                    { text: 'Testing', link: '/guides/testing' },
                 ]
             },
             {

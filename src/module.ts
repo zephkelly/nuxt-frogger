@@ -26,12 +26,14 @@ export {
     fileTransport,
     httpTransport,
     observeTransport,
+    memoryTransport,
 } from './runtime/shared/transports/factories'
 export type {
     FroggerTransportConfig,
     FileTransportConfig,
     HttpTransportConfig,
     ObserveTransportConfig,
+    MemoryTransportConfig,
 } from './runtime/shared/types/transports'
 
 // Mirror of the level ordering in internal-log.ts so build-time banner gating

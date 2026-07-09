@@ -24,6 +24,7 @@ import type {
     HttpTransportConfig,
     FileTransportConfig,
     ObserveTransportConfig,
+    MemoryTransportConfig,
     ResolvedHttpTransport,
     ResolvedFileTransport,
     ResolvedServerTransport,
@@ -365,6 +366,15 @@ function resolveTransports(transports: FroggerTransportConfig[] | undefined): {
                 froggerInternal.warn('A `file` transport is server-only; `client: true` is ignored.')
             }
             server.push(normalizeFile(file))
+            continue
+        }
+
+        if (type === 'memory') {
+            const mem = t as MemoryTransportConfig
+            if (mem.client === true) {
+                froggerInternal.warn('A `memory` transport is server-only; `client: true` is ignored.')
+            }
+            server.push({ type: 'memory', name: mem.name ?? 'memory' })
             continue
         }
 

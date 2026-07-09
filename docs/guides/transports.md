@@ -173,6 +173,23 @@ Each entry is a destination:
 Declarative transports are independent of your [`preset`](/configuration) — they
 work under any preset, and default to no extra destinations.
 
+### `memoryTransport()` — capture logs for tests
+
+`memoryTransport({ name })` is a server-only destination that keeps every log in
+an in-memory array instead of writing to a file or HTTP endpoint. It's the
+foundation of Frogger's [testing helpers](/guides/testing): add it to
+`transports`, drive the code under test, then read the captures back with
+`getCapturedLogs({ name })` from `nuxt-frogger/testing`.
+
+```ts
+import { memoryTransport } from '#frogger/config'
+
+transports: [memoryTransport({ name: 'test' })]
+```
+
+The `name` is the shared key between the transport and the helper. See the
+[Testing guide](/guides/testing) for the full workflow.
+
 ### Shipping logs to a collector
 
 A client-direct POST to a different origin with `x-api-key` + a JSON body

@@ -539,4 +539,5 @@ Now that you can make logs, explore what Frogger does with them:
 - [Rate Limiting](/guides/rate-limiting) — protect the ingest endpoint from log floods.
 - [Error Capture](/guides/error-capture) — automatic capture of uncaught client and server errors.
 - [Transports & HttpTransport](/guides/transports) — file output, reporters, and forwarding logs.
+- [Testing your logging](/guides/testing) — capture logs in memory and assert your app emitted them, in Vitest and Playwright.
 - [Logger API](/reference/logger-api) — the full `IFroggerLogger` reference.

@@ -118,11 +118,44 @@ export interface ObserveTransportConfig {
     retryDelay?: number
 }
 
+/**
+ * Declarative in-memory capture destination. Server-only (for v1, mirroring
+ * `file`). Every log batch is pushed into an array instead of a real sink, so a
+ * test can read back exactly what the app logged.
+ *
+ * A `name` writes into a process-global registry shared with the
+ * `nuxt-frogger/testing` helpers (`getCapturedLogs({ name })`); an unnamed entry
+ * keeps a private array only reachable through a direct `MemoryTransport`
+ * reference.
+ */
+export interface MemoryTransportConfig {
+    type: 'memory'
+    /**
+     * Registry key. When set, the constructed `MemoryTransport` shares its array
+     * with `getCapturedLogs({ name })` from `nuxt-frogger/testing`.
+     */
+    name?: string
+    /**
+     * Capture from the browser client log queue. Server-only for v1 (matching
+     * `file`); `client: true` is ignored with a warning.
+     *
+     * @default false
+     */
+    client?: boolean
+    /**
+     * Capture from the Nitro server log queue.
+     *
+     * @default true
+     */
+    server?: boolean
+}
+
 /** Any declarative transport entry, tagged by `type`. */
 export type FroggerTransportConfig =
     | HttpTransportConfig
     | FileTransportConfig
     | ObserveTransportConfig
+    | MemoryTransportConfig
 
 /**
  * A single normalised HTTP transport as emitted by `resolveFroggerOptions` into
@@ -165,5 +198,18 @@ export interface ResolvedFileTransport {
     options: Required<FileOptions>
 }
 
-/** A server-bound transport is either an HTTP or a file destination. */
-export type ResolvedServerTransport = ResolvedHttpTransport | ResolvedFileTransport
+/**
+ * A single normalised memory transport as emitted into `runtimeConfig.frogger`.
+ * Server-only. Carries only the registry `name` — the captured array lives in
+ * the process-global store keyed by that name, never in runtime config.
+ */
+export interface ResolvedMemoryTransport {
+    type: 'memory'
+    name: string
+}
+
+/** A server-bound transport is an HTTP, file, or memory destination. */
+export type ResolvedServerTransport =
+    | ResolvedHttpTransport
+    | ResolvedFileTransport
+    | ResolvedMemoryTransport

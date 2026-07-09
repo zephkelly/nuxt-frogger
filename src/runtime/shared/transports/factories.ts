@@ -3,6 +3,7 @@ import type {
     FileTransportConfig,
     HttpTransportConfig,
     ObserveTransportConfig,
+    MemoryTransportConfig,
 } from '../types/transports'
 
 /**
@@ -51,4 +52,18 @@ export function httpTransport(options: Omit<HttpTransportConfig, 'type'>): HttpT
  */
 export function observeTransport(options: Omit<ObserveTransportConfig, 'type'>): ObserveTransportConfig {
     return { type: 'observe', ...options }
+}
+
+/**
+ * In-memory capture destination for tests. Server-only. Every log batch is kept
+ * in an array instead of hitting a real sink; a `name` shares that array with
+ * the `nuxt-frogger/testing` helpers so a test can assert what was logged.
+ *
+ * ```ts
+ * transports: [memoryTransport({ name: 'test' })]
+ * // then, in a test: getCapturedLogs({ name: 'test' })
+ * ```
+ */
+export function memoryTransport(options: Omit<MemoryTransportConfig, 'type'> = {}): MemoryTransportConfig {
+    return { type: 'memory', ...options }
 }

@@ -22,12 +22,32 @@ vi.mock('../../src/runtime/websocket/state/factory', () => ({
 
 import { ServerLogQueueService } from '../../src/runtime/server/services/server-log-queue'
 import { DEFAULT_FILE } from '../../src/runtime/shared/types/file'
+import { getCapturedLogs, clearCapturedLogs, flushFrogger } from '../../src/testing'
+
+import type { LoggerObject } from '../../src/runtime/shared/types/log'
 
 function fileEntry(overrides: Partial<typeof DEFAULT_FILE> = {}): ResolvedServerTransport {
     return {
         type: 'file',
         name: 'file',
         options: { ...DEFAULT_FILE, directory: join(tmpdir(), 'frogger-test-logs'), ...overrides },
+    }
+}
+
+function memoryEntry(name = 'memory'): ResolvedServerTransport {
+    return { type: 'memory', name }
+}
+
+function makeLog(overrides: Partial<LoggerObject> = {}): LoggerObject {
+    return {
+        time: 0,
+        lvl: 3,
+        type: 'info',
+        msg: 'captured',
+        ctx: {},
+        env: 'server',
+        trace: { traceId: 'trace-a', spanId: 'span-a' },
+        ...overrides,
     }
 }
 
@@ -125,6 +145,26 @@ describe('ServerLogQueueService transport construction', () => {
         setConfig([bad, httpEntry('good')])
         const queue = freshQueue()
         expect(downstreamNames(queue)).toEqual(['FroggerHttpTransport'])
+    })
+
+    it('constructs a MemoryTransport for a memory entry', () => {
+        setConfig([memoryEntry()])
+        const queue = freshQueue()
+        expect(downstreamNames(queue)).toContain('FroggerMemoryTransport')
+    })
+
+    it('captures an enqueued batch readable via getCapturedLogs after flush', async () => {
+        clearCapturedLogs('cap')
+        // `batch: false` is the documented recommendation for deterministic
+        // capture: logs reach the memory transport synchronously on enqueue.
+        setConfig([memoryEntry('cap')], { batch: false })
+        const queue = freshQueue()
+
+        queue.enqueueBatch({ logs: [makeLog({ msg: 'first' }), makeLog({ msg: 'second' })] })
+        await flushFrogger()
+
+        expect(getCapturedLogs({ name: 'cap' }).map(l => l.msg)).toEqual(['first', 'second'])
+        expect(getCapturedLogs({ name: 'cap', msg: 'first' })).toHaveLength(1)
     })
 
     it('addTransport still registers a transport imperatively', () => {

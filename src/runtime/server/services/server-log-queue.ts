@@ -10,6 +10,7 @@ import type { BatchOptions } from '../../shared/types/batch'
 
 import { LogScrubber } from '../../scrubber'
 import { FileTransport } from '../../logger/_transports/file-transport'
+import { MemoryTransport } from '../../logger/_transports/memory-transport'
 import { HttpTransport } from '../../logger/_transports/http-transport'
 import { WebSocketTransport } from '../../logger/_transports/websocket-transport'
 import { createWebSocketStateKVLayer } from '../../websocket/state/factory'
@@ -107,6 +108,11 @@ export class ServerLogQueueService {
             try {
                 if (t.type === 'file') {
                     transporters.push(new FileTransport(t.options));
+                    continue;
+                }
+
+                if (t.type === 'memory') {
+                    transporters.push(new MemoryTransport({ name: t.name }));
                     continue;
                 }
 

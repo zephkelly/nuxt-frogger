@@ -18,6 +18,25 @@ export default defineFroggerOptions({
 });
 ```
 
+## Metrics (opt-in)
+
+Frogger can also collect **metrics** — a fully separate pipeline from logging,
+**off by default**. Turn it on with `metrics: true` to auto-collect Web Vitals
+(LCP/CLS/INP/FCP/TTFB) and a per-batch device/network envelope:
+
+```ts
+// frogger.config.ts
+import { defineFroggerOptions } from '#frogger/config';
+
+export default defineFroggerOptions({
+    metrics: true,
+});
+```
+
+Metrics are stored raw and aggregated on read, carry an optional trace exemplar
+linking each measurement to the page's trace, and never touch the logging
+pipeline. See the [Metrics guide](https://zephkelly.github.io/nuxt-frogger/guides/metrics) for the config reference and cardinality model.
+
 ## Installation
 
 ### Automatic Installation

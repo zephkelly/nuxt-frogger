@@ -18,14 +18,17 @@ import { test as base, expect } from '@playwright/test'
 // Explicit extensions: these specifiers cross build-entry dirs, so mkdist emits
 // them verbatim and they must resolve under plain Node ESM (how Playwright loads
 // this package's built output).
-import { filterLogs } from '../testing/index.js'
+import { filterLogs, filterMetrics } from '../testing/index.js'
 
 import type { Page } from '@playwright/test'
-import type { LogMatcher } from '../testing/index.js'
+import type { LogMatcher, MetricMatcher } from '../testing/index.js'
 import type { LoggerObject } from '../runtime/shared/types/log.js'
 import type { LoggerObjectBatch } from '../runtime/shared/types/batch.js'
+import type { MetricObject } from '../runtime/metrics/shared/types/metric.js'
+import type { MetricObjectBatch } from '../runtime/metrics/shared/types/metric-batch.js'
 
 export type { LogMatcher, LoggerObject, LoggerObjectBatch }
+export type { MetricMatcher, MetricObject, MetricObjectBatch }
 
 /**
  * The stable prefix Frogger stamps on every internal-diagnostics console line
@@ -36,6 +39,9 @@ export const FROGGER_INTERNAL_PREFIX = '🐸 Frogger'
 
 /** Default client→server ingest route Frogger POSTs batches to. */
 export const DEFAULT_FROGGER_ENDPOINT = '/api/_frogger/logs'
+
+/** Default client→server metrics ingest route. */
+export const DEFAULT_FROGGER_METRICS_ENDPOINT = '/api/_frogger/metrics'
 
 export interface FroggerCaptureOptions {
     /**
@@ -130,6 +136,103 @@ export async function useFroggerCapture(
             matcher ? filterLogs(allLogs(), matcher) : allLogs(),
         waitForLog,
         expectLog: waitForLog,
+        clear: () => {
+            batches.length = 0
+        },
+    }
+}
+
+export interface FroggerMetricsCaptureOptions {
+    /**
+     * Metrics ingest route to intercept. Matched as `**` + endpoint.
+     * @default {@link DEFAULT_FROGGER_METRICS_ENDPOINT}
+     */
+    endpoint?: string
+}
+
+export interface FroggerMetricsCapture {
+    /** Every captured metric (flattened across batches), optionally filtered. */
+    getMetrics(matcher?: MetricMatcher): MetricObject[]
+    /** Raw metric batches as received, newest last. */
+    getBatches(): MetricObjectBatch[]
+    /** Resolve once a metric matching `matcher` is captured, else reject on timeout. */
+    waitForMetric(matcher: MetricMatcher, options?: WaitForLogOptions): Promise<MetricObject>
+    /** Assert (waiting up to the timeout) that a matching metric was captured. */
+    expectMetric(matcher: MetricMatcher, options?: WaitForLogOptions): Promise<MetricObject>
+    /** Drop all captured batches. */
+    clear(): void
+}
+
+/**
+ * Intercept the client→server metric POSTs on `page`, collecting each
+ * `MetricObjectBatch` body, and `route.continue()` so the app still works.
+ *
+ * Metric batches may arrive as `sendBeacon` `text/plain` bodies, so the body is
+ * read as a raw string and JSON-parsed (rather than `postDataJSON()`).
+ *
+ * ```ts
+ * const metrics = await useFroggerMetricsCapture(page)
+ * await page.goto('/')
+ * await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+ * const lcp = await metrics.expectMetric({ name: 'web.vital.lcp' })
+ * expect(lcp.labels?.rating).toBeTruthy()
+ * ```
+ */
+export async function useFroggerMetricsCapture(
+    page: Page,
+    options: FroggerMetricsCaptureOptions = {},
+): Promise<FroggerMetricsCapture> {
+    const endpoint = options.endpoint ?? DEFAULT_FROGGER_METRICS_ENDPOINT
+    const batches: MetricObjectBatch[] = []
+
+    await page.route(`**${endpoint}`, async (route) => {
+        const request = route.request()
+        if (request.method() === 'POST') {
+            try {
+                const raw = request.postData()
+                const body = raw ? (JSON.parse(raw) as MetricObjectBatch) : null
+                if (body && Array.isArray(body.metrics)) {
+                    batches.push(body)
+                }
+            }
+            catch {
+                // Malformed / non-JSON body — let it through untouched.
+            }
+        }
+        await route.continue()
+    })
+
+    const allMetrics = (): MetricObject[] => batches.flatMap(b => b.metrics)
+
+    const waitForMetric = async (
+        matcher: MetricMatcher,
+        waitOptions: WaitForLogOptions = {},
+    ): Promise<MetricObject> => {
+        const timeout = waitOptions.timeout ?? 5000
+        const interval = waitOptions.interval ?? 50
+        const start = Date.now()
+
+        for (;;) {
+            const matches = filterMetrics(allMetrics(), matcher)
+            if (matches.length > 0) {
+                return matches[0]!
+            }
+            if (Date.now() - start >= timeout) {
+                throw new Error(
+                    `useFroggerMetricsCapture: timed out after ${timeout}ms waiting for a metric matching `
+                    + `${JSON.stringify(matcher)} (captured ${allMetrics().length} metric(s)).`,
+                )
+            }
+            await new Promise(resolve => setTimeout(resolve, interval))
+        }
+    }
+
+    return {
+        getBatches: () => batches,
+        getMetrics: (matcher?: MetricMatcher) =>
+            matcher ? filterMetrics(allMetrics(), matcher) : allMetrics(),
+        waitForMetric,
+        expectMetric: waitForMetric,
         clear: () => {
             batches.length = 0
         },

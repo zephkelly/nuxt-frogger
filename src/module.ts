@@ -12,7 +12,7 @@ import {
 
 import { defu } from 'defu'
 
-import { DEFAULT_LOGGING_ENDPOINT } from './runtime/shared/types/module-options'
+import { DEFAULT_LOGGING_ENDPOINT, DEFAULT_METRICS_ENDPOINT } from './runtime/shared/types/module-options'
 
 import type { ModuleOptions } from './runtime/shared/types/module-options'
 import { loadFroggerConfig } from './runtime/shared/utils/frogger-config'
@@ -35,6 +35,18 @@ export type {
     ObserveTransportConfig,
     MemoryTransportConfig,
 } from './runtime/shared/types/transports'
+
+// Metric-transport factories + config types (parallel to the log factories).
+export {
+    metricFileTransport,
+    metricMemoryTransport,
+} from './runtime/metrics/shared/transports/factories'
+export type {
+    FroggerMetricTransportConfig,
+    MetricFileTransportConfig,
+    MetricMemoryTransportConfig,
+} from './runtime/metrics/shared/types/metric-transports'
+export type { MetricsOptions } from './runtime/metrics/shared/types/metric-options'
 
 // Mirror of the level ordering in internal-log.ts so build-time banner gating
 // can compare thresholds without importing runtime mutable state.
@@ -87,6 +99,12 @@ export default defineNuxtModule<ModuleOptions>({
             ? resolved.serverModule.autoEventCapture !== false
             : resolved.serverModule === true;
 
+        // Metrics are a fully separate, opt-in subsystem. When off, NOTHING is
+        // emitted: no plugin, no route, no runtime-config keys, no singleton —
+        // fully inert like every other opt-in subsystem.
+        const metrics = resolved.metrics;
+        const metricsEnabled = metrics !== false;
+
         // Resolve how loud Frogger is allowed to be about itself (build banners
         // here, internal runtime diagnostics via runtime config below).
         const internalLogLevel = resolveInternalLogLevel(
@@ -126,6 +144,18 @@ export default defineNuxtModule<ModuleOptions>({
                     errorCapture: resolved.errorCapture.client,
                     // ⚠️ apiKeys on client transports are bundle-visible.
                     transports: resolved.transports.client,
+                    // Metrics client config — present ONLY when metrics are on.
+                    ...(metricsEnabled ? {
+                        metrics: {
+                            endpoint: metrics.public.endpoint,
+                            webVitals: metrics.webVitals,
+                            deviceStats: metrics.deviceStats,
+                            sampleRate: metrics.sampleRate,
+                            maxEventsPerPage: metrics.maxEventsPerPage,
+                            batch: metrics.public.batch,
+                            transports: metrics.transports.client,
+                        },
+                    } : {}),
                 },
             },
             frogger: {
@@ -142,6 +172,13 @@ export default defineNuxtModule<ModuleOptions>({
                 websocket: resolved.websocket,
                 scrub: resolved.scrub,
                 errorCapture: resolved.errorCapture.server,
+                // Metrics server config (file/memory transports stay server-side).
+                ...(metricsEnabled ? {
+                    metrics: {
+                        transports: metrics.transports.server,
+                        batch: metrics.batch,
+                    },
+                } : {}),
             }
         };
 
@@ -277,6 +314,10 @@ export default defineNuxtModule<ModuleOptions>({
             addImportsDir(resolver.resolve('./runtime/app/utils'))
             addPlugin(resolver.resolve('./runtime/app/plugins/log-queue.client'))
 
+            if (metricsEnabled) {
+                addPlugin(resolver.resolve('./runtime/metrics/app/plugins/metrics.client'))
+            }
+
             if (resolved.errorCapture.client) {
                 if (allowInternal('info')) {
                     console.log('🐸 FROGGER: Setting up Vue global error capture');
@@ -324,6 +365,16 @@ export default defineNuxtModule<ModuleOptions>({
                 route: '/api/_frogger/logs',
                 handler: resolver.resolve('./runtime/server/api/logger.post'),
             })
+
+            // Metrics ingest route + queue lifecycle — registered ONLY when the
+            // metrics subsystem is enabled (unlike the always-on log route).
+            if (metricsEnabled) {
+                addServerPlugin(resolver.resolve('./runtime/metrics/server/plugins/metrics-queue.server'))
+                addServerHandler({
+                    route: DEFAULT_METRICS_ENDPOINT,
+                    handler: resolver.resolve('./runtime/metrics/server/api/metrics.post'),
+                })
+            }
 
             if (resolved.websocket && _nuxt.options.dev) {
                 const wsRoute = resolved.websocket.route || '/api/_frogger/dev-ws';

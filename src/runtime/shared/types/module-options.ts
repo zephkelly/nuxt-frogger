@@ -7,6 +7,7 @@ import type { GlobalErrorCaptureOptions } from "./global-error";
 import type { InternalLogLevel } from "../utils/internal-log";
 import type { FroggerTransportConfig } from "./transports";
 import type { LogContext } from "./log";
+import type { MetricsOptions } from "../../metrics/shared/types/metric-options";
 
 export type {
     FroggerTransportConfig,
@@ -129,6 +130,16 @@ export interface ModuleOptions {
      */
     transports?: FroggerTransportConfig[]
 
+    /**
+     * Metrics subsystem. A fully separate, opt-in capability from logging: OFF
+     * by default and never part of a `preset`. `true` auto-collects Web Vitals
+     * + a per-batch device envelope; pass an object to tune sampling, batching
+     * and metric transports. See {@link MetricsOptions}.
+     *
+     * @default false
+     */
+    metrics?: MetricsOptions | boolean
+
     public?: {
         /**
          * The app's own ingest route the browser POSTs to. `false` disables the
@@ -149,3 +160,5 @@ export const APP_MOUNTED_STATE_KEY = 'frogger-app-mounted-state';
 export const DEFAULT_LOGGING_ENDPOINT = '/api/_frogger/logs';
 
 export const DEFAULT_WEBSOCKET_ENDPOINT = '/api/_frogger/dev-ws';
+
+export const DEFAULT_METRICS_ENDPOINT = '/api/_frogger/metrics';

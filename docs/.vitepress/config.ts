@@ -38,6 +38,7 @@ export default defineConfig({
                     { text: 'Scrubbing & PII', link: '/guides/scrubbing' },
                     { text: 'Rate Limiting', link: '/guides/rate-limiting' },
                     { text: 'Error Capture', link: '/guides/error-capture' },
+                    { text: 'Metrics', link: '/guides/metrics' },
                     { text: 'Transports & HttpTransport', link: '/guides/transports' },
                     { text: 'Testing', link: '/guides/testing' },
                 ]

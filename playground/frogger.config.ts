@@ -1,4 +1,4 @@
-import { defineFroggerOptions, defineScrub, RECOMMENDED_RULES } from '#frogger/config';
+import { defineFroggerOptions, defineScrub, RECOMMENDED_RULES, metricFileTransport, metricMemoryTransport } from '#frogger/config';
 
 /**
  * Playground Frogger config.
@@ -58,6 +58,17 @@ export default defineFroggerOptions({
         .use(...RECOMMENDED_RULES)
         .redact('authToken', /.*secret.*/i)
         .build(),
+
+    // Metrics are a separate, opt-in subsystem (never part of a preset). Turned
+    // on here so the /metrics demo page collects Web Vitals + device stats.
+    // Raw metric events are written to logs/metrics/ and also captured in memory
+    // (named 'playground') so the e2e/testing helpers can read them back.
+    metrics: {
+        transports: [
+            metricFileTransport(),
+            metricMemoryTransport({ name: 'playground' }),
+        ],
+    },
 
     // Tune the per-IP / per-app rate-limit tiers here:
     // rateLimit: {

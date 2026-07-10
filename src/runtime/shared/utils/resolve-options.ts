@@ -31,6 +31,8 @@ import type {
 } from '../types/transports'
 import type { InternalLogLevel } from './internal-log'
 import { froggerInternal } from './internal-log'
+import type { ResolvedMetricsOptions } from '../../metrics/shared/types/metric-options'
+import { resolveMetricsOptions } from '../../metrics/shared/utils/resolve-metrics'
 
 /**
  * Options resolution for Frogger.
@@ -182,6 +184,12 @@ export interface ResolvedFroggerOptions {
     websocket: WebsocketOptions | false
     errorCapture: ResolvedErrorCapture
     /**
+     * Metrics subsystem, normalised to `false` (fully off — no plugin, route,
+     * runtime-config keys or singleton) or a complete config object (on).
+     * Independent of `preset`, like `transports`.
+     */
+    metrics: ResolvedMetricsOptions | false
+    /**
      * Log destinations, split by which side ships them. Server transports
      * (HTTP + file) land in `runtimeConfig.frogger` (keys stay server-side);
      * client transports (HTTP only) land in `runtimeConfig.public.frogger`
@@ -230,7 +238,7 @@ const mergeConfig = createDefu((obj, key, value) => {
  * never mutate — the module-level defaults across repeated `resolveFroggerOptions`
  * calls.
  */
-function normalizeToggle<T extends object>(
+export function normalizeToggle<T extends object>(
     value: T | boolean | undefined,
     defaults: T,
 ): T | false {
@@ -483,6 +491,7 @@ export function resolveFroggerOptions(options: ModuleOptions = {}): ResolvedFrog
         rateLimit: normalizeToggle(rateLimit, DEFAULT_RATE_LIMIT),
         websocket: normalizeToggle(websocket, DEFAULT_WEBSOCKET),
         errorCapture: normalizeErrorCapture(errorCapture),
+        metrics: resolveMetricsOptions(options.metrics),
         transports: resolveTransports(options.transports),
         public: {
             endpoint,

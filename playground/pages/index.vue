@@ -42,6 +42,7 @@ const pages = [
   { to: '/live-logs', title: 'Live Logs', desc: 'subscribe to the dev WebSocket with useFroggerWebSocket()' },
   { to: '/error-capture', title: 'Error Capture', desc: 'automatic capture of Vue errors and unhandled rejections' },
   { to: '/scrubbing', title: 'Scrubbing', desc: 'PII redaction in action, client and server' },
+  { to: '/metrics', title: 'Metrics', desc: 'Web Vitals + device stats, beamed to /api/_frogger/metrics' },
 ]
 </script>
 

@@ -85,6 +85,47 @@ client's trace.
 headers into `event.context.frogger`. Client↔server handoff means "last log on the client is the
 parent of the first log on the server" (and vice-versa).
 
+## Metrics subsystem (opt-in, fully parallel pipeline)
+
+`nuxt-frogger` also has a **metrics** subsystem under [src/runtime/metrics/](src/runtime/metrics/). It
+is **off by default**, opt-in via `metrics: true | MetricsOptions`, and **never part of a preset**
+(like `transports`). It is a structural parallel of the log pipeline that shares **zero body types and
+zero mutable state** with it: separate wire type ([`MetricObject`](src/runtime/metrics/shared/types/metric.ts)
+/ [`MetricObjectBatch`](src/runtime/metrics/shared/types/metric-batch.ts)), separate ingest route
+(`/api/_frogger/metrics`), separate queues, separate transport union + factories, and a separate
+`globalThis.__FROGGER_METRICS_STORE__` capture registry. When metrics are off, **nothing** is emitted
+(no plugin/route/runtime-config keys/singleton) — verified inert.
+
+- **v1 collects**: Web Vitals (LCP/CLS/INP/FCP/TTFB → gauges `web.vital.*`, timings in **seconds**,
+  CLS unitless) via the `web-vitals` dependency, plus a per-batch device/network envelope. No userland
+  API yet (config-driven auto-collection).
+- **Cardinality model**: `labels` = indexed dims (rating, route **pattern**), `attr` = non-indexed
+  detail (id, delta, navigationType); device context rides the batch **once**. Raw events stored,
+  **aggregate on read** — never pre-aggregate at ingest.
+- **Client** ([metrics/app/](src/runtime/metrics/app/)): `MetricsQueueService` (lazy via
+  `getMetricsQueue(nuxtApp)`, `$froggerMetricsQueue` cache key), `collector/web-vitals.ts` (dynamic
+  `import('web-vitals')` — client-only) + `collector/device.ts`, `session.ts` (decide-once sampling in
+  `sessionStorage`), `plugins/metrics.client.ts` (captures trace exemplar + route pattern once at init,
+  flushes on `visibilitychange → hidden` + `pagehide` via `sendBeacon`).
+- **Server** ([metrics/server/](src/runtime/metrics/server/)): `ServerMetricsQueueService` (singleton,
+  no scrubber, **no aggregation** — raw fan-out), `api/metrics.post.ts` (**must** read `text/plain`
+  beacon bodies via `readRawBody` + `JSON.parse`, not `readBody`; stamps `context.ua`), lifecycle
+  plugin. No rate limiting in v1 (deferred with the limiter refactor).
+- **Transports** ([metrics/_transports/](src/runtime/metrics/_transports/)): `IFroggerMetricsTransport`
+  + `MetricsBatchTransport` (retyped `insertSorted`/`maxAge`/`maxSize`) + `MetricsFileTransport`
+  (default dir `logs/metrics/`) + `MetricsMemoryTransport`. Factories `metricFileTransport()` /
+  `metricMemoryTransport()` in [metrics/shared/transports/factories.ts](src/runtime/metrics/shared/transports/factories.ts),
+  re-exported from [module.ts](src/module.ts) + [options.ts](src/runtime/options.ts).
+- **Config**: `resolveMetricsOptions()` in [metrics/shared/utils/resolve-metrics.ts](src/runtime/metrics/shared/utils/resolve-metrics.ts)
+  (reuses the now-exported `normalizeToggle`); distinct server/client batch defaults
+  (`DEFAULT_METRICS_BATCH` maxAge 15000 vs `DEFAULT_METRICS_PUBLIC_BATCH` maxAge 5000). Resolved into
+  `ResolvedFroggerOptions.metrics: ResolvedMetricsOptions | false`; runtimeConfig split
+  `public.frogger.metrics` (client) vs `frogger.metrics` (server transports) — present only when on.
+- **Testing**: [src/testing/index.ts](src/testing/index.ts) adds `getCapturedMetrics({ store, ...matcher })`
+  (store key is `store`, since `name` is the metric name), `clearCapturedMetrics`, `filterMetrics`,
+  `flushFroggerMetrics`; [src/playwright/index.ts](src/playwright/index.ts) adds
+  `useFroggerMetricsCapture(page)` (reads `postData()` — beacons are `text/plain`).
+
 ## Directory guide (`src/runtime/`)
 
 | Dir | What lives here | Start at |

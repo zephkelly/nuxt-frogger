@@ -16,6 +16,19 @@ export type {
     MemoryTransportConfig,
 } from "./shared/types/transports";
 
+// Metric-transport factories + config types. Pure (no #imports), importable
+// from frogger.config.ts. Add these to `metrics.transports`, not `transports`.
+export {
+    metricFileTransport,
+    metricMemoryTransport,
+} from "./metrics/shared/transports/factories";
+export type {
+    FroggerMetricTransportConfig,
+    MetricFileTransportConfig,
+    MetricMemoryTransportConfig,
+} from "./metrics/shared/types/metric-transports";
+export type { MetricsOptions } from "./metrics/shared/types/metric-options";
+
 // Scrub primitives — provided for composition, never applied automatically.
 export { defineScrub, fields } from "./scrubber/builder";
 export { RECOMMENDED_RULES } from "./scrubber/recommended";

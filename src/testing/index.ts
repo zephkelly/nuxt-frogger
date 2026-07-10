@@ -21,11 +21,20 @@ import {
     clearMemoryStore,
 } from '../runtime/logger/_transports/memory-transport.js'
 import { memoryTransport } from '../runtime/shared/transports/factories.js'
+import {
+    MetricsMemoryTransport,
+    getMetricsStore,
+    clearMetricsStore,
+} from '../runtime/metrics/_transports/memory-metrics-transport.js'
+import { metricMemoryTransport } from '../runtime/metrics/shared/transports/factories.js'
 
 import type { LoggerObject } from '../runtime/shared/types/log.js'
+import type { MetricObject, MetricKind } from '../runtime/metrics/shared/types/metric.js'
 
 export { MemoryTransport, memoryTransport }
+export { MetricsMemoryTransport, metricMemoryTransport }
 export type { LoggerObject }
+export type { MetricObject, MetricKind }
 
 /** The default registry key used when a memory transport is added without a `name`. */
 export const DEFAULT_CAPTURE_NAME = 'memory'
@@ -143,6 +152,102 @@ export async function flushFrogger(): Promise<void> {
         '../runtime/server/services/server-log-queue.js'
     )
     await ServerLogQueueService.getInstance().flush()
+}
+
+// --- Metrics capture (parallel to the log capture above) ---------------------
+
+/**
+ * Predicate for narrowing a captured-metric list. Every field is optional; all
+ * present fields must match (logical AND). `rating`/`route` are conveniences for
+ * the corresponding indexed labels.
+ */
+export interface MetricMatcher {
+    /** Exact metric name, e.g. `'web.vital.lcp'`. */
+    name?: string
+    kind?: MetricKind
+    /** Exact `env` match. */
+    env?: string
+    /** Exact match against `labels.rating`. */
+    rating?: string | number | boolean
+    /** Exact match against `labels.route`. */
+    route?: string | number | boolean
+    /** Subset match against `labels` — every listed key must equal the metric's. */
+    labels?: Record<string, string | number | boolean>
+    /** Exact match against `trace.traceId`. */
+    traceId?: string
+}
+
+/**
+ * Options for {@link getCapturedMetrics}: which store to read, plus inline
+ * filters. The store key is `store` (not `name`) because `name` is the metric
+ * name in {@link MetricMatcher}.
+ */
+export interface GetCapturedMetricsOptions extends MetricMatcher {
+    /** Registry key of the metric memory transport. @default {@link DEFAULT_CAPTURE_NAME} */
+    store?: string
+}
+
+function matchesOneMetric(metric: MetricObject, matcher: MetricMatcher): boolean {
+    if (matcher.name !== undefined && metric.name !== matcher.name) return false
+    if (matcher.kind !== undefined && metric.kind !== matcher.kind) return false
+    if (matcher.env !== undefined && metric.env !== matcher.env) return false
+    if (matcher.rating !== undefined && metric.labels?.rating !== matcher.rating) return false
+    if (matcher.route !== undefined && metric.labels?.route !== matcher.route) return false
+
+    if (matcher.labels !== undefined) {
+        const labels = metric.labels ?? {}
+        for (const key of Object.keys(matcher.labels)) {
+            if (labels[key] !== matcher.labels[key]) return false
+        }
+    }
+
+    if (matcher.traceId !== undefined && metric.trace?.traceId !== matcher.traceId) {
+        return false
+    }
+
+    return true
+}
+
+/**
+ * Filter a list of captured metrics by a {@link MetricMatcher}. The shared
+ * predicate behind {@link getCapturedMetrics}.
+ */
+export function filterMetrics(metrics: MetricObject[], matcher: MetricMatcher = {}): MetricObject[] {
+    return metrics.filter(m => matchesOneMetric(m, matcher))
+}
+
+/**
+ * Read the metrics captured by a named metric memory transport, optionally
+ * filtered. Uses a separate registry from {@link getCapturedLogs}.
+ *
+ * ```ts
+ * const lcp = getCapturedMetrics({ store: 'test', name: 'web.vital.lcp' })
+ * ```
+ */
+export function getCapturedMetrics(options: GetCapturedMetricsOptions = {}): MetricObject[] {
+    const { store = DEFAULT_CAPTURE_NAME, ...matcher } = options
+    const metrics = getMetricsStore(store)
+    return filterMetrics(metrics, matcher)
+}
+
+/**
+ * Clear the captures for a named metric memory transport (default:
+ * {@link DEFAULT_CAPTURE_NAME}), or every metrics store when called with no
+ * argument. Call between tests.
+ */
+export function clearCapturedMetrics(name: string | undefined = DEFAULT_CAPTURE_NAME): void {
+    clearMetricsStore(name)
+}
+
+/**
+ * Force the server metrics queue to drain synchronously. The metrics analogue
+ * of {@link flushFrogger}; pairs with `batch: false` for deterministic capture.
+ */
+export async function flushFroggerMetrics(): Promise<void> {
+    const { ServerMetricsQueueService } = await import(
+        '../runtime/metrics/server/services/server-metrics-queue.js'
+    )
+    await ServerMetricsQueueService.getInstance().flush()
 }
 
 /**

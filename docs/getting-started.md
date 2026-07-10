@@ -257,7 +257,7 @@ Here are some usage examples:
 ```ts
 // Client-side
 const logger = useFrogger({
-    consoleOutput: true,
+    consoleOutput: false,
 });
 
 // Server-side
@@ -268,6 +268,10 @@ const logger = getFrogger({
     },
 });
 ```
+
+::: tip
+`consoleOutput` here only affects this one logger. To silence the console across a whole app, so that a production browser build prints nothing to devtools while still shipping every log to your transports, use the [`consoleOutput` module option](./configuration.md#console-output) instead.
+:::
 
 
 

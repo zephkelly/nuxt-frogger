@@ -134,6 +134,10 @@ export default defineNuxtModule<ModuleOptions>({
                     app: resolved.app,
                     context: resolved.context,
                     logLevel: internalLogLevel,
+                    // Both sides live in public config: they are plain booleans,
+                    // and the server logger already reads its scrub default from
+                    // here, so a single key keeps the two runtimes from drifting.
+                    consoleOutput: resolved.consoleOutput,
                     clientModule: resolved.clientModule,
                     serverModule: serverModuleEnabled,
                     endpoint: resolved.public.endpoint,

@@ -57,13 +57,19 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
             level: 3,
             context: {},
-            consoleOutput: true,
             // Scrub is opt-in: follow whatever the resolved runtime config says
             // (`false` when off, a config object when on). A per-logger
             // `useFrogger({ scrub: true })` in `...options` still overrides this.
             //@ts-ignore
             scrub: config.public.frogger.scrub ?? false,
-            ...options
+            ...options,
+            // The RESOLVED value the base constructor already computed, not the
+            // raw option. Children inherit `this.options`, so hardcoding `true`
+            // here would re-materialise an explicit `true` that outranks a
+            // module-wide `consoleOutput: false` for every child and span.
+            // Assigned after the spread so an explicit `{ consoleOutput:
+            // undefined }` cannot clobber the resolution.
+            consoleOutput: this.consoleOutput,
         }
 
         //@ts-expect-error

@@ -71,6 +71,28 @@ export interface ModuleOptions {
      */
     logLevel?: InternalLogLevel
 
+    /**
+     * Mirrors your application logs to the console. On for both runtimes by
+     * default. This is the counterpart to `verbose`/`logLevel`, which govern
+     * Frogger's own diagnostics rather than your logs.
+     *
+     * `false` silences both sides; pass an object to control each independently
+     * (`{ client: false }` leaves the server console untouched). `client`
+     * covers loggers created by `useFrogger()` and the ambient `frogger.*`
+     * facade — including their output during SSR — while `server` covers
+     * `getFrogger()`.
+     *
+     * Transport delivery is a wholly separate path, so a silenced console still
+     * batches and ships every log. A per-logger `consoleOutput` still overrides
+     * whatever is set here, in either direction.
+     *
+     * @default true
+     */
+    consoleOutput?: boolean | {
+        client?: boolean
+        server?: boolean
+    }
+
     app?: AppInfoOptions,
 
     /**

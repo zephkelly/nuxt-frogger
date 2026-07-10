@@ -124,7 +124,7 @@ Both `useFrogger()` and `getFrogger()` accept `FroggerOptions`:
 export interface FroggerOptions {
     context?: LogContext   // initial context merged into every log
     scrub?: ScrubberOptions | boolean  // override scrubbing for this logger
-    consoleOutput?: boolean // mirror logs to the console — default true
+    consoleOutput?: boolean // mirror this logger's output to the console
 }
 ```
 
@@ -135,6 +135,15 @@ const logger = useFrogger({
     consoleOutput: false,
 })
 ```
+
+`consoleOutput` overrides the [`consoleOutput` module option](/configuration#console-output) for this
+logger only, in either direction: an explicit `true` restores the console for one logger even when
+the module has silenced it app-wide. When omitted, the module option decides (default `true`).
+Silencing the console never affects transport delivery: the logger still batches and ships.
+
+Child loggers and spans inherit their parent's resolved options, so `logger.child({})` and
+`logger.startSpan('checkout')` print exactly when their parent does, unless they override it
+themselves.
 
 ## LoggerObject
 

@@ -48,9 +48,25 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
     constructor(options: FroggerOptions = {}) {
         this.traceId = generateTraceId();
         this.level = options.level ?? 3;
-        this.consoleOutput = options.consoleOutput !== false;
 
         const config = useRuntimeConfig();
+
+        const moduleConsoleOutput = (config.public?.frogger as {
+            consoleOutput?: boolean | { client?: boolean; server?: boolean }
+        } | undefined)?.consoleOutput;
+
+        // The resolver always hands us a per-runtime pair, but runtime config can
+        // be overridden wholesale from nuxt.config, so a bare boolean is honoured
+        // rather than silently ignored.
+        const moduleDefault = typeof moduleConsoleOutput === 'boolean'
+            ? moduleConsoleOutput
+            : moduleConsoleOutput?.[this.getConsoleScope()];
+
+        // Per-logger consoleOutput overrides the module default, which overrides
+        // `true`. Note `??` rather than `!== false`: an explicit per-logger
+        // `true` must be able to re-enable the console for one logger under a
+        // module-wide `consoleOutput: false`.
+        this.consoleOutput = options.consoleOutput ?? moduleDefault ?? true;
 
         // Per-logger scrub overrides module config: `false` opts this logger
         // out entirely, an object REPLACES the module rules (compose module
@@ -70,7 +86,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             this.scrubber = new LogScrubber(resolvedScrub);
         }
 
-        if (options.consoleOutput !== false) {
+        if (this.consoleOutput) {
             this.consoleReporter = new ConsoleReporter();
         }
 
@@ -92,6 +108,20 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         if (options.context) {
             this.globalContext.value = { ...options.context };
         }
+    }
+
+
+    /**
+     * Which side of the module's `consoleOutput` option governs this logger.
+     *
+     * Deliberately not `import.meta.server`: ClientFrogger also runs during the
+     * SSR render pass, and the logs it emits there belong to the client's flag.
+     *
+     * Called from the base constructor, so it resolves off the prototype and
+     * must never touch subclass instance fields.
+     */
+    protected getConsoleScope(): 'client' | 'server' {
+        return 'client';
     }
 
 

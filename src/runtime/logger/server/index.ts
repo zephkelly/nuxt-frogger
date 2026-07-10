@@ -39,6 +39,10 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         this.traceContext = traceContext;
     }
 
+    protected override getConsoleScope(): 'client' | 'server' {
+        return 'server';
+    }
+
     protected createLoggerObject(logObj: LogObject): LoggerObject {
         if (!logObj || typeof logObj !== 'object') {
             froggerInternal.warn('Invalid log object:', logObj);

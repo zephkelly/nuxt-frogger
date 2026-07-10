@@ -104,6 +104,20 @@ export const DEFAULT_SCRUB: ScrubberOptions = {
     preserveTypes: true,
 }
 
+/**
+ * Console mirroring of application logs, resolved per runtime. Not part of any
+ * preset: it is a core output channel, not an opt-in subsystem.
+ */
+export interface ResolvedConsoleOutput {
+    client: boolean
+    server: boolean
+}
+
+export const DEFAULT_CONSOLE_OUTPUT: ResolvedConsoleOutput = {
+    client: true,
+    server: true,
+}
+
 export const DEFAULT_RATE_LIMIT: RateLimitingOptions = {
     storage: {
         driver: undefined,
@@ -178,6 +192,7 @@ export interface ResolvedFroggerOptions {
     context?: LogContext
     verbose?: boolean
     logLevel?: InternalLogLevel
+    consoleOutput: ResolvedConsoleOutput
     batch: BatchOptions | false
     scrub: ScrubberOptions | false
     rateLimit: RateLimitingOptions | false
@@ -412,6 +427,21 @@ type ErrorCaptureInput =
         server?: ServerErrorCapture | boolean
     }
 
+/**
+ * Normalise `consoleOutput` to a per-runtime pair. A bare boolean applies to
+ * both sides; a partial object leaves the unspecified side at its default (on).
+ */
+export function normalizeConsoleOutput(
+    value: boolean | { client?: boolean; server?: boolean } | undefined,
+): ResolvedConsoleOutput {
+    if (value === undefined) return { ...DEFAULT_CONSOLE_OUTPUT }
+    if (typeof value === 'boolean') return { client: value, server: value }
+    return {
+        client: value.client ?? DEFAULT_CONSOLE_OUTPUT.client,
+        server: value.server ?? DEFAULT_CONSOLE_OUTPUT.server,
+    }
+}
+
 function normalizeErrorCapture(value: ErrorCaptureInput | undefined): ResolvedErrorCapture {
     if (value === false || value === undefined) {
         return { client: false, server: false }
@@ -486,6 +516,7 @@ export function resolveFroggerOptions(options: ModuleOptions = {}): ResolvedFrog
         context: options.context,
         verbose: options.verbose,
         logLevel: options.logLevel,
+        consoleOutput: normalizeConsoleOutput(options.consoleOutput),
         batch: options.batch === false ? false : defu(options.batch, DEFAULT_BATCH),
         scrub: resolveScrub(scrub),
         rateLimit: normalizeToggle(rateLimit, DEFAULT_RATE_LIMIT),

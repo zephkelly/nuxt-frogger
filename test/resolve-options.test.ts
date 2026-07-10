@@ -229,6 +229,43 @@ describe('resolveFroggerOptions', () => {
         });
     });
 
+    describe('consoleOutput normalization', () => {
+        it('defaults to on for both runtimes', () => {
+            expect(resolveFroggerOptions().consoleOutput).toEqual({ client: true, server: true });
+        });
+
+        it('false silences both runtimes', () => {
+            expect(resolveFroggerOptions({ consoleOutput: false }).consoleOutput)
+                .toEqual({ client: false, server: false });
+        });
+
+        it('true enables both runtimes', () => {
+            expect(resolveFroggerOptions({ consoleOutput: true }).consoleOutput)
+                .toEqual({ client: true, server: true });
+        });
+
+        it('per-side booleans silence one runtime only', () => {
+            expect(resolveFroggerOptions({ consoleOutput: { client: false } }).consoleOutput)
+                .toEqual({ client: false, server: true });
+
+            expect(resolveFroggerOptions({ consoleOutput: { server: false } }).consoleOutput)
+                .toEqual({ client: true, server: false });
+        });
+
+        it('is independent of the preset', () => {
+            for (const preset of ['minimal', 'standard', 'full'] as const) {
+                expect(resolveFroggerOptions({ preset }).consoleOutput)
+                    .toEqual({ client: true, server: true });
+            }
+        });
+
+        it('never aliases the shared default', () => {
+            const r = resolveFroggerOptions();
+            r.consoleOutput.client = false;
+            expect(resolveFroggerOptions().consoleOutput.client).toBe(true);
+        });
+    });
+
     describe('core toggles', () => {
         it('batch:false disables batching', () => {
             expect(resolveFroggerOptions({ batch: false }).batch).toBe(false);

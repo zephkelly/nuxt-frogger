@@ -35,6 +35,14 @@ export interface ModuleOptions {
     
     batch?: BatchOptions | false
 
+    // Mirrors your application logs to the console. On for both runtimes by
+    // default. `false` silences both; `{ client, server }` silences one side.
+    // See "Console output" below.
+    consoleOutput?: boolean | {
+        client?: boolean
+        server?: boolean
+    }
+
     // Opt-in. `true` enables sensible tiers; an object tunes them.
     rateLimit?: RateLimitingOptions | boolean
 
@@ -99,6 +107,11 @@ export interface ModuleOptions {
         retryDelay?: number
         sortingWindowMs?: number
     } | false
+
+    consoleOutput?: boolean | {
+        client?: boolean;
+        server?: boolean;
+    }
 
     rateLimit?: {
         limits?: {
@@ -224,7 +237,7 @@ Frogger is **quiet by default**. A bare install logs to a file and the console, 
 | `standard` | ✓ | ✓ | ✓ | ✗ |
 | `full` | ✓ | ✓ | ✓ | ✓ |
 
-`file` + `console` output and client/server batching are always on (unless you disable them explicitly). Only the four columns above are preset-controlled.
+`file` + `console` output and client/server batching are always on (unless you disable them explicitly; console output is turned off with [`consoleOutput`](#console-output)). Only the four columns above are preset-controlled.
 
 ```ts
 export default defineNuxtConfig({
@@ -298,8 +311,11 @@ These are the defaults each subsystem uses once switched on (via a preset, `true
 ```
 :::
 
-::: details Always-on core defaults (file, batch)
+::: details Always-on core defaults (consoleOutput, file, batch)
 ```ts
+// consoleOutput  →
+{ client: true, server: true }
+
 // file  →
 {
     directory: 'logs',
@@ -322,6 +338,63 @@ These are the defaults each subsystem uses once switched on (via a preset, `true
 Earlier versions enabled scrubbing, rate-limiting, the dev websocket and global error capture **by default**. They are now off unless you opt in. To keep the old behaviour, set `preset: 'full'` (or `preset: 'standard'` to skip the dev-only websocket). The vestigial `public.globalErrorCapture` option has been removed — use `errorCapture` instead.
 
 Note that scrubbing changed further: enabling it no longer applies any built-in rules. Even with `preset: 'full'`, nothing is scrubbed until you declare rules. To restore the old default coverage, opt into the `RECOMMENDED_RULES` bundle — see the [Scrubbing guide](/guides/scrubbing).
+:::
+
+## Console output
+By default Frogger mirrors every application log to the console: the browser devtools console on the client, stdout on the server. `consoleOutput` turns that off.
+
+```ts
+export default defineNuxtConfig({
+    frogger: {
+        consoleOutput: false,   // silence both runtimes
+    }
+})
+```
+
+Pass an object to control each runtime independently. The most common case is a silent browser with the server console left intact:
+
+```ts
+export default defineNuxtConfig({
+    frogger: {
+        consoleOutput: {
+            client: process.env.NODE_ENV !== 'production',
+            // `server` is unspecified, so it stays on
+        },
+    }
+})
+```
+
+`client` covers loggers created by `useFrogger()` and the ambient `frogger.*` facade, including the logs they emit during server-side rendering. `server` covers `getFrogger()`.
+
+::: tip Silencing the console never drops a log
+Console output and transport delivery are independent paths. A logger with `consoleOutput: false` still batches every log and ships it to your configured [transports](/guides/transports) and ingest endpoint. This is what makes it safe to run a production browser build that prints nothing to devtools while still collecting everything.
+:::
+
+### Per-logger overrides
+`consoleOutput` is also a [per-instance option](/reference/logger-api#per-instance-options). A value passed to a specific logger always wins over the module option, in **either** direction:
+
+```ts
+// with nuxt.config.ts set to frogger: { consoleOutput: false }
+
+frogger.info('silent')                              // module default: no console
+useFrogger().info('silent')                         // module default: no console
+useFrogger({ consoleOutput: true }).info('loud')    // opts back in
+```
+
+Resolution order, most specific first:
+
+| Source | Example |
+| --- | --- |
+| Per-logger option | `useFrogger({ consoleOutput: true })` |
+| Module option | `frogger: { consoleOutput: { client: false } }` |
+| Built-in default | `true` |
+
+Child loggers and spans inherit their parent's resolved value, so `logger.child({})`, `logger.startSpan('checkout')` and `logger.span('checkout', fn)` all stay consistent with the logger they came from.
+
+::: warning Not the same as `verbose` / `logLevel`
+`consoleOutput` governs **your** application logs. Frogger's own internal diagnostics (transport state, caught errors in its machinery, build banners) are a separate channel, controlled by the `verbose` and `logLevel` module options. Those are already silent in production builds.
+
+One console message is deliberately exempt from both: if a log fails to reach the queue *and* a direct send also fails, Frogger prints an error rather than dropping your log silently.
 :::
 
 ## Frogger Config
@@ -355,6 +428,12 @@ export default defineNuxtConfig({
         }
     }
 })
+```
+
+Nested keys follow the same pattern, so console output can be silenced per runtime without touching your config:
+
+``` env
+NUXT_PUBLIC_FROGGER_CONSOLE_OUTPUT_CLIENT=false
 ```
 
 ::: warning

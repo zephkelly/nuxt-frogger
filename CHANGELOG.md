@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.1.16
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.15...v0.1.16)
+
+### 🚀 Enhancements
+
+- Unit and e2e testing helpers ([6a20429](https://github.com/zephkelly/nuxt-frogger/commit/6a20429))
+- Foundational metrics collection pipeline ([1bcce7e](https://github.com/zephkelly/nuxt-frogger/commit/1bcce7e))
+
+### 🩹 Fixes
+
+- Harden log ingestion pipline at app start ([c35bb9a](https://github.com/zephkelly/nuxt-frogger/commit/c35bb9a))
+- Individual logger scrub options being discarded ([828bb04](https://github.com/zephkelly/nuxt-frogger/commit/828bb04))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.15
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.14...v0.1.15)

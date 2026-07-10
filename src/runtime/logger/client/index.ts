@@ -209,7 +209,12 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         const childContext = this.createChildContext(reactive);
 
         const childOptions: ClientLoggerOptions = {
-            ...defu(this.options, options),
+            // Child options win; the parent's act as defaults.
+            ...defu(options, this.options),
+            // scrub must replace wholesale, not deep-merge: defu would
+            // concatenate the two configs' rule arrays, silently re-adding
+            // parent rules a child scrub object was meant to replace.
+            ...(options.scrub !== undefined && { scrub: options.scrub }),
             context: reactive
                 ? options.context
                 // Explicit child context overrides inherited keys (a nested

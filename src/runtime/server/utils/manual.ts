@@ -54,7 +54,8 @@ export function getFrogger(
         endpoint: runtimeEndpoint,
     }
 
-    const mergedOptions = defu(froggerOptions, options) as ServerLoggerOptions;
+    // Caller options win over runtime config, as the JSDoc promises.
+    const mergedOptions = defu(options, froggerOptions) as ServerLoggerOptions;
 
     // Inside frogger.span(...), continue the span tree instead of re-branching
     // from the request root. Outside a span, behavior is unchanged.

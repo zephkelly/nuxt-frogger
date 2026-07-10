@@ -13,6 +13,7 @@ import { froggerInternal } from "../shared/utils/internal-log";
 
 import type { IFroggerReporter } from "./_reporters/types";
 import { LogScrubber } from "../scrubber";
+import type { ScrubberOptions } from "../scrubber/options";
 
 import { useRuntimeConfig } from "#imports";
 import { defu } from 'defu';
@@ -48,14 +49,25 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         this.traceId = generateTraceId();
         this.level = options.level ?? 3;
         this.consoleOutput = options.consoleOutput !== false;
-        this.scrub = options.scrub === true;
 
         const config = useRuntimeConfig();
 
+        // Per-logger scrub overrides module config: `false` opts this logger
+        // out entirely, an object REPLACES the module rules (compose module
+        // rules back in explicitly via defineScrub().use(...) if wanted), and
+        // `true`/unset falls back to whatever the module resolved.
         //@ts-ignore
-        if (config.public.frogger.scrub || options.scrub) {
-            //@ts-ignore
-            this.scrubber = new LogScrubber(config.public.frogger.scrub);
+        const moduleScrub = config.public.frogger.scrub as ScrubberOptions | false | undefined;
+        const resolvedScrub = options.scrub === false
+            ? false
+            : (typeof options.scrub === 'object' && options.scrub !== null)
+                ? options.scrub
+                : moduleScrub;
+
+        this.scrub = Boolean(resolvedScrub);
+
+        if (resolvedScrub) {
+            this.scrubber = new LogScrubber(resolvedScrub);
         }
 
         if (options.consoleOutput !== false) {

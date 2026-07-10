@@ -224,6 +224,29 @@ defineScrub({ maxDepth: 6 })
 Scrubbing is configured with the `scrub` option (module options or `frogger.config.ts`), or per-logger
 via `useFrogger({ scrub })` / `getFrogger({ scrub })`.
 
+Per-logger, `scrub` overrides the module config for that logger:
+
+- `scrub: false` turns scrubbing off for that logger, even when module scrubbing is on.
+- A `ScrubberOptions` object **replaces** the module rules entirely — module rules do not apply on
+  top. To keep them, compose explicitly: `defineScrub().use(...RECOMMENDED_RULES).redact('myField').build()`.
+- `true` or unset inherits the module config.
+
+Child loggers (`child()`, `startSpan()`, `span()`) inherit the parent's effective `scrub` unless the
+child options say otherwise — a child's `scrub` object likewise replaces the parent's rather than
+merging with it.
+
+```ts
+import { defineScrub } from '#frogger/config'
+
+// Module scrubbing stays on for everything else; this logger sees raw values.
+const audit = useFrogger({ scrub: false })
+
+// This logger applies ONLY the apiKey rule — module rules are replaced.
+const jobs = getFrogger(event, {
+  scrub: defineScrub().redact('apiKey').build(),
+})
+```
+
 ::: tip Turn it off
 Set `scrub: false` to disable the engine entirely (e.g. to override a preset). An enabled engine with
 no rules is already a no-op, so this is only needed to silence the dev notice.

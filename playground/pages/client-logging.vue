@@ -38,11 +38,14 @@
     <section class="demo-section">
       <h2>Context — add / set / clear</h2>
       <p>
-        Context is merged into every log this logger makes. <code>addContext</code> merges,
+        Context is merged into every log this logger makes. <code>addContext</code> deep-merges;
+        the incoming value wins on key conflicts by default, while
+        <code>{ overwrite: false }</code> keeps existing keys and fills only the missing ones.
         <code>setContext</code> replaces, <code>clearContext</code> empties.
       </p>
       <div class="demo-actions">
         <button class="btn" @click="doAddContext">addContext()</button>
+        <button class="btn" @click="doAddContextKeep">addContext(overwrite:false)</button>
         <button class="btn" @click="doSetContext">setContext()</button>
         <button class="btn" @click="doClearContext">clearContext()</button>
         <button class="btn btn-primary" @click="logWithContext">info() with current context</button>
@@ -118,6 +121,14 @@ function syncContextPreview(next: Record<string, any>) {
 function doAddContext() {
   ctxLogger.addContext({ userId: 'u_123', tier: 'pro' })
   Object.assign(currentContext, { userId: 'u_123', tier: 'pro' })
+}
+function doAddContextKeep() {
+  // overwrite: false keeps any existing key (e.g. userId) and only fills the rest
+  const incoming = { userId: 'u_999', plan: 'enterprise' }
+  ctxLogger.addContext(incoming, { overwrite: false })
+  for (const [k, v] of Object.entries(incoming)) {
+    if (currentContext[k] === undefined) currentContext[k] = v
+  }
 }
 function doSetContext() {
   ctxLogger.setContext({ replaced: true })

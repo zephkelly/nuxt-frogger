@@ -35,7 +35,7 @@ export interface IFroggerLogger {
     clearReporters(): void
 
     // Context
-    addContext(ctx: Object): void
+    addContext(ctx: Object, options?: { overwrite?: boolean }): void
     setContext(ctx: Object): void
     clearContext(): void
 
@@ -70,12 +70,37 @@ logger.error('checkout failed', { orderId, error })
 
 | Method | Effect |
 | --- | --- |
-| `addContext(ctx)` | Merge `ctx` into the logger's context (uses `defu`) |
+| `addContext(ctx, options?)` | Deep-merge `ctx` into the logger's context |
 | `setContext(ctx)` | Replace the logger's context entirely |
 | `clearContext()` | Remove all context |
 
 Context is appended to **every** log this logger makes. See
 [Getting Started → Adding Context](/getting-started#adding-context).
+
+### `addContext` merge precedence
+
+`addContext` deep-merges the incoming context in. On a **key conflict**, the
+incoming value wins by default (last-write-wins, the same convention as
+pino/winston/bunyan/OpenTelemetry), so re-stamping a key updates it rather than
+freezing on its first value:
+
+```ts
+logger.addContext({ route: '/login' })
+logger.addContext({ route: '/dashboard' })
+// context.route === '/dashboard'
+```
+
+Pass `{ overwrite: false }` to keep existing values and only fill in keys that
+aren't already set ("set a default if absent"):
+
+```ts
+logger.addContext({ tenant: 'acme' })
+logger.addContext({ tenant: 'other', region: 'eu' }, { overwrite: false })
+// context === { tenant: 'acme', region: 'eu' }
+```
+
+Either way, nested objects are deep-merged; `overwrite` only decides the winner
+on a leaf-key conflict.
 
 ## Child loggers
 

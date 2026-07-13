@@ -4,7 +4,7 @@ import { froggerInternal } from "../../shared/utils/internal-log";
 
 import type { LogObject, LogType } from 'consola';
 import type { LoggerObject } from "../../shared/types/log";
-import type { IFroggerLogger } from "../types";
+import type { IFroggerLogger, AddContextOptions } from "../types";
 import type { IFroggerReporter } from "../_reporters/types";
 import type { LogContext } from "../../shared/types/log";
 import type { FroggerOptions } from "../../shared/types/options";
@@ -65,7 +65,7 @@ export class SimpleConsoleLogger implements IFroggerLogger {
     getHeaders(customVendor?: string): Record<string, string> {
         throw new Error("Method not implemented.");
     }
-    addContext(context: Object): void {
+    addContext(context: Object, options?: AddContextOptions): void {
         throw new Error("Method not implemented.");
     }
     setContext(context: Object): void {

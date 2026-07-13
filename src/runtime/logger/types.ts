@@ -4,6 +4,27 @@ import type { LogType } from "consola";
 
 
 
+/**
+ * Options for {@link IFroggerLogger.addContext}.
+ */
+export interface AddContextOptions {
+    /**
+     * Which side wins when the incoming context shares a key with the existing
+     * context.
+     *
+     * - `true` (default) — the incoming value wins (last-write-wins, the same
+     *   convention as pino/winston/bunyan/OpenTelemetry). Re-stamping a key
+     *   updates it, so long-lived context like `route` or `user` never freezes
+     *   on its first value.
+     * - `false` — the existing value is preserved and only keys not already set
+     *   are filled in ("set a default if absent").
+     *
+     * Nested objects are deep-merged either way; this flag only decides the
+     * winner on a leaf-key conflict.
+     */
+    overwrite?: boolean;
+}
+
 export interface IFroggerLogger {
     /**
      * Get W3C Trace Context headers for the current logger instance
@@ -55,10 +76,14 @@ export interface IFroggerLogger {
 
     // Context Management ------------------------------------------
     /**
-     * Add additional context to all requests made by the logger
-     * @param context Additional context to add to the logger
+     * Merge additional context into the context appended to every log this
+     * logger makes. By default the incoming context wins on key conflicts
+     * (last-write-wins); pass `{ overwrite: false }` to instead keep existing
+     * values and only fill in keys that aren't already set.
+     * @param context Additional context to merge into the logger
+     * @param options {@link AddContextOptions} controlling merge precedence
      */
-    addContext(context: Object): void;
+    addContext(context: Object, options?: AddContextOptions): void;
     
     /**
      * Set the context for the logger

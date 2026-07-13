@@ -226,7 +226,7 @@ export interface IFroggerLogger {
     getReporters(): readonly IFroggerReporter[];
     clearReporters(): void;
 
-    addContext(ctx: Object): void;
+    addContext(ctx: Object, options?: { overwrite?: boolean }): void;
     setContext(ctx: Object): void;
     clearContext(): void;
 
@@ -301,7 +301,7 @@ logger.log('User logged in', {
 //     ...
 ```
 
-If you'd like to add context to an existing logger, you can use the `addContext` method, this will use `defu` to merge the existing and incoming contexts together:
+If you'd like to add context to an existing logger, you can use the `addContext` method. This deep-merges the incoming context into the existing one:
 
 ```ts
 const logger = useFrogger();
@@ -310,6 +310,22 @@ logger.addContext({
     numberOfCats: 3,
     location: 'London',
 });
+```
+
+When the incoming context shares a key with the existing context, the **incoming value wins** by default (last-write-wins). Re-stamping a key updates it, so long-lived context like a `route` or `user` never freezes on its first value:
+
+```ts
+logger.addContext({ route: '/login' });
+logger.addContext({ route: '/dashboard' });
+// route is now '/dashboard'
+```
+
+Pass `{ overwrite: false }` when you instead want to keep existing values and only fill in keys that aren't already set:
+
+```ts
+logger.addContext({ tenant: 'acme' });
+logger.addContext({ tenant: 'other', region: 'eu' }, { overwrite: false });
+// context is { tenant: 'acme', region: 'eu' }
 ```
 
 ### Additional Methods

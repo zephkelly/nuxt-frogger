@@ -1,6 +1,6 @@
 import type { LogType } from 'consola'
 
-import type { IFroggerLogger } from './types'
+import type { IFroggerLogger, AddContextOptions } from './types'
 import type { IFroggerReporter } from './_reporters/types'
 import type { FroggerOptions } from '../shared/types/options'
 import { normalizeLogArgs } from '../shared/utils/normalize-log-args'
@@ -35,7 +35,7 @@ export interface FroggerAmbient {
 
     // Pass-throughs to the underlying logger -----------------------------
     getHeaders(customVendor?: string): Record<string, string>
-    addContext(context: object): void
+    addContext(context: object, options?: AddContextOptions): void
     setContext(context: object): void
     clearContext(): void
     child(options: FroggerOptions): IFroggerLogger
@@ -88,7 +88,7 @@ export function createAmbientFrogger(resolve: () => IFroggerLogger): FroggerAmbi
     }
 
     facade.getHeaders = (customVendor?: string) => resolve().getHeaders(customVendor)
-    facade.addContext = (context: object) => resolve().addContext(context)
+    facade.addContext = (context: object, options?: AddContextOptions) => resolve().addContext(context, options)
     facade.setContext = (context: object) => resolve().setContext(context)
     facade.clearContext = () => resolve().clearContext()
     facade.child = (options: FroggerOptions) => resolve().child(options)

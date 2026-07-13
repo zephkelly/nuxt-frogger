@@ -66,7 +66,11 @@ describe('createAmbientFrogger', () => {
 
         const ctx = { scope: 'a' }
         frogger.addContext(ctx)
-        expect(logger.addContext).toHaveBeenCalledWith(ctx)
+        expect(logger.addContext).toHaveBeenCalledWith(ctx, undefined)
+
+        const ctxWithOpts = { user: 'u1' }
+        frogger.addContext(ctxWithOpts, { overwrite: false })
+        expect(logger.addContext).toHaveBeenCalledWith(ctxWithOpts, { overwrite: false })
 
         frogger.child({})
         expect(logger.child).toHaveBeenCalled()

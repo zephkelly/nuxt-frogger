@@ -4,7 +4,7 @@ import { generateTraceId, generateSpanId, generateW3CTraceHeaders } from "../sha
 
 import type { LogType, LogObject } from 'consola';
 import type { LoggerObject } from "../shared/types/log";
-import type { IFroggerLogger } from "./types";
+import type { IFroggerLogger, AddContextOptions } from "./types";
 import type { FroggerOptions } from "../shared/types/options";
 import type { LogContext } from "../shared/types/log";
 import type { TraceContext } from "../shared/types/trace-headers";
@@ -199,8 +199,13 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
 
 
     // Context Management -------------------------------------------
-    public addContext(context: LogContext): void {
-        this.globalContext.value = defu(this.globalContext.value, context);
+    public addContext(context: LogContext, options?: AddContextOptions): void {
+        // Incoming wins by default (last-write-wins), so re-stamping a key like
+        // `route` or `user` updates it instead of freezing on the first value.
+        // `overwrite: false` flips precedence to fill only keys not already set.
+        this.globalContext.value = options?.overwrite === false
+            ? defu(this.globalContext.value, context)
+            : defu(context, this.globalContext.value);
     }
 
     public setContext(context: LogContext): void {

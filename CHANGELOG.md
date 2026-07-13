@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.18
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.17...v0.1.18)
+
+### 🚀 Enhancements
+
+- Adjust addContext to upsert by default with optional override ([d99d586](https://github.com/zephkelly/nuxt-frogger/commit/d99d586))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.17
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.16...v0.1.17)

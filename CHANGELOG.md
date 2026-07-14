@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.19
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.18...v0.1.19)
+
+### 🩹 Fixes
+
+- Logger scrubbers mutating objects directly ([93d69e1](https://github.com/zephkelly/nuxt-frogger/commit/93d69e1))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.18
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.17...v0.1.18)

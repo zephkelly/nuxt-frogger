@@ -248,6 +248,75 @@ describe('LogScrubber', () => {
         });
     });
 
+    describe('Never mutates the caller input (copy-on-write)', () => {
+        it('leaves the original ctx object untouched', () => {
+            const scrubber = recommendedScrubber();
+            const original = { email: 'jane@example.com', password: 'hunter2', name: 'Frogger' };
+            const log = makeLog(original);
+
+            scrubber.scrubLoggerObject(log);
+
+            // The stored record is scrubbed...
+            expect(log.ctx.email).toBe('j***@example.com');
+            expect(log.ctx.password).toBe('[REDACTED]');
+            // ...but the caller's object is preserved verbatim.
+            expect(original).toEqual({ email: 'jane@example.com', password: 'hunter2', name: 'Frogger' });
+            expect(log.ctx).not.toBe(original);
+        });
+
+        it('does not mutate nested objects shared with the caller', () => {
+            const scrubber = recommendedScrubber();
+            const sharedUser = { password: 'secret123', email: 'jane@example.com' };
+            const original = { user: sharedUser, requestId: 'abc' };
+            const log = makeLog(original);
+
+            scrubber.scrubLoggerObject(log);
+
+            expect(log.ctx.user.password).toBe('[REDACTED]');
+            expect(log.ctx.user.email).toBe('j***@example.com');
+            // The caller's nested object is untouched and no longer shared.
+            expect(sharedUser).toEqual({ password: 'secret123', email: 'jane@example.com' });
+            expect(log.ctx.user).not.toBe(sharedUser);
+        });
+
+        it('does not mutate objects nested in arrays', () => {
+            const scrubber = recommendedScrubber();
+            const first = { password: 'a' };
+            const log = makeLog({ users: [first, { password: 'b' }] });
+
+            scrubber.scrubLoggerObject(log);
+
+            expect(log.ctx.users[0].password).toBe('[REDACTED]');
+            expect(first.password).toBe('a');
+        });
+
+        it('shares (does not clone) subtrees with nothing to scrub', () => {
+            const scrubber = recommendedScrubber();
+            const meta = { region: 'us-east', retries: 3 };
+            const log = makeLog({ password: 'secret123', meta });
+
+            scrubber.scrubLoggerObject(log);
+
+            expect(log.ctx.password).toBe('[REDACTED]');
+            // Untouched subtree is shared by reference, not needlessly deep-copied.
+            expect(log.ctx.meta).toBe(meta);
+        });
+
+        it('re-scrubbing the same source is stable across logs', () => {
+            const scrubber = recommendedScrubber();
+            const shared = { password: 'secret123' };
+
+            scrubber.scrubLoggerObject(makeLog(shared));
+            const secondLog = makeLog(shared);
+            scrubber.scrubLoggerObject(secondLog);
+
+            // Because the source is never mutated, the second log scrubs the real
+            // value, not an already-redacted one.
+            expect(secondLog.ctx.password).toBe('[REDACTED]');
+            expect(shared.password).toBe('secret123');
+        });
+    });
+
     describe('Deep scrubbing', () => {
         it('scrubs nested objects when deepScrub is enabled', () => {
             const scrubber = recommendedScrubber();

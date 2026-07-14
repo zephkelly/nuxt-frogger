@@ -17,7 +17,7 @@ export class LogScrubber {
         // No default rules: scrubbing is fully opt-in. An enabled scrubber with
         // an empty rule set is a deliberate no-op (see the dev-time notice).
         // maxDepth has no default: undefined = unlimited recursion (cycle-safe
-        // via the WeakSet guard in scrubObject).
+        // via the WeakSet guard in scrubValue).
         this.config = defu(config, {
             enabled: true,
             rules: [] as ScrubRule[],
@@ -107,64 +107,93 @@ export class LogScrubber {
         return applyStrategy(value, rule.action, { preserveTypes: this.config.preserveTypes });
     }
 
-    private scrubObject(obj: any, depth: number = 0, visited = new WeakSet()): { modified: boolean; fieldsModified: string[] } {
-        if (!obj || (this.config.maxDepth !== undefined && depth > this.config.maxDepth)) {
-            return { modified: false, fieldsModified: [] };
+    /**
+     * Shallow-clone an object or array, preserving its prototype so a class
+     * instance keeps its methods / `toJSON` and an array stays an array. Used to
+     * copy a node on first write (see {@link scrubValue}).
+     */
+    private shallowClone<T extends object>(value: T): T {
+        if (Array.isArray(value)) {
+            return value.slice() as unknown as T;
+        }
+        return Object.assign(Object.create(Object.getPrototypeOf(value)), value);
+    }
+
+    /**
+     * Return a scrubbed copy of `value`, never mutating the input. Nodes are
+     * copied on write (copy-on-first-scrub): a subtree with nothing to scrub is
+     * returned by reference and shared with the original, and only the spine of
+     * nodes leading to a scrubbed value is cloned. This guarantees the caller's
+     * object graph (including persistent global context) is left untouched while
+     * keeping allocations proportional to what actually changed.
+     */
+    private scrubValue(value: any, depth: number, visited: WeakSet<object>): { value: any; modified: boolean; fieldsModified: string[] } {
+        if (!value || typeof value !== 'object') {
+            return { value, modified: false, fieldsModified: [] };
         }
 
-        if (typeof obj !== 'object') {
-            return { modified: false, fieldsModified: [] };
+        if (this.config.maxDepth !== undefined && depth > this.config.maxDepth) {
+            return { value, modified: false, fieldsModified: [] };
         }
 
-        if (visited.has(obj)) {
-            return { modified: false, fieldsModified: [] };
+        // Cycle guard: an object already on the current path is returned as-is so
+        // the copy keeps referencing the original at the cycle point (matching the
+        // prior skip-on-revisit behaviour) without infinite recursion.
+        if (visited.has(value)) {
+            return { value, modified: false, fieldsModified: [] };
         }
 
-        visited.add(obj);
-
-        let modified = false;
-        const fieldsModified: string[] = [];
+        visited.add(value);
 
         try {
-            if (Array.isArray(obj)) {
-                for (let i = 0; i < obj.length; i++) {
-                    const item = obj[i];
+            let modified = false;
+            const fieldsModified: string[] = [];
+            let result = value;
+
+            if (Array.isArray(value)) {
+                for (let i = 0; i < value.length; i++) {
+                    const item = value[i];
                     if (item && typeof item === 'object') {
-                        const nestedResult = this.scrubObject(item, depth + 1, visited);
-                        if (nestedResult.modified) {
+                        const nested = this.scrubValue(item, depth + 1, visited);
+                        if (nested.modified) {
+                            if (result === value) result = this.shallowClone(value);
+                            result[i] = nested.value;
                             modified = true;
-                            fieldsModified.push(...nestedResult.fieldsModified.map(field => `[${i}].${field}`));
+                            fieldsModified.push(...nested.fieldsModified.map(field => `[${i}].${field}`));
                         }
                     }
                 }
             }
             else {
-                for (const [key, value] of Object.entries(obj)) {
+                for (const [key, entryValue] of Object.entries(value)) {
                     const rule = this.findRule(key);
 
                     if (rule) {
-                        const scrubbedValue = this.applyScrubAction(value, rule);
-                        if (scrubbedValue !== value) {
-                            obj[key] = scrubbedValue;
+                        const scrubbedValue = this.applyScrubAction(entryValue, rule);
+                        if (scrubbedValue !== entryValue) {
+                            if (result === value) result = this.shallowClone(value);
+                            result[key] = scrubbedValue;
                             modified = true;
                             fieldsModified.push(key);
                         }
                     }
-                    else if (this.config.deepScrub && value && typeof value === 'object') {
-                        const nestedResult = this.scrubObject(value, depth + 1, visited);
-                        if (nestedResult.modified) {
+                    else if (this.config.deepScrub && entryValue && typeof entryValue === 'object') {
+                        const nested = this.scrubValue(entryValue, depth + 1, visited);
+                        if (nested.modified) {
+                            if (result === value) result = this.shallowClone(value);
+                            result[key] = nested.value;
                             modified = true;
-                            fieldsModified.push(...nestedResult.fieldsModified.map(field => `${key}.${field}`));
+                            fieldsModified.push(...nested.fieldsModified.map(field => `${key}.${field}`));
                         }
                     }
                 }
             }
+
+            return { value: result, modified, fieldsModified };
         }
         finally {
-            visited.delete(obj);
+            visited.delete(value);
         }
-
-        return { modified, fieldsModified };
     }
 
 
@@ -175,10 +204,14 @@ export class LogScrubber {
 
         this.scrubStats.totalProcessed++;
 
-        const result = this.scrubObject(logObj.ctx);
+        const result = this.scrubValue(logObj.ctx, 0, new WeakSet());
 
         if (result.modified) {
             this.scrubStats.totalScrubbed++;
+            // Swap in the scrubbed copy; the caller's original ctx graph is never
+            // mutated (copy-on-write above), so redaction can't leak back into the
+            // object the developer passed to the logger.
+            logObj.ctx = result.value;
         }
 
         return {

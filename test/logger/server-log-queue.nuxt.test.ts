@@ -180,3 +180,65 @@ describe('ServerLogQueueService transport construction', () => {
         expect(downstreamNames(queue)).toContain('FakeTransport')
     })
 })
+
+describe('ServerLogQueueService origin app attribution', () => {
+    it('stamps the envelope app onto every log that has no source of its own', async () => {
+        clearCapturedLogs('origin')
+        setConfig([memoryEntry('origin')], { batch: false })
+        const queue = freshQueue()
+
+        queue.enqueueBatch({
+            logs: [makeLog({ msg: 'first' }), makeLog({ msg: 'second' })],
+            app: { name: 'paincoach-dash', version: '2.1.0' },
+        })
+        await flushFrogger()
+
+        const captured = getCapturedLogs({ name: 'origin' })
+        expect(captured).toHaveLength(2)
+        for (const log of captured) {
+            expect(log.source).toEqual({ name: 'paincoach-dash', version: '2.1.0' })
+        }
+    })
+
+    it('does not overwrite a log that already carries its own source', async () => {
+        clearCapturedLogs('origin')
+        setConfig([memoryEntry('origin')], { batch: false })
+        const queue = freshQueue()
+
+        queue.enqueueBatch({
+            logs: [
+                makeLog({ msg: 'own', source: { name: 'paincoach-app-web', version: '1.0.0' } }),
+                makeLog({ msg: 'inherited' }),
+            ],
+            app: { name: 'paincoach-dash', version: '2.1.0' },
+        })
+        await flushFrogger()
+
+        const captured = getCapturedLogs({ name: 'origin' })
+        expect(captured.find(l => l.msg === 'own')?.source?.name).toBe('paincoach-app-web')
+        expect(captured.find(l => l.msg === 'inherited')?.source?.name).toBe('paincoach-dash')
+    })
+
+    it('defaults the version to empty when the envelope carries a name only', async () => {
+        clearCapturedLogs('origin')
+        setConfig([memoryEntry('origin')], { batch: false })
+        const queue = freshQueue()
+
+        queue.enqueueBatch({ logs: [makeLog()], app: { name: 'paincoach-main' } })
+        await flushFrogger()
+
+        expect(getCapturedLogs({ name: 'origin' })[0]?.source).toEqual({ name: 'paincoach-main', version: '' })
+    })
+
+    it('leaves source unset when the envelope carries no app', async () => {
+        clearCapturedLogs('origin')
+        setConfig([memoryEntry('origin')], { batch: false })
+        const queue = freshQueue()
+
+        queue.enqueueBatch({ logs: [makeLog()] })
+        await flushFrogger()
+
+        expect(getCapturedLogs({ name: 'origin' })[0]?.source).toBeUndefined()
+    })
+})
+

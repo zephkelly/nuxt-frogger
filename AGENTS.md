@@ -66,7 +66,10 @@ Commands (pnpm lockfile present; scripts shell out to npm/nuxi):
    rate-limit ([src/runtime/rate-limiter/](src/runtime/rate-limiter/)) → loop detection (anti-feedback via
    `x-frogger-*` headers + batch `meta.processChain`) → `ServerLogQueueService.enqueueBatch`.
 6. `ServerLogQueueService` (singleton, [src/runtime/server/services/server-log-queue.ts](src/runtime/server/services/server-log-queue.ts)):
-   scrub → `BatchTransport` (timestamp-sorted buffering) → fan-out to configured transports.
+   stamp each log's `source` from the batch envelope's `app` when it has none → scrub →
+   `BatchTransport` (timestamp-sorted buffering) → fan-out to configured transports. The stamp is what
+   lets a relay forward another app's logs without re-badging them as its own: `HttpTransport` rebuilds
+   the envelope from the *relaying* app's identity, so per-log `source` is the only carrier that survives.
 7. Transports ([src/runtime/logger/_transports/](src/runtime/logger/_transports/)) are built from the
    declarative `transports` list (server side) in `buildConfiguredTransports`: a `fileTransport()`
    entry → `FileTransport` (append + date/size rotation, dir defaults to `logs/`), any http/observe

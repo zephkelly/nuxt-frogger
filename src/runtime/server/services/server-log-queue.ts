@@ -154,6 +154,16 @@ export class ServerLogQueueService {
             return;
         }
 
+        // A relay re-batches under its own app identity, so the origin app only
+        // survives if the envelope's name is stamped onto each log first.
+        const originName = loggerObjectBatch.app?.name;
+        if (originName) {
+            const originVersion = loggerObjectBatch.app?.version ?? '';
+            for (const log of logs) {
+                log.source ??= { name: originName, version: originVersion };
+            }
+        }
+
         if (this.scrubber) {
             this.scrubber.scrubBatch(logs);
         }

@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.20
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.19...v0.1.20)
+
+### 🚀 Enhancements
+
+- Add source to enqueueBatch ([8da9f07](https://github.com/zephkelly/nuxt-frogger/commit/8da9f07))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.19
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.18...v0.1.19)

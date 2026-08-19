@@ -1,6 +1,6 @@
 {
   "name": "nuxt-frogger",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "description": "Logging and tracing module for Nuxt applications",
   "repository": {
     "type": "git",

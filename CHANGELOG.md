@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.21
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.20...v0.1.21)
+
+### 🩹 Fixes
+
+- Span emission, error capture deduping, scrub precedence ([62d56ec](https://github.com/zephkelly/nuxt-frogger/commit/62d56ec))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.20
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.19...v0.1.20)

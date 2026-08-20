@@ -281,6 +281,37 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
         await this.flushPromise;
         return this.flush();
     }
+
+    /**
+     * Flush EVERYTHING in the buffer, ignoring the sorting window. flush()
+     * deliberately holds back logs younger than `sortingWindowMs` so late
+     * arrivals sort correctly, but on a shutdown or crash path "wait for
+     * stragglers" means "lose the batch". Logs are taken out of the buffer
+     * before sending, so a concurrent scheduled flush can never double-send.
+     */
+    async drain(): Promise<void> {
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+
+        await this.flushPromise.catch(() => {});
+
+        if (this.logs.length === 0) {
+            return;
+        }
+
+        const logsToDrain = this.logs;
+        this.logs = [];
+
+        try {
+            await this.options.onFlush(logsToDrain);
+            this.lastFlushTime = Date.now();
+        }
+        catch (error) {
+            froggerInternal.error(`Failed to drain ${logsToDrain.length} logs:`, error);
+        }
+    }
 }
 
 export function createBatchTransport(

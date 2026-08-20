@@ -242,3 +242,55 @@ describe('ServerLogQueueService origin app attribution', () => {
     })
 })
 
+
+describe('ServerLogQueueService drain', () => {
+    function setBatchedConfig(name: string) {
+        useRuntimeConfigMock.mockReturnValue({
+            public: {
+                frogger: {
+                    app: 'test-app',
+                    baseUrl: '',
+                    batch: { maxSize: 200, maxAge: 15000, sortingWindowMs: 3000 },
+                },
+            },
+            frogger: {
+                scrub: false,
+                batch: { maxSize: 200, maxAge: 15000, sortingWindowMs: 3000 },
+                websocket: false,
+                transports: [memoryEntry(name)],
+            },
+        })
+    }
+
+    it('delivers logs younger than the sorting window that flush() holds back', async () => {
+        clearCapturedLogs('drain')
+        setBatchedConfig('drain')
+        const queue = freshQueue()
+
+        // A crash line is milliseconds old; flush() defers it to sort stragglers.
+        queue.enqueueLog(makeLog({ msg: 'fatal crash line', time: Date.now() }))
+
+        await queue.flush()
+        expect(getCapturedLogs({ name: 'drain' })).toHaveLength(0)
+
+        await queue.drain()
+        expect(getCapturedLogs({ name: 'drain' }).map(l => l.msg)).toEqual(['fatal crash line'])
+    })
+
+    it('falls back to flush() in direct (unbatched) mode', async () => {
+        clearCapturedLogs('direct-drain')
+        setConfig([memoryEntry('direct-drain')], { batch: false })
+        const queue = freshQueue()
+
+        queue.enqueueLog(makeLog({ msg: 'row' }))
+        await queue.drain()
+
+        expect(getCapturedLogs({ name: 'direct-drain' }).map(l => l.msg)).toEqual(['row'])
+    })
+
+    it('is safe on an empty queue and an uninitialised service', async () => {
+        setBatchedConfig('empty-drain')
+        const queue = freshQueue()
+        await expect(queue.drain()).resolves.toBeUndefined()
+    })
+})

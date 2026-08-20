@@ -1,3 +1,4 @@
+import type { LogType } from "consola"
 import type { BatchOptions } from "./batch"
 import type { RateLimitingOptions } from "../../rate-limiter/types";
 import type { AppInfoOptions } from "../../app-info/types";
@@ -111,6 +112,16 @@ export interface ModuleOptions {
     context?: LogContext
 
     batch?: BatchOptions | false
+
+    /**
+     * Span-end events. Every `span()` emits one row carrying its duration and
+     * ok/error status (OTel-style), so a span is visible even when nothing
+     * logs inside it. On by default at `info`; pass `{ level }` to change the
+     * level or `false` to make spans pure correlation scopes again.
+     *
+     * @default { level: 'info' }
+     */
+    spans?: boolean | { level?: LogType }
 
     /**
      * Ingest-endpoint rate limiting. Off by default; `true` enables it with

@@ -143,6 +143,8 @@ export default defineNuxtModule<ModuleOptions>({
                     endpoint: resolved.public.endpoint,
                     baseUrl: resolved.public.baseUrl || _nuxt.options.app.baseURL,
                     batch: resolved.public.batch,
+                    // Both runtimes' loggers read span-event config from here.
+                    spans: resolved.spans,
                     scrub: resolved.scrub,
                     websocket: publicWebsocket,
                     errorCapture: resolved.errorCapture.client,

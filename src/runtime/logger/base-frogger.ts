@@ -14,6 +14,7 @@ import { froggerInternal } from "../shared/utils/internal-log";
 import type { IFroggerReporter } from "./_reporters/types";
 import { LogScrubber } from "../scrubber";
 import type { ScrubberOptions } from "../scrubber/options";
+import { DEFAULT_SPAN_EVENTS, type ResolvedSpanEvents } from "../shared/utils/span-events";
 
 import { useRuntimeConfig } from "#imports";
 import { defu } from 'defu';
@@ -39,6 +40,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
     protected level: number;
     protected readonly consoleOutput: boolean;
     protected readonly scrub: boolean;
+    protected readonly spanEvents: ResolvedSpanEvents;
 
     private customReporters: IFroggerReporter[] = [];
     private consoleReporter: ConsoleReporter | null = null;
@@ -85,6 +87,14 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         if (resolvedScrub) {
             this.scrubber = new LogScrubber(resolvedScrub);
         }
+
+        // Span-end events default ON at info; `spans: false` in module config
+        // turns them off. Resolved by the module, so a missing key (bare test
+        // configs) falls back to the same default the resolver would produce.
+        const moduleSpans = (config.public?.frogger as {
+            spans?: ResolvedSpanEvents
+        } | undefined)?.spans;
+        this.spanEvents = moduleSpans === false ? false : (moduleSpans ?? DEFAULT_SPAN_EVENTS);
 
         if (this.consoleOutput) {
             this.consoleReporter = new ConsoleReporter();

@@ -196,14 +196,13 @@ describe('consoleOutput', () => {
             configState.consoleOutput = { server: false }
             await server().span('work', () => {})
 
-            // The span child logs nothing itself; assert it is wired for delivery
-            // rather than merely muted.
+            // span() emits its own end event; the explicit log makes two.
             const child = server().startSpan('work')
             child.info('inside span')
             await flush()
 
             expect(printsToConsole(child)).toBe(false)
-            expect(enqueueLog).toHaveBeenCalledTimes(1)
+            expect(enqueueLog).toHaveBeenCalledTimes(2)
         })
     })
 })

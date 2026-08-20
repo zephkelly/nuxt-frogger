@@ -2,7 +2,27 @@
 import { defineNitroPlugin, useRuntimeConfig } from "#imports";
 import { H3Error } from "h3";
 import { getFrogger } from "../utils/auto";
+import { ServerLogQueueService } from "../services/server-log-queue";
+import { isErrorLogged } from "../../shared/utils/normalize-errors";
 import type { GlobalErrorCaptureOptions } from "../../shared/types/global-error";
+
+/**
+ * Push buffered logs out before the process dies. The 50ms lead gives the
+ * in-flight consola pipeline (async reporter hop) time to enqueue the crash
+ * line itself; the race caps how long shutdown can hang on a dead transport.
+ */
+async function drainBeforeExit(timeoutMs: number): Promise<void> {
+    try {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        await Promise.race([
+            ServerLogQueueService.getInstance().drain(),
+            new Promise<void>(resolve => setTimeout(resolve, timeoutMs)),
+        ]);
+    }
+    catch {
+        // Exiting anyway; a drain failure must never mask the real crash.
+    }
+}
 
 //@ts-ignore
 export default defineNitroPlugin((nitroApp) => {
@@ -31,9 +51,9 @@ export default defineNitroPlugin((nitroApp) => {
             cause: error.cause,
         });
 
-        setTimeout(() => {
+        void drainBeforeExit(3000).finally(() => {
             process.exit(1);
-        }, 1000);
+        });
     });
 
     process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
@@ -79,6 +99,13 @@ export default defineNitroPlugin((nitroApp) => {
 
     //@ts-ignore
     nitroApp.hooks.hook('error', (error, { event }) => {
+        // An error a handler already caught and logged (any Error serialised
+        // into a log row is stamped) is not reported a second time here.
+        if (globalErrorCaptureConfig.dedupe !== false
+            && (isErrorLogged(error) || (error instanceof Error && isErrorLogged(error.cause)))) {
+            return;
+        }
+
         const errorContext: Record<string, any> = {
             uncaught: true,
             type: 'nitro-error',
@@ -120,7 +147,7 @@ export default defineNitroPlugin((nitroApp) => {
         process.on(signal, async () => {
             globalLogger.info(`Received ${signal}, starting graceful shutdown`);
 
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await drainBeforeExit(3000);
 
             process.exit(0);
         });

@@ -31,6 +31,7 @@ import type {
 } from '../types/transports'
 import type { InternalLogLevel } from './internal-log'
 import { froggerInternal } from './internal-log'
+import { DEFAULT_SPAN_EVENTS, type ResolvedSpanEvents } from './span-events'
 import type { ResolvedMetricsOptions } from '../../metrics/shared/types/metric-options'
 import { resolveMetricsOptions } from '../../metrics/shared/utils/resolve-metrics'
 
@@ -169,6 +170,7 @@ export const DEFAULT_ERROR_CAPTURE_SERVER: ServerErrorCapture = {
     includeRejectionHandled: false,
     includeWarnings: false,
     includeStack: true,
+    dedupe: true,
 }
 
 // --- Resolved shape ----------------------------------------------------------
@@ -194,6 +196,11 @@ export interface ResolvedFroggerOptions {
     logLevel?: InternalLogLevel
     consoleOutput: ResolvedConsoleOutput
     batch: BatchOptions | false
+    /**
+     * Span-end events: every `span()` emits one row with its duration and
+     * ok/error status. `false` restores span-as-correlation-scope-only.
+     */
+    spans: ResolvedSpanEvents
     scrub: ScrubberOptions | false
     rateLimit: RateLimitingOptions | false
     websocket: WebsocketOptions | false
@@ -475,6 +482,18 @@ function resolveScrub(value: ScrubberOptions | boolean | undefined): ScrubberOpt
 }
 
 /**
+ * Normalise the `spans` option: on by default (span-end events at info),
+ * `false` disables, a partial object overrides the level.
+ */
+function resolveSpans(value: boolean | { level?: string } | undefined): ResolvedSpanEvents {
+    if (value === false) return false
+    if (typeof value === 'object' && value !== null && value.level) {
+        return { level: value.level as Exclude<ResolvedSpanEvents, false>['level'] }
+    }
+    return structuredClone(DEFAULT_SPAN_EVENTS)
+}
+
+/**
  * Resolve raw (already user-merged) module options into a fully-normalised
  * config. `options` should be the result of merging `frogger.config.ts` over
  * the `nuxt.config` `frogger` key — NOT pre-filled with subsystem defaults, or
@@ -518,6 +537,7 @@ export function resolveFroggerOptions(options: ModuleOptions = {}): ResolvedFrog
         logLevel: options.logLevel,
         consoleOutput: normalizeConsoleOutput(options.consoleOutput),
         batch: options.batch === false ? false : defu(options.batch, DEFAULT_BATCH),
+        spans: resolveSpans(options.spans),
         scrub: resolveScrub(scrub),
         rateLimit: normalizeToggle(rateLimit, DEFAULT_RATE_LIMIT),
         websocket: normalizeToggle(websocket, DEFAULT_WEBSOCKET),

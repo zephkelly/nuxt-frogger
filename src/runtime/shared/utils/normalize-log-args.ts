@@ -15,15 +15,11 @@
  *    usage — while `frogger.log('count', 5)` becomes `msg: 'count 5'`.
  */
 
+import { serializeError } from './normalize-errors'
+
 export interface NormalizedLogArgs {
     message: string
     context?: Record<string, any>
-}
-
-interface SerializedError {
-    name: string
-    message: string
-    stack?: string
 }
 
 /**
@@ -37,14 +33,6 @@ function isPlainObject(value: unknown): value is Record<string, any> {
     }
     const proto = Object.getPrototypeOf(value)
     return proto === Object.prototype || proto === null
-}
-
-function serializeError(error: Error): SerializedError {
-    return {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-    }
 }
 
 function stringifyPart(value: unknown): string {

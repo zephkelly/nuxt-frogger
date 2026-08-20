@@ -11,6 +11,8 @@ import type { TraceContext } from '../../shared/types/trace-headers';
 import { defu } from 'defu';
 import { useRuntimeConfig } from '#imports';
 import { froggerInternal } from '../../shared/utils/internal-log';
+import { normalizeContextErrors } from '../../shared/utils/normalize-errors';
+import { runSpanWithEvent } from '../../shared/utils/span-events';
 import { runWithLogger } from '../active-context.server';
 import type { FroggerOptions } from '../../shared/types/options';
 import type { IFroggerLogger } from '../types';
@@ -65,11 +67,13 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
             lvl: logObj.level,
             type: logObj.type,
             msg: logObj.args?.[0],
-            ctx: {
+            // Errors in ctx are flattened to JSON-safe objects here, or their
+            // non-enumerable name/message/stack vanish at the transport.
+            ctx: normalizeContextErrors({
                 ...this.mergedGlobalContext.value,
                 ...this.globalContext.value,
                 ...logObj.args?.slice(1)[0],
-            },
+            }),
             env: 'server',
             source: this.appInfo !== undefined ? {
                 name: this.appInfo.name || 'unknown',
@@ -150,6 +154,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
     }
 
     public span<T>(name: string, fn: () => T | Promise<T>): Promise<T> {
-        return runWithLogger(this.startSpan(name), fn);
+        const child = this.startSpan(name);
+        return runSpanWithEvent(child, name, this.spanEvents, () => runWithLogger(child, fn));
     }
 }

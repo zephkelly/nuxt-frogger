@@ -34,6 +34,7 @@ export type ScrubAction = ScrubStrategy | typeof SCRUB_ACTION[keyof typeof SCRUB
 export interface ScrubRule {
     action: ScrubAction;
     fieldPatterns: FieldPattern[];
+    /** Higher wins across ALL rules, string and regex alike; an exact string match wins ties. */
     priority: number;
     description?: string;
 }

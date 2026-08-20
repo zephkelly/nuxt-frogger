@@ -409,6 +409,54 @@ describe('LogScrubber', () => {
         });
     });
 
+    describe('Priority across pattern kinds', () => {
+        const exactLow: ScrubRule = {
+            action: SCRUB_STRATEGY.REDACT,
+            fieldPatterns: ['token'],
+            priority: 1,
+            description: 'exact-low',
+        };
+        const regexHigh: ScrubRule = {
+            action: SCRUB_STRATEGY.HASH,
+            fieldPatterns: [/tok/i],
+            priority: 10,
+            description: 'regex-high',
+        };
+        const regexLow: ScrubRule = {
+            action: SCRUB_STRATEGY.HASH,
+            fieldPatterns: [/tok/i],
+            priority: 0,
+            description: 'regex-low',
+        };
+        const exactHigh: ScrubRule = {
+            action: SCRUB_STRATEGY.REDACT,
+            fieldPatterns: ['token'],
+            priority: 10,
+            description: 'exact-high',
+        };
+
+        it('a higher-priority regex rule beats a lower-priority exact rule', () => {
+            const scrubber = new LogScrubber({ rules: [exactLow, regexHigh] });
+            expect(scrubber.wouldScrub('token').rule?.description).toBe('regex-high');
+        });
+
+        it('a higher-priority exact rule beats a lower-priority regex rule', () => {
+            const scrubber = new LogScrubber({ rules: [exactHigh, regexLow] });
+            expect(scrubber.wouldScrub('token').rule?.description).toBe('exact-high');
+        });
+
+        it('an exact rule wins a priority tie', () => {
+            const tiedRegex: ScrubRule = { ...regexHigh, priority: 1, description: 'regex-tied' };
+            const scrubber = new LogScrubber({ rules: [exactLow, tiedRegex] });
+            expect(scrubber.wouldScrub('token').rule?.description).toBe('exact-low');
+        });
+
+        it('a field only a regex matches still resolves to the regex rule', () => {
+            const scrubber = new LogScrubber({ rules: [exactLow, regexLow] });
+            expect(scrubber.wouldScrub('accessToken').rule?.description).toBe('regex-low');
+        });
+    });
+
     describe('Config and rule management', () => {
         it('does not scrub when disabled', () => {
             const scrubber = new LogScrubber({ enabled: false, rules: compileScrubRules(RECOMMENDED_RULES) });

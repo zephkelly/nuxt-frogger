@@ -228,6 +228,38 @@ export class ServerLogQueueService {
         await Promise.allSettled(flushPromises);
     }
 
+    /**
+     * Shutdown/crash flush: empty the batch buffer regardless of the sorting
+     * window, then flush every downstream transport's own buffer (file
+     * streams, retry queues). `flush()` is the polite runtime flush; this is
+     * the one to call when the process is about to exit.
+     */
+    public async drain(): Promise<void> {
+        if (!this.initialised) {
+            return;
+        }
+
+        if (!this.batchTransporter) {
+            await this.flush();
+            return;
+        }
+
+        try {
+            await this.batchTransporter.drain();
+        }
+        catch (err) {
+            froggerInternal.error('Error draining batch transporter:', err);
+        }
+
+        const downstreamFlushes = this.downstreamTransporters
+            .filter(t => t.forceFlush)
+            .map(t => t.forceFlush!().catch(err => {
+                froggerInternal.error(`Error flushing ${t.name} during drain:`, err);
+            }));
+
+        await Promise.allSettled(downstreamFlushes);
+    }
+
     public async destroy(): Promise<void> {
         if (!this.initialised) {
             return;

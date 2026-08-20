@@ -10,5 +10,11 @@ export default defineNitroPlugin((nitroApp) => {
     const froggerConfig = useRuntimeConfig().frogger as { logLevel?: InternalLogLevel } | undefined;
     configureInternalLog(froggerConfig?.logLevel);
 
-    ServerLogQueueService.getInstance()
+    const queue = ServerLogQueueService.getInstance()
+
+    // Graceful shutdown: empty the batch buffer (sorting window included)
+    // before Nitro lets the process go.
+    nitroApp.hooks.hook('close', async () => {
+        await queue.drain()
+    });
 });

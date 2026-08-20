@@ -5,15 +5,19 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime'
 import type { LoggerObject } from '../../src/runtime/shared/types/log'
 import type { IFroggerLogger } from '../../src/runtime/logger/types'
 
-const { useRuntimeConfigMock, queueLogs } = vi.hoisted(() => ({
-    useRuntimeConfigMock: vi.fn(() => ({
-        frogger: { file: false, batch: false, scrub: false },
-        public: { frogger: { scrub: false, batch: false, endpoint: '/ingest' } },
-    })),
-    // Child loggers do not inherit custom reporters, but every server logger
-    // funnels into the shared queue singleton — capture there.
-    queueLogs: [] as unknown[],
-}))
+const { useRuntimeConfigMock, queueLogs, publicFroggerConfig } = vi.hoisted(() => {
+    const publicFroggerConfig: Record<string, unknown> = { scrub: false, batch: false, endpoint: '/ingest' }
+    return {
+        publicFroggerConfig,
+        useRuntimeConfigMock: vi.fn(() => ({
+            frogger: { file: false, batch: false, scrub: false },
+            public: { frogger: publicFroggerConfig },
+        })),
+        // Child loggers do not inherit custom reporters, but every server logger
+        // funnels into the shared queue singleton — capture there.
+        queueLogs: [] as unknown[],
+    }
+})
 
 mockNuxtImport('useRuntimeConfig', () => useRuntimeConfigMock)
 
@@ -40,14 +44,21 @@ function sleep(ms: number): Promise<void> {
 }
 
 describe('span parentage (ServerFroggerLogger)', () => {
+    let allLogs: LoggerObject[]
     let logs: LoggerObject[]
     let root: ServerFroggerLogger
 
     beforeEach(() => {
         queueLogs.length = 0
-        logs = queueLogs as LoggerObject[]
+        allLogs = queueLogs as LoggerObject[]
         root = new ServerFroggerLogger({ consoleOutput: false })
     })
+
+    // Parentage assertions run over application rows; span() additionally
+    // emits one end event per span, asserted in its own describe below.
+    function appLogs(): LoggerObject[] {
+        return allLogs.filter(l => l.ctx.spanEvent !== 'end')
+    }
 
     it('startSpan child chains under the parent logger\'s current span', async () => {
         root.info('r1')
@@ -57,6 +68,7 @@ describe('span parentage (ServerFroggerLogger)', () => {
         child.info('c1')
         await flush()
 
+        logs = appLogs()
         expect(logs).toHaveLength(2)
         const [r1, c1] = logs
         expect(c1!.trace.traceId).toBe(r1!.trace.traceId)
@@ -69,6 +81,7 @@ describe('span parentage (ServerFroggerLogger)', () => {
         child.info('c1')
         await flush()
 
+        logs = appLogs()
         expect(logs[0]!.ctx.span).toBe('checkout')
         expect(logs[0]!.ctx.orderId).toBe('o-1')
     })
@@ -89,6 +102,7 @@ describe('span parentage (ServerFroggerLogger)', () => {
         expect(getActiveLogger()).toBeUndefined()
 
         await flush()
+        logs = appLogs()
         expect(logs).toHaveLength(2)
         const [r1, a1] = logs
         expect(a1!.trace.traceId).toBe(r1!.trace.traceId)
@@ -111,6 +125,7 @@ describe('span parentage (ServerFroggerLogger)', () => {
         })
         await flush()
 
+        logs = appLogs()
         expect(logs).toHaveLength(3)
         const [r1, a1, b1] = logs
         expect(a1!.trace.traceId).toBe(r1!.trace.traceId)
@@ -131,6 +146,7 @@ describe('span parentage (ServerFroggerLogger)', () => {
         })
         await flush()
 
+        logs = appLogs()
         expect(logs).toHaveLength(2)
         const [r1, b1] = logs
         expect(b1!.trace.traceId).toBe(r1!.trace.traceId)
@@ -148,6 +164,7 @@ describe('span parentage (ServerFroggerLogger)', () => {
         })
         await flush()
 
+        logs = appLogs()
         expect(logs).toHaveLength(2)
         const [a1, a2] = logs
         expect(a2!.trace.traceId).toBe(a1!.trace.traceId)
@@ -167,10 +184,83 @@ describe('span parentage (ServerFroggerLogger)', () => {
         ])
         await flush()
 
+        logs = appLogs()
         const inA = logs.find(l => l.msg === 'in-a')
         const inB = logs.find(l => l.msg === 'in-b')
         expect(inA!.ctx.span).toBe('span-a')
         expect(inB!.ctx.span).toBe('span-b')
         expect(inA!.trace.traceId).toBe(inB!.trace.traceId)
+    })
+})
+
+describe('span end events (ServerFroggerLogger)', () => {
+    let root: ServerFroggerLogger
+
+    beforeEach(() => {
+        queueLogs.length = 0
+        delete publicFroggerConfig.spans
+        root = new ServerFroggerLogger({ consoleOutput: false })
+    })
+
+    function endEvents(): LoggerObject[] {
+        return (queueLogs as LoggerObject[]).filter(l => l.ctx.spanEvent === 'end')
+    }
+
+    it('a span emits exactly one end event carrying duration and ok', async () => {
+        await root.span('checkout', async () => {
+            getActiveLogger()!.info('inside')
+        })
+        await flush()
+
+        const events = endEvents()
+        expect(events).toHaveLength(1)
+        const [end] = events
+        expect(end!.msg).toBe('checkout')
+        expect(end!.ctx.span).toBe('checkout')
+        expect(end!.ctx.ok).toBe(true)
+        expect(typeof end!.ctx.durationMs).toBe('number')
+        expect(end!.type).toBe('info')
+    })
+
+    it('a span whose body has no logs is still visible through its end event', async () => {
+        await root.span('quiet', async () => {})
+        await flush()
+
+        expect(endEvents()).toHaveLength(1)
+    })
+
+    it('a throwing span emits ok: false and rethrows', async () => {
+        await expect(root.span('explode', async () => {
+            throw new Error('boom')
+        })).rejects.toThrow('boom')
+        await flush()
+
+        const events = endEvents()
+        expect(events).toHaveLength(1)
+        expect(events[0]!.ctx.ok).toBe(false)
+        // The error itself is the caller's to report; the event carries status only.
+        expect(events[0]!.ctx.error).toBeUndefined()
+    })
+
+    it('spans: false disables end events entirely', async () => {
+        publicFroggerConfig.spans = false
+        const silentRoot = new ServerFroggerLogger({ consoleOutput: false })
+
+        await silentRoot.span('quiet', async () => {})
+        await flush()
+
+        expect(queueLogs).toHaveLength(0)
+    })
+
+    it('a configured level is honoured', async () => {
+        publicFroggerConfig.spans = { level: 'debug' }
+        const debugRoot = new ServerFroggerLogger({ consoleOutput: false, level: 4 })
+
+        await debugRoot.span('quiet', async () => {})
+        await flush()
+
+        const events = endEvents()
+        expect(events).toHaveLength(1)
+        expect(events[0]!.type).toBe('debug')
     })
 })

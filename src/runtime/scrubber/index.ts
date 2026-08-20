@@ -74,22 +74,25 @@ export class LogScrubber {
         }
 
         const lowerFieldName = fieldName.toLowerCase();
+        const exactMatch = this.fieldRuleMap.get(lowerFieldName) ?? null;
 
-        const exactMatch = this.fieldRuleMap.get(lowerFieldName);
-        if (exactMatch) {
-            this.cacheRule(fieldName, exactMatch);
-            return exactMatch;
-        }
-
+        // Priority decides across BOTH pattern kinds; an exact string match
+        // only breaks ties. regexRules is sorted by descending priority, so
+        // the scan stops as soon as a regex can no longer outrank the exact
+        // match.
+        let chosen = exactMatch;
         for (const { pattern, rule } of this.regexRules) {
+            if (exactMatch && rule.priority <= exactMatch.priority) {
+                break;
+            }
             if (pattern.test(fieldName)) {
-                this.cacheRule(fieldName, rule);
-                return rule;
+                chosen = rule;
+                break;
             }
         }
 
-        this.cacheRule(fieldName, null);
-        return null;
+        this.cacheRule(fieldName, chosen);
+        return chosen;
     }
 
     private cacheRule(fieldName: string, rule: ScrubRule | null): void {

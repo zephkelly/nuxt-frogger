@@ -41,10 +41,15 @@ vi.mock('../../src/runtime/server/services/server-log-queue', () => ({
     },
 }))
 
-// getFrogger falls back to useEvent() when no event is passed; outside a
-// request context the real one throws, so options-only calls need this stub.
+// getFrogger falls back to useEvent() when no event is passed. The real one
+// THROWS outside a request context (boot-time nitro plugins, cron tasks) —
+// the mock does the same so options-only calls exercise getFrogger's guard.
+// The 0.1.22 crash: the global-error plugin's getFrogger({ context }) call
+// stopped being mistaken for an event and hit this throw at startup.
 vi.mock('nitropack/runtime/internal/context', () => ({
-    useEvent: vi.fn(() => undefined),
+    useEvent: vi.fn(() => {
+        throw new Error('Nitro request context is not available.')
+    }),
 }))
 
 import { ServerFroggerLogger } from '../../src/runtime/logger/server'
@@ -240,6 +245,14 @@ describe('getFrogger event detection', () => {
         const logger = getFrogger(fakeEvent, { scrub: false } as never)
 
         expect(optionsOf(logger).scrub).toBe(false)
+    })
+
+    it('does not throw at boot time, when useEvent has no request context', () => {
+        // The global-error nitro plugin calls this exact shape during
+        // runNitroPlugins, before any request exists.
+        const logger = getFrogger({ context: { errorHandler: 'global' } } as never)
+
+        expect(optionsOf(logger).context).toEqual({ errorHandler: 'global' })
     })
 
     it('accepts the event in second position, per the auto overload order', () => {

@@ -35,7 +35,15 @@ export function getFrogger(
         : isEvent(optionsOrEvent) ? optionsOrEvent : undefined;
 
     if (!event) {
-        event = useEvent();
+        // useEvent() THROWS outside a request context (nitro plugin init, cron
+        // tasks, startup code) rather than returning undefined. A logger with
+        // no ambient event is valid there — it just starts a fresh trace.
+        try {
+            event = useEvent();
+        }
+        catch {
+            event = undefined;
+        }
     }
 
     const rawOptions = isEvent(eventOrOptions) ? optionsOrEvent : eventOrOptions;

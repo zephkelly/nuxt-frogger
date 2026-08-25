@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.22
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.21...v0.1.22)
+
+### 🩹 Fixes
+
+- Scrub directive detection and queue rescrubbing ([b13de55](https://github.com/zephkelly/nuxt-frogger/commit/b13de55))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.21
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.20...v0.1.21)

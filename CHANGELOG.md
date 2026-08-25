@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.23
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.22...v0.1.23)
+
+### 🩹 Fixes
+
+- Production crashing bug ([b30408e](https://github.com/zephkelly/nuxt-frogger/commit/b30408e))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.22
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.21...v0.1.22)

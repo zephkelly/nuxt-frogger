@@ -1,6 +1,7 @@
 
 
 import { defu } from 'defu';
+import { isEvent } from "h3";
 import type { H3Event } from "h3";
 import { useRuntimeConfig } from '#imports';
 import { useEvent } from 'nitropack/runtime/internal/context';
@@ -29,18 +30,22 @@ export function getFrogger(event?: H3Event, options?: ServerLoggerOptions): IFro
 
 export function getFrogger(
     eventOrOptions?: H3Event | ServerLoggerOptions,
-    maybeOptions?: ServerLoggerOptions
+    optionsOrEvent?: ServerLoggerOptions | H3Event
 ): IFroggerLogger {
-    const isEvent = eventOrOptions && 'context' in eventOrOptions;
-    
-    let event = isEvent ? eventOrOptions as H3Event : undefined;
+    // h3's brand check, not a `'context' in x` sniff: `context` is a documented
+    // ServerLoggerOptions field, so sniffing it mistook real options objects
+    // for events and silently dropped the caller's options (scrub included).
+    // The event is accepted in either position, matching both overload orders.
+    let event = isEvent(eventOrOptions)
+        ? eventOrOptions
+        : isEvent(optionsOrEvent) ? optionsOrEvent : undefined;
 
     if (!event) {
         event = useEvent();
     }
 
-
-    const options = isEvent ? maybeOptions : eventOrOptions as ServerLoggerOptions;
+    const rawOptions = isEvent(eventOrOptions) ? optionsOrEvent : eventOrOptions;
+    const options = isEvent(rawOptions) ? undefined : rawOptions as ServerLoggerOptions | undefined;
 
     const config = useRuntimeConfig();
 

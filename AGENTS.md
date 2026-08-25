@@ -66,7 +66,10 @@ Commands (pnpm lockfile present; scripts shell out to npm/nuxi):
    rate-limit ([src/runtime/rate-limiter/](src/runtime/rate-limiter/)) → loop detection (anti-feedback via
    `x-frogger-*` headers + batch `meta.processChain`) → `ServerLogQueueService.enqueueBatch`.
 6. `ServerLogQueueService` (singleton, [src/runtime/server/services/server-log-queue.ts](src/runtime/server/services/server-log-queue.ts)):
-   stamp each log's `source` from the batch envelope's `app` when it has none → scrub →
+   stamp each log's `source` from the batch envelope's `app` when it has none → scrub (skipped for rows
+   carrying the `SCRUB_HANDLED` symbol from an in-process server logger, whose own scrub disposition —
+   including a per-logger `scrub: false` — is authoritative; the symbol never survives JSON, so network
+   rows are always scrubbed, and it is stripped before any transport sees the row) →
    `BatchTransport` (timestamp-sorted buffering) → fan-out to configured transports. The stamp is what
    lets a relay forward another app's logs without re-badging them as its own: `HttpTransport` rebuilds
    the envelope from the *relaying* app's identity, so per-log `source` is the only carrier that survives.
@@ -79,9 +82,12 @@ Commands (pnpm lockfile present; scripts shell out to npm/nuxi):
 
 **Server-side direct logging:** `getFrogger()` → `ServerFroggerLogger`
 ([src/runtime/logger/server/index.ts](src/runtime/logger/server/index.ts)) enqueues straight into
-`ServerLogQueueService` (steps 6–7). It auto-captures the current H3 event via Nitro `asyncContext`
+`ServerLogQueueService` (steps 6–7), stamping each row `SCRUB_HANDLED` since the logger's own scrub
+pass has already run. It auto-captures the current H3 event via Nitro `asyncContext`
 (`useEvent()`), reading incoming `traceparent`/`tracestate` so the first server log continues the
-client's trace.
+client's trace. `getFrogger` detects an event argument via h3's `isEvent()` brand check (either
+argument position), never by sniffing a `context` property — `context` is a legal
+`ServerLoggerOptions` field.
 
 **Trace propagation:** `logger.getHeaders()` emits `traceparent` + `tracestate`. The
 [trace-headers server plugin](src/runtime/server/plugins/trace-headers.server.ts) parses incoming

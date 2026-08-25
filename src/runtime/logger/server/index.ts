@@ -2,6 +2,7 @@ import type { LogObject } from 'consola/basic';
 
 import { BaseFroggerLogger } from '../base-frogger';
 import type { ServerLoggerOptions } from '../../server/types/logger';
+import { SCRUB_HANDLED } from '../../shared/types/log';
 import type { LoggerObject, LogContext } from '../../shared/types/log';
 import { ServerLogQueueService } from '../../server/services/server-log-queue';
 import { parseAppInfoConfig } from '../../app-info/parse';
@@ -86,6 +87,10 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
     }
     
     protected processLoggerObject(loggerObject: LoggerObject): void {
+        // handleLog already applied this logger's scrub disposition (its rules
+        // or an explicit `scrub: false`); the stamp stops the queue's
+        // module-level pass from overriding it.
+        loggerObject[SCRUB_HANDLED] = true;
         this.logQueue.enqueueLog(loggerObject);
        
         if (!this.madeFirstLog) {

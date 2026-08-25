@@ -1,6 +1,7 @@
 import { useRuntimeConfig } from '#imports'
 
 import type { IFroggerTransport } from '../../logger/_transports/types'
+import { SCRUB_HANDLED } from '../../shared/types/log'
 import type { LoggerObject } from '../../shared/types/log'
 import type { LoggerObjectBatch } from '../../shared/types/batch'
 
@@ -164,8 +165,24 @@ export class ServerLogQueueService {
             }
         }
 
-        if (this.scrubber) {
-            this.scrubber.scrubBatch(logs);
+        // Rows stamped by an in-process server logger already carry that
+        // logger's scrub disposition (rules or an explicit `scrub: false`);
+        // re-scrubbing them here would override the per-logger opt-out.
+        // Network batches are parsed from JSON, which cannot carry the symbol,
+        // so client rows always pass through the scrubber. The stamp is
+        // stripped either way so transports never see it.
+        const unhandled: LoggerObject[] = [];
+        for (const log of logs) {
+            if (log[SCRUB_HANDLED]) {
+                delete log[SCRUB_HANDLED];
+            }
+            else {
+                unhandled.push(log);
+            }
+        }
+
+        if (this.scrubber && unhandled.length > 0) {
+            this.scrubber.scrubBatch(unhandled);
         }
 
         if (this.batchTransporter) {
@@ -184,7 +201,10 @@ export class ServerLogQueueService {
     public enqueueLog(logObj: LoggerObject): void {
         if (!this.ensureInitialised()) return;
 
-        if (this.scrubber) {
+        if (logObj[SCRUB_HANDLED]) {
+            delete logObj[SCRUB_HANDLED];
+        }
+        else if (this.scrubber) {
             this.scrubber.scrubLoggerObject(logObj);
         }
 

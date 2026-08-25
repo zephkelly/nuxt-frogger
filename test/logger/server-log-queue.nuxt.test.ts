@@ -23,7 +23,9 @@ vi.mock('../../src/runtime/websocket/state/factory', () => ({
 import { ServerLogQueueService } from '../../src/runtime/server/services/server-log-queue'
 import { DEFAULT_FILE } from '../../src/runtime/shared/types/file'
 import { getCapturedLogs, clearCapturedLogs, flushFrogger } from '../../src/testing'
+import { defineScrub } from '../../src/runtime/scrubber/builder'
 
+import { SCRUB_HANDLED } from '../../src/runtime/shared/types/log'
 import type { LoggerObject } from '../../src/runtime/shared/types/log'
 
 function fileEntry(overrides: Partial<typeof DEFAULT_FILE> = {}): ResolvedServerTransport {
@@ -239,6 +241,78 @@ describe('ServerLogQueueService origin app attribution', () => {
         await flushFrogger()
 
         expect(getCapturedLogs({ name: 'origin' })[0]?.source).toBeUndefined()
+    })
+})
+
+
+describe('ServerLogQueueService scrub pass', () => {
+    const MODULE_SCRUB = defineScrub().redact('password').build()
+
+    function setScrubConfig(name: string) {
+        setConfig([memoryEntry(name)], { batch: false, scrub: MODULE_SCRUB })
+    }
+
+    it('scrubs unstamped rows (network batches) with the module ruleset', async () => {
+        clearCapturedLogs('q-scrub')
+        setScrubConfig('q-scrub')
+        const queue = freshQueue()
+
+        queue.enqueueBatch({ logs: [makeLog({ ctx: { password: 'hunter2', user: 'zeph' } })] })
+        await flushFrogger()
+
+        const captured = getCapturedLogs({ name: 'q-scrub' })
+        expect(captured[0]!.ctx.password).toBe('[REDACTED]')
+        expect(captured[0]!.ctx.user).toBe('zeph')
+    })
+
+    it('skips the pass for rows stamped by a server logger and strips the stamp', async () => {
+        clearCapturedLogs('q-skip')
+        setScrubConfig('q-skip')
+        const queue = freshQueue()
+
+        queue.enqueueBatch({
+            logs: [
+                makeLog({ msg: 'stamped', ctx: { password: 'hunter2' }, [SCRUB_HANDLED]: true }),
+                makeLog({ msg: 'plain', ctx: { password: 'hunter2' } }),
+            ],
+        })
+        await flushFrogger()
+
+        const captured = getCapturedLogs({ name: 'q-skip' })
+        const stamped = captured.find(l => l.msg === 'stamped')!
+        expect(stamped.ctx.password).toBe('hunter2')
+        expect(SCRUB_HANDLED in stamped).toBe(false)
+        expect(captured.find(l => l.msg === 'plain')!.ctx.password).toBe('[REDACTED]')
+    })
+
+    it('honours the stamp on enqueueLog and strips it before transport', async () => {
+        clearCapturedLogs('q-log')
+        setScrubConfig('q-log')
+        const queue = freshQueue()
+
+        queue.enqueueLog(makeLog({ ctx: { password: 'hunter2' }, [SCRUB_HANDLED]: true }))
+        await flushFrogger()
+
+        const captured = getCapturedLogs({ name: 'q-log' })
+        expect(captured[0]!.ctx.password).toBe('hunter2')
+        expect(SCRUB_HANDLED in captured[0]!).toBe(false)
+    })
+
+    it('the stamp cannot be forged over the wire: JSON round-trips drop it', async () => {
+        clearCapturedLogs('q-forge')
+        setScrubConfig('q-forge')
+        const queue = freshQueue()
+
+        // Simulates the /api ingress: readBody JSON-parses the batch, and a
+        // symbol key never survives serialization, so hostile clients cannot
+        // opt their rows out of the queue's scrub.
+        const wire = JSON.parse(JSON.stringify({
+            logs: [makeLog({ ctx: { password: 'hunter2' }, [SCRUB_HANDLED]: true })],
+        }))
+        queue.enqueueBatch(wire)
+        await flushFrogger()
+
+        expect(getCapturedLogs({ name: 'q-forge' })[0]!.ctx.password).toBe('[REDACTED]')
     })
 })
 

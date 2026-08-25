@@ -7,6 +7,15 @@ export interface LogContext {
     [key: string]: any
 }
 
+// Stamped by an in-process server logger once its own scrub disposition (its
+// rules, or an explicit `scrub: false`) has been applied, so the queue's
+// module-level pass doesn't override a per-logger opt-out. A symbol key:
+// network batches are parsed from JSON and can never carry it, so client rows
+// always get the queue's unconditional scrub. The queue strips it before any
+// transport sees the row. Symbol.for keeps the marker recognisable even if
+// the runtime is bundled twice.
+export const SCRUB_HANDLED: unique symbol = Symbol.for('frogger:scrub-handled');
+
 export interface LoggerObject {
     time: number;
     lvl: number;
@@ -20,6 +29,7 @@ export interface LoggerObject {
         version: string;
     };
     trace: TraceContext;
+    [SCRUB_HANDLED]?: true;
 }
 
 export const LOG_LEVELS = {

@@ -8,7 +8,7 @@ export interface SplitMetricBatchCaps {
 }
 
 /**
- * Split a metric batch into chunks that fit a destination's per-batch caps —
+ * Split a metric batch into chunks that fit a destination's per-batch caps -
  * the sibling of `splitLoggerBatch`. The load-bearing use in v1 is the
  * page-exit `sendBeacon` path: batches must stay well under the ~64KB beacon
  * quota, so the client caps chunks by byte size before beaconing.

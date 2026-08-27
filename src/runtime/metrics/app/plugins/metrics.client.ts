@@ -27,7 +27,7 @@ function traceFromLogger(logger: IFroggerLogger): { traceId: string; spanId?: st
         if (parsed) return { traceId: parsed.traceId, spanId: parsed.spanId }
     }
     catch {
-        // logger without trace headers — no exemplar
+        // logger without trace headers - no exemplar
     }
     return undefined
 }
@@ -46,7 +46,7 @@ export default defineNuxtPlugin({
     name: 'frogger:metrics',
     setup(nuxtApp) {
         const config = useRuntimeConfig()
-        //@ts-ignore — public.frogger.metrics is present only when metrics are on
+        //@ts-ignore - public.frogger.metrics is present only when metrics are on
         const metricsConfig = config.public?.frogger?.metrics as {
             webVitals?: { reportAllChanges: boolean } | false
             deviceStats?: boolean
@@ -71,14 +71,14 @@ export default defineNuxtPlugin({
             }
         }
         catch {
-            // sessionStorage unavailable (privacy mode) — decide in-memory only.
+            // sessionStorage unavailable (privacy mode) - decide in-memory only.
             session = { id: uuidv7(), sampled: decideSampled(metricsConfig.sampleRate ?? 1, Math.random()) }
         }
 
         const queue = getMetricsQueue(app)
         queue.setSession(session)
 
-        // A sampled-out session collects nothing — do no further work.
+        // A sampled-out session collects nothing - do no further work.
         if (!session.sampled) return
 
         // Device envelope: read once, rides the batch (never per point).
@@ -86,11 +86,9 @@ export default defineNuxtPlugin({
             queue.setContext(collectDeviceContext())
         }
 
-        // Trace exemplar + route pattern, both captured ONCE at init. Reading
-        // the route at report time would mis-attribute — CLS/INP report at page
-        // hide, after SPA navigation may have moved the current route.
-        const pageTrace = traceFromLogger(getAmbientClientLogger())
-
+        // Route pattern captured ONCE at init (it only reads `$router`).
+        // Reading the route at report time would mis-attribute - CLS/INP report
+        // at page hide, after SPA navigation may have moved the current route.
         let route: string | undefined
         try {
             const matched = app.$router?.currentRoute?.value?.matched
@@ -101,13 +99,31 @@ export default defineNuxtPlugin({
             route = undefined
         }
 
+        // The page trace is resolved LAZILY on the first vital, never during
+        // plugin setup: `getAmbientClientLogger()` force-constructs the ambient
+        // logger and fires the one-shot `frogger:init` hook, and doing that in
+        // setup() would fire it before user plugins have registered handlers.
+        // Memoised inside the fallback branch only - when a span is open the
+        // ambient accessor returns the span logger, and an unguarded memo would
+        // freeze that span's trace as the page trace.
+        let pageTrace: { traceId: string; spanId?: string } | undefined
+        let pageTraceResolved = false
+
         const resolveStamp = (): WebVitalStamp => {
             // An active span at callback time is an opportunistic override; the
             // page-level trace is the load-bearing path (vitals fire from a
             // PerformanceObserver, essentially never inside a user span).
             const active = getActiveLogger()
-            const trace = (active && traceFromLogger(active)) || pageTrace
-            return { trace, route }
+            const activeTrace = active && traceFromLogger(active)
+            if (activeTrace) {
+                return { trace: activeTrace, route }
+            }
+
+            if (!pageTraceResolved) {
+                pageTraceResolved = true
+                pageTrace = traceFromLogger(getAmbientClientLogger())
+            }
+            return { trace: pageTrace, route }
         }
 
         if (metricsConfig.webVitals !== false) {

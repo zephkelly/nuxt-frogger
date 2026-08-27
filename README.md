@@ -33,6 +33,20 @@ export default defineFroggerOptions({
 });
 ```
 
+Metrics can be shipped to a [nuxt-observe](https://github.com/zephkelly/nuxt-observe)
+deployment with a single transport entry - relayed from your server, or sent
+directly from the browser on static sites:
+
+```ts
+import { defineFroggerOptions, metricObserveTransport } from '#frogger/config';
+
+export default defineFroggerOptions({
+    metrics: {
+        transports: [metricObserveTransport({ url: 'https://observe.example.com', key: 'obsk_...' })],
+    },
+});
+```
+
 Metrics are stored raw and aggregated on read, carry an optional trace exemplar
 linking each measurement to the page's trace, and never touch the logging
 pipeline. See the [Metrics guide](https://zephkelly.github.io/nuxt-frogger/guides/metrics) for the config reference and cardinality model.

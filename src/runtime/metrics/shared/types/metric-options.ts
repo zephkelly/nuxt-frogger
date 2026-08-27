@@ -8,7 +8,7 @@ import type {
 /**
  * The metrics subsystem is a fully separate, opt-in capability from the logging
  * pipeline. It is OFF by default and never part of the `minimal`/`standard`/
- * `full` presets — enabling data collection is always an explicit choice.
+ * `full` presets - enabling data collection is always an explicit choice.
  *
  * `metrics: true` turns on the free, bounded-cardinality signals only: Web
  * Vitals + a per-batch device envelope. Everything heavier (manual metrics API,
@@ -46,7 +46,7 @@ export interface MetricsOptions {
      */
     batch?: BatchOptions | false
 
-    /** Metric destinations (parallel to logs — NOT the log `transports`). */
+    /** Metric destinations (parallel to logs - NOT the log `transports`). */
     transports?: FroggerMetricTransportConfig[]
 
     public?: {

@@ -1,10 +1,12 @@
 import type { MetricObject } from './metric'
 
 /**
- * Device / network / viewport envelope stamped ONCE per batch — never per
- * point and never as labels. Keeping this off the per-point `labels` is a
- * hard cardinality guardrail: a device string as a label would multiply every
- * series by the number of distinct devices.
+ * Device / network / viewport envelope, collected and transmitted ONCE per
+ * batch, then denormalised onto each stored event at server ingest (transports
+ * receive a bare `MetricObject[]`, so the envelope only survives on the
+ * points). The cardinality guardrail is that it stays out of the per-point
+ * `labels`: a device string as a label would multiply every series by the
+ * number of distinct devices.
  *
  * Every field is best-effort and feature-detected on the client; an
  * unsupported API is `null` (never `0`, which would read as a real reading).
@@ -18,11 +20,11 @@ export interface MetricContext {
     os?: string
     deviceType?: string
 
-    /** `navigator.connection.effectiveType` — `null` when unsupported. */
+    /** `navigator.connection.effectiveType` - `null` when unsupported. */
     effectiveType?: string | null
-    /** `navigator.deviceMemory` (GiB) — `null` when unsupported. */
+    /** `navigator.deviceMemory` (GiB) - `null` when unsupported. */
     deviceMemory?: number | null
-    /** `navigator.hardwareConcurrency` — `null` when unsupported. */
+    /** `navigator.hardwareConcurrency` - `null` when unsupported. */
     hardwareConcurrency?: number | null
 
     /** Viewport size in CSS pixels at collection time. */
@@ -38,7 +40,7 @@ export interface MetricObjectBatch {
     metrics: MetricObject[]
     app?: { name?: string; version?: string }
 
-    /** Device envelope — rides the batch once, not each point. */
+    /** Device envelope - rides the batch once; denormalised onto points at ingest. */
     context?: MetricContext
 
     /** One sampling decision per session (uuidv7 session id). */

@@ -2,11 +2,12 @@ import type { FileOptions } from '../../../shared/types/file'
 import type {
     MetricFileTransportConfig,
     MetricMemoryTransportConfig,
+    MetricObserveTransportConfig,
 } from '../types/metric-transports'
 
 /**
  * Declarative metric-transport factories. The metrics-pipeline counterpart of
- * `shared/transports/factories.ts` — same tagged-serializable-factory
+ * `shared/transports/factories.ts` - same tagged-serializable-factory
  * discipline (pure module, no `#imports`, returns a plain `{ type, ...options }`
  * object that survives `structuredClone`), a deliberately different body
  * contract. Add these to `metrics.transports`, not the log `transports`.
@@ -34,4 +35,18 @@ export function metricFileTransport(options: FileOptions & { name?: string } = {
  */
 export function metricMemoryTransport(options: Omit<MetricMemoryTransportConfig, 'type'> = {}): MetricMemoryTransportConfig {
     return { type: 'memory', ...options }
+}
+
+/**
+ * A nuxt-observe deployment's metrics ingest. Encodes the observe contract
+ * (ingest path, auth placement, batch caps) - the metrics sibling of the log
+ * `observeTransport`, same option names.
+ *
+ * ```ts
+ * metrics: { transports: [metricObserveTransport({ url: 'https://observe.app.com', key })] }              // relay (server)
+ * metrics: { transports: [metricObserveTransport({ url: 'https://observe.app.com', key, client: true })] } // browser-direct
+ * ```
+ */
+export function metricObserveTransport(options: Omit<MetricObserveTransportConfig, 'type'>): MetricObserveTransportConfig {
+    return { type: 'observe', ...options }
 }

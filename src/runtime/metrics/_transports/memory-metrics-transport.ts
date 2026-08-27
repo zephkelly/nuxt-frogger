@@ -7,7 +7,7 @@ import type { MetricObject } from '../shared/types/metric'
 
 /**
  * Process-global registry of captured-metric arrays, keyed by transport `name`.
- * The metrics analogue of the log memory store — a separate registry on
+ * The metrics analogue of the log memory store - a separate registry on
  * `globalThis.__FROGGER_METRICS_STORE__` so metric and log captures never mix.
  * A `memoryMetricTransport({ name })` entry travels through `runtimeConfig`
  * carrying only its `name`; the constructed transport writes into

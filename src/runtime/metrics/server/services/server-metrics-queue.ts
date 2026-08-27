@@ -8,13 +8,14 @@ import type { BatchOptions } from '../../../shared/types/batch'
 
 import { MetricsFileTransport } from '../../_transports/file-metrics-transport'
 import { MetricsMemoryTransport } from '../../_transports/memory-metrics-transport'
+import { MetricsHttpTransport } from '../../_transports/http-metrics-transport'
 import { MetricsBatchTransport, createMetricsBatchTransport } from '../../_transports/batch-metrics-transport'
 import { froggerInternal } from '../../../shared/utils/internal-log'
 
 /**
- * Server-side metrics queue. The metrics analogue of `ServerLogQueueService` —
+ * Server-side metrics queue. The metrics analogue of `ServerLogQueueService` -
  * same `getInstance()` + `initialise()`-from-runtimeConfig singleton shape and
- * per-transport try/catch isolation — but it does NOT aggregate: raw metric
+ * per-transport try/catch isolation - but it does NOT aggregate: raw metric
  * events fan out to the configured sinks unchanged (aggregation is a read-time
  * concern). No scrubber runs on metrics; their cardinality guard is the
  * labels-vs-attr split enforced at collection time.
@@ -43,7 +44,7 @@ export class ServerMetricsQueueService {
         this.initialised = true
 
         const config = useRuntimeConfig()
-        //@ts-ignore — frogger.metrics is injected by the module only when enabled
+        //@ts-ignore - frogger.metrics is injected by the module only when enabled
         const metricsConfig = config.frogger?.metrics as { batch?: BatchOptions | false } | undefined
 
         const batchingEnabled = (metricsConfig?.batch ?? false) !== false
@@ -63,7 +64,7 @@ export class ServerMetricsQueueService {
     }
 
     private buildConfiguredTransports(config: ReturnType<typeof useRuntimeConfig>): IFroggerMetricsTransport[] {
-        //@ts-ignore — frogger.metrics.transports is injected by the module
+        //@ts-ignore - frogger.metrics.transports is injected by the module
         const configured = (config.frogger?.metrics?.transports ?? []) as ResolvedMetricServerTransport[]
 
         const transporters: IFroggerMetricsTransport[] = []
@@ -77,6 +78,25 @@ export class ServerMetricsQueueService {
                     transporters.push(new MetricsMemoryTransport({ name: t.name }))
                     continue
                 }
+                if (t.type === 'http') {
+                    transporters.push(new MetricsHttpTransport({
+                        baseUrl: t.baseUrl,
+                        endpoint: t.endpoint,
+                        apiKey: t.apiKey,
+                        apiKeyLocation: t.apiKeyLocation,
+                        headers: t.headers,
+                        timeout: t.timeout,
+                        retryOnFailure: t.retryOnFailure,
+                        maxRetries: t.maxRetries,
+                        retryDelay: t.retryDelay,
+                        maxBatchEvents: t.maxBatchEvents,
+                        maxBodyBytes: t.maxBodyBytes,
+                    }))
+                    continue
+                }
+                froggerInternal.warn(
+                    `Unknown metric transport type "${(t as { type?: string }).type}" - skipping.`,
+                )
             }
             catch (err) {
                 froggerInternal.error('ServerMetricsQueueService: failed to construct metric transport', t.name, err)
@@ -97,6 +117,17 @@ export class ServerMetricsQueueService {
 
         const metrics = batch.metrics
         if (!metrics || metrics.length === 0) return
+
+        // Transports receive a bare MetricObject[], so the batch envelope only
+        // survives if it is denormalised onto each point first - the metrics
+        // sibling of the log queue's origin-app stamping. `??=` keeps a relay
+        // hop idempotent: a point stamped at the origin is never re-stamped.
+        const app = batch.app
+        for (const m of metrics) {
+            if (app?.name) m.source ??= { name: app.name, version: app.version ?? '' }
+            m.context ??= batch.context
+            m.session ??= batch.session
+        }
 
         if (this.batchTransporter) {
             try {
@@ -134,6 +165,36 @@ export class ServerMetricsQueueService {
         }
 
         await Promise.allSettled(flushPromises)
+    }
+
+    /**
+     * Graceful-shutdown drain: force the batch window to hand everything to the
+     * downstream sinks, then force-flush their own buffers (the file
+     * transport's write buffer included). The metrics sibling of the log
+     * queue's `drain()`.
+     */
+    public async drain(): Promise<void> {
+        if (!this.initialised) return
+
+        if (!this.batchTransporter) {
+            await this.flush()
+            return
+        }
+
+        try {
+            await this.batchTransporter.drain()
+        }
+        catch (err) {
+            froggerInternal.error('Error draining metric batch transporter:', err)
+        }
+
+        const downstreamFlushes = this.downstreamTransporters
+            .filter(t => t.forceFlush)
+            .map(t => t.forceFlush!().catch((err) => {
+                froggerInternal.error(`Error flushing ${t.name} during drain:`, err)
+            }))
+
+        await Promise.allSettled(downstreamFlushes)
     }
 
     public async destroy(): Promise<void> {

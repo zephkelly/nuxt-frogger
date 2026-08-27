@@ -2,6 +2,7 @@ import { H3Error, eventHandler, readRawBody, getHeader, createError } from 'h3'
 
 import type { MetricObjectBatch } from '../../shared/types/metric-batch'
 import { ServerMetricsQueueService } from '../services/server-metrics-queue'
+import { getFroggerRateLimiter } from '../../../rate-limiter'
 import { froggerInternal } from '../../../shared/utils/internal-log'
 
 
@@ -25,7 +26,7 @@ function detectMetricsLoop(batch: MetricObjectBatch): { isLoop: boolean; reason?
     if (batch.meta.time) {
         const age = Date.now() - batch.meta.time
         if (age > 600000) {
-            return { isLoop: true, reason: `Metrics older than 10 minutes (${Math.round(age / 1000)}s) — possible retry loop` }
+            return { isLoop: true, reason: `Metrics older than 10 minutes (${Math.round(age / 1000)}s) - possible retry loop` }
         }
     }
 
@@ -44,8 +45,13 @@ export default eventHandler(async (event) => {
         })
     }
 
+    // Shares the log ingest's per-IP rate-limit budget (inert when the
+    // rateLimit subsystem is off) - a metrics burst counts against the same
+    // window as logs, which is the right trade at web-vitals volume.
+    await getFroggerRateLimiter().check(event)
+
     // Page-exit batches arrive via `navigator.sendBeacon`, which sends a
-    // `text/plain;charset=UTF-8` body — h3's `readBody` only JSON-parses when
+    // `text/plain;charset=UTF-8` body - h3's `readBody` only JSON-parses when
     // the content-type is exactly `application/json`, so a beacon body would be
     // silently dropped. Read the raw string and parse it ourselves so both the
     // in-session `$fetch` (application/json) and beacon (text/plain) paths work.
@@ -85,7 +91,7 @@ export default eventHandler(async (event) => {
         }
 
         // Stamp the raw User-Agent server-side (UA parsing / geo is deferred to
-        // Phase 3 — zero new deps here). Rides the batch envelope, never a point.
+        // Phase 3 - zero new deps here). Rides the batch envelope, never a point.
         const ua = getHeader(event, 'user-agent')
         if (ua) {
             batch.context = { ...batch.context, ua }

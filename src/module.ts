@@ -41,11 +41,13 @@ export type {
 export {
     metricFileTransport,
     metricMemoryTransport,
+    metricObserveTransport,
 } from './runtime/metrics/shared/transports/factories'
 export type {
     FroggerMetricTransportConfig,
     MetricFileTransportConfig,
     MetricMemoryTransportConfig,
+    MetricObserveTransportConfig,
 } from './runtime/metrics/shared/types/metric-transports'
 export type { MetricsOptions } from './runtime/metrics/shared/types/metric-options'
 
@@ -256,8 +258,14 @@ export default defineNuxtModule<ModuleOptions>({
             // apiKey on one is NOT a secret. Warn (once per keyed transport)
             // so the author knows before it ships. observe browser keys are
             // write-only public by design (`publicKeyOk`) and skipped.
+            // Metric client transports ship in the same bundle, so they get
+            // the same inspection.
             if (allowInternal('warn')) {
-                for (const t of clientTransports) {
+                const bundledTransports = [
+                    ...clientTransports,
+                    ...(metricsEnabled ? metrics.transports.client : []),
+                ];
+                for (const t of bundledTransports) {
                     if (t.apiKey && !t.publicKeyOk) {
                         console.warn(
                             '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
@@ -417,12 +425,17 @@ export default defineNuxtModule<ModuleOptions>({
 
             // Metrics ingest route + queue lifecycle — registered ONLY when the
             // metrics subsystem is enabled (unlike the always-on log route).
+            // The route is the RESOLVED endpoint, so a custom
+            // `metrics.public.endpoint` serves where the client posts; `false`
+            // registers no route at all.
             if (metricsEnabled) {
                 addServerPlugin(resolver.resolve('./runtime/metrics/server/plugins/metrics-queue.server'))
-                addServerHandler({
-                    route: DEFAULT_METRICS_ENDPOINT,
-                    handler: resolver.resolve('./runtime/metrics/server/api/metrics.post'),
-                })
+                if (metrics.public.endpoint !== false) {
+                    addServerHandler({
+                        route: metrics.public.endpoint || DEFAULT_METRICS_ENDPOINT,
+                        handler: resolver.resolve('./runtime/metrics/server/api/metrics.post'),
+                    })
+                }
             }
 
             if (resolved.websocket && _nuxt.options.dev) {

@@ -84,9 +84,11 @@ Never put an id, a URL, or free-form user input in `labels`.
 
 ## Device context
 
-The device envelope rides each batch **once** (never per point, never as
-labels). Every field is best-effort and feature-detected; an unsupported API is
-`null`, never `0`:
+The device envelope is collected and transmitted **once per batch**, then
+stamped onto each stored event at server ingest (alongside the session and the
+origin app, which lands in each event's `source` field). It is never emitted as
+labels, so it can never multiply your series count. Every field is best-effort
+and feature-detected; an unsupported API is `null`, never `0`:
 
 ```ts
 {
@@ -147,6 +149,10 @@ metrics: {
   transports: [
     metricFileTransport(),                    // rotated JSON-lines under logs/metrics/
     metricMemoryTransport({ name: 'test' }),  // in-memory capture for tests
+    metricObserveTransport({                  // ship to a nuxt-observe deployment
+      url: 'https://observe.example.com',
+      key: process.env.OBSERVE_INGEST_KEY!,
+    }),
   ],
 
   public: {
@@ -160,20 +166,107 @@ Import the metric transport factories from `#frogger/config` (or from
 `nuxt-frogger` in `nuxt.config.ts`):
 
 ```ts
-import { metricFileTransport, metricMemoryTransport } from '#frogger/config'
+import {
+  metricFileTransport,
+  metricMemoryTransport,
+  metricObserveTransport,
+} from '#frogger/config'
 ```
 
 Metric transports are a deliberately separate list from the log `transports`;
 they share no body types.
 
+## Shipping metrics to nuxt-observe
+
+`metricObserveTransport()` is the metrics sibling of the log
+[`observeTransport()`](/guides/transports#observetransport-—-ship-to-nuxt-observe): one entry is enough to ship every
+collected metric to a [nuxt-observe](https://github.com/zephkelly/nuxt-observe)
+deployment. It encodes the observe ingest contract for you: the metrics ingest
+path (`/api/observe/ingest/frogger/metrics`), where the key is sent, and batch
+caps (500 events / ~950 KiB per request) so a chunk is never rejected as too
+large.
+
+```ts
+// frogger.config.ts
+import { defineFroggerOptions, metricObserveTransport } from '#frogger/config'
+
+export default defineFroggerOptions({
+  metrics: {
+    transports: [
+      metricObserveTransport({
+        url: 'https://observe.example.com',        // deployment origin
+        key: process.env.OBSERVE_INGEST_KEY!,      // write-only ingest key
+      }),
+    ],
+  },
+})
+```
+
+By default this is a **server relay**: your Nitro server receives the browser's
+metric batches at `/api/_frogger/metrics` and forwards them to observe with the
+key in an `x-api-key` header, so the key never reaches the client bundle.
+
+### Browser-direct (`client: true`)
+
+A static site with `serverModule: false` has no server to relay through. Set
+`client: true` and the browser sends batches straight to observe instead:
+
+```ts
+metricObserveTransport({
+  url: 'https://observe.example.com',
+  key: 'obsk_...',       // ships in the browser bundle (write-only by design)
+  client: true,
+  server: false,         // no server to relay from on a static site
+})
+```
+
+Browser-direct sends carry the key as a `?key=` query parameter rather than a
+header. That is deliberate: observe resolves its CORS allowlist from the query
+string, and `sendBeacon` (the page-exit path) cannot set headers at all, which
+makes query auth the only possible beacon auth.
+
+::: warning Client keys are public
+Everything on a `client: true` entry, including `key`, is compiled into the
+browser bundle. Observe ingest keys are write-only, per-service and rate-limited
+by design, so this is safe. Never put a key that grants read or admin
+access on a client transport. See the
+[security note in the transports guide](/guides/transports#⚠️-security-client-transport-keys-are-public).
+:::
+
+Each entry supports:
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `url` | `string` | — | **Required.** The observe deployment origin |
+| `key` | `string` | — | **Required.** Ingest API key |
+| `server` | `boolean` | `true` | Relay from the Nitro server metrics queue |
+| `client` | `boolean` | `false` | Send directly from the browser |
+| `name` | `string` | `observe (<origin>)` | Label for diagnostics (never contains the key) |
+| `timeout`, `retryOnFailure`, `maxRetries`, `retryDelay` | | transport defaults | Per-destination tuning |
+
 ## How delivery works
 
-- In-session, batches are POSTed to `/api/_frogger/metrics` via `$fetch`.
+- In-session, batches are POSTed to `/api/_frogger/metrics` via `$fetch` with
+  `keepalive` set, so an in-flight send survives the page being hidden.
+- Any `client: true` metric transports receive the same batch in parallel, each
+  with its own bounded retry (`Retry-After` and `429` respected). A failing
+  destination never blocks the others or the primary send.
 - On page exit (`visibilitychange → hidden` primary, `pagehide` secondary), the
   queue drains via `navigator.sendBeacon` as a plain JSON string, split into
-  chunks kept well under the ~64KB beacon quota (falling back to
-  `fetch(keepalive)` if a beacon is refused). The server ingest route accepts
-  both the `application/json` and beacon `text/plain` bodies.
+  small chunks (the ~64KB beacon quota is shared across all in-flight beacons),
+  falling back to `fetch(keepalive)` if a beacon is refused. Exit chunks go to
+  the primary ingest route and to every client transport. The server ingest
+  route accepts both the `application/json` and beacon `text/plain` bodies.
+- On the server, buffered metrics are drained on shutdown (the Nitro `close`
+  hook), so a deploy or restart does not lose the batching window.
+
+::: info Rate limiting is shared with logs
+When [rate limiting](/guides/rate-limiting) is enabled, the metrics ingest
+route checks the **same per-IP budget** as the log ingest, so a metrics burst
+counts against the same window as logs. At Web Vitals volume (a handful of
+events per page load) this is the right trade; a separate metrics budget is
+planned alongside the manual metrics API.
+:::
 
 ## Testing metrics
 

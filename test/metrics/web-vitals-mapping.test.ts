@@ -26,8 +26,10 @@ describe('webVitalToMetric', () => {
             value: 2.5,
             unit: 'second',
             env: 'client',
-            source: { name: 'web-vitals', version: '5' },
         })
+        // `source` is reserved for the origin app, stamped at server ingest —
+        // the collector must not pre-fill it.
+        expect(m.source).toBeUndefined()
         expect(m.attr).toEqual({ id: 'v1-1', delta: 2.5, navigationType: 'navigate' })
     })
 

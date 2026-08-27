@@ -4,7 +4,7 @@ import type { MetricContext } from '../../shared/types/metric-batch'
  * Read a device/network/viewport envelope once, feature-detected. Every field
  * is best-effort: an unsupported API resolves to `null` (never `0`, which would
  * read as a genuine measurement). Safari and Firefox expose far fewer of these
- * than Chromium, so undercounts are expected — documented as a known caveat.
+ * than Chromium, so undercounts are expected - documented as a known caveat.
  *
  * The result is the client half of {@link MetricContext}; `ua` is stamped
  * server-side at ingest.

@@ -21,11 +21,13 @@ export type {
 export {
     metricFileTransport,
     metricMemoryTransport,
+    metricObserveTransport,
 } from "./metrics/shared/transports/factories";
 export type {
     FroggerMetricTransportConfig,
     MetricFileTransportConfig,
     MetricMemoryTransportConfig,
+    MetricObserveTransportConfig,
 } from "./metrics/shared/types/metric-transports";
 export type { MetricsOptions } from "./metrics/shared/types/metric-options";
 

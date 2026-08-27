@@ -173,6 +173,32 @@ Each entry is a destination:
 Declarative transports are independent of your [`preset`](/configuration) — they
 work under any preset, and default to no extra destinations.
 
+### `observeTransport()` — ship to nuxt-observe
+
+For a [nuxt-observe](https://github.com/zephkelly/nuxt-observe) deployment you
+don't need to spell out the ingest URL and auth yourself. `observeTransport()`
+encodes the observe contract (ingest path, header auth from the server, query
+auth from the browser, and batch caps) from just the deployment origin and a
+key:
+
+```ts
+import { observeTransport } from '#frogger/config'
+
+transports: [
+    // Relay from your server (default):
+    observeTransport({ url: 'https://observe.example.com', key: process.env.OBSERVE_INGEST_KEY! }),
+
+    // Or send directly from the browser (static sites):
+    observeTransport({ url: 'https://observe.example.com', key: 'obsk_...', client: true }),
+]
+```
+
+`server` defaults to `true` and `client` to `false`, like any other entry.
+Observe ingest keys are write-only by design, so a `client: true` key does not
+trigger the bundle-visible-key build warning. Metrics have a parallel factory,
+[`metricObserveTransport()`](/guides/metrics#shipping-metrics-to-nuxt-observe),
+on the separate `metrics.transports` list.
+
 ### `memoryTransport()` — capture logs for tests
 
 `memoryTransport({ name })` is a server-only destination that keeps every log in

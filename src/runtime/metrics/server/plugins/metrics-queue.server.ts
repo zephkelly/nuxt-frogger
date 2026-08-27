@@ -10,6 +10,12 @@ import { defineNitroPlugin } from '#imports'
  * log-queue plugin (always present when serverModule is on).
  */
 //@ts-ignore
-export default defineNitroPlugin(() => {
-    ServerMetricsQueueService.getInstance()
+export default defineNitroPlugin((nitroApp) => {
+    const queue = ServerMetricsQueueService.getInstance()
+
+    // Graceful shutdown: drain the batch window (sorting window included) so
+    // buffered metrics are not lost on deploys/restarts - log-queue parity.
+    nitroApp.hooks.hook('close', async () => {
+        await queue.drain()
+    })
 })

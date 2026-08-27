@@ -2,7 +2,7 @@ import { MetricsQueueService } from './metrics-queue'
 
 /**
  * Where the single client metrics queue is cached on the Nuxt app instance.
- * Deliberately not plugin-injected — same boot-order reasoning as
+ * Deliberately not plugin-injected - same boot-order reasoning as
  * `get-log-queue.ts`: resolving lazily on first use removes any window in which
  * an early caller could dereference an unready queue.
  */

@@ -109,21 +109,33 @@ zero mutable state** with it: separate wire type ([`MetricObject`](src/runtime/m
   CLS unitless) via the `web-vitals` dependency, plus a per-batch device/network envelope. No userland
   API yet (config-driven auto-collection).
 - **Cardinality model**: `labels` = indexed dims (rating, route **pattern**), `attr` = non-indexed
-  detail (id, delta, navigationType); device context rides the batch **once**. Raw events stored,
+  detail (id, delta, navigationType); device context is transmitted **once per batch**, then
+  denormalised onto each point at server ingest (`source`/`context`/`session`, `??=` so relay hops
+  stay idempotent — `source` is the **origin app**, matching `log.source`). Raw events stored,
   **aggregate on read** — never pre-aggregate at ingest.
 - **Client** ([metrics/app/](src/runtime/metrics/app/)): `MetricsQueueService` (lazy via
   `getMetricsQueue(nuxtApp)`, `$froggerMetricsQueue` cache key), `collector/web-vitals.ts` (dynamic
   `import('web-vitals')` — client-only) + `collector/device.ts`, `session.ts` (decide-once sampling in
-  `sessionStorage`), `plugins/metrics.client.ts` (captures trace exemplar + route pattern once at init,
-  flushes on `visibilitychange → hidden` + `pagehide` via `sendBeacon`).
+  `sessionStorage`), `plugins/metrics.client.ts` (captures the route pattern once at init; the page
+  trace exemplar is resolved **lazily on the first vital** so setup never force-fires the one-shot
+  `frogger:init` hook; flushes on `visibilitychange → hidden` + `pagehide` via `sendBeacon` with a
+  `fetch(keepalive)` fallback). The client queue also fans out to **client metric transports**
+  (browser-direct observe: query auth, per-chunk bounded retry, beacon exit with `?key=` on the URL).
 - **Server** ([metrics/server/](src/runtime/metrics/server/)): `ServerMetricsQueueService` (singleton,
   no scrubber, **no aggregation** — raw fan-out), `api/metrics.post.ts` (**must** read `text/plain`
-  beacon bodies via `readRawBody` + `JSON.parse`, not `readBody`; stamps `context.ua`), lifecycle
-  plugin. No rate limiting in v1 (deferred with the limiter refactor).
+  beacon bodies via `readRawBody` + `JSON.parse`, not `readBody`; stamps `context.ua`; shares the log
+  rate-limit budget via `getFroggerRateLimiter().check(event)`), lifecycle plugin (drains the batch
+  window on nitro `close`, log-queue parity). The route is registered at the **resolved**
+  `metrics.public.endpoint` (no route when `false`).
 - **Transports** ([metrics/_transports/](src/runtime/metrics/_transports/)): `IFroggerMetricsTransport`
-  + `MetricsBatchTransport` (retyped `insertSorted`/`maxAge`/`maxSize`) + `MetricsFileTransport`
-  (default dir `logs/metrics/`) + `MetricsMemoryTransport`. Factories `metricFileTransport()` /
-  `metricMemoryTransport()` in [metrics/shared/transports/factories.ts](src/runtime/metrics/shared/transports/factories.ts),
+  + `MetricsBatchTransport` (retyped `insertSorted`/`maxAge`/`maxSize`, plus `drain()`) +
+  `MetricsFileTransport` (default dir `logs/metrics/`) + `MetricsMemoryTransport` +
+  `MetricsHttpTransport` (the observe relay: rebuilds `{ metrics, app, meta }` with a fresh
+  `processChain: [transportId]`, chunks via `splitMetricBatch` when caps are set, drops on non-429
+  4xx, exponential backoff otherwise). Factories `metricFileTransport()` / `metricMemoryTransport()` /
+  `metricObserveTransport({ url, key, client? })` (expands to header-auth server relay + query-auth
+  browser-direct entries against `/api/observe/ingest/frogger/metrics`, caps 500 events / 950 KiB) in
+  [metrics/shared/transports/factories.ts](src/runtime/metrics/shared/transports/factories.ts),
   re-exported from [module.ts](src/module.ts) + [options.ts](src/runtime/options.ts).
 - **Config**: `resolveMetricsOptions()` in [metrics/shared/utils/resolve-metrics.ts](src/runtime/metrics/shared/utils/resolve-metrics.ts)
   (reuses the now-exported `normalizeToggle`); distinct server/client batch defaults

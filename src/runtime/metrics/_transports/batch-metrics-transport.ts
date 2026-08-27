@@ -20,7 +20,7 @@ export interface MetricsBatchTransportOptions extends BatchOptions {
  * Time/size-window batcher for metric events. A retyped sibling of the log
  * `BatchTransport`: same `insertSorted` (binary search on `time`), `maxAge`
  * timer and `maxSize` cutoff scheduling, fanning `metricBatch` downstream. No
- * aggregation happens here — the window only orders and groups raw deltas.
+ * aggregation happens here - the window only orders and groups raw deltas.
  */
 export class MetricsBatchTransport extends BaseMetricsTransport<Required<MetricsBatchTransportOptions>> {
     public readonly name = 'FroggerMetricsBatchTransport'
@@ -223,6 +223,32 @@ export class MetricsBatchTransport extends BaseMetricsTransport<Required<Metrics
     override async forceFlush(): Promise<void> {
         await this.flushPromise
         return this.flush()
+    }
+
+    /**
+     * Shutdown drain: bypass the sorting window entirely and hand every
+     * buffered metric downstream in one final flush. Ported from the log
+     * `BatchTransport.drain()`.
+     */
+    async drain(): Promise<void> {
+        if (this.timer) {
+            clearTimeout(this.timer)
+            this.timer = null
+        }
+
+        await this.flushPromise.catch(() => { })
+
+        if (this.metrics.length === 0) return
+
+        const toDrain = this.metrics
+        this.metrics = []
+
+        try {
+            await this.options.onFlush(toDrain)
+        }
+        catch (error) {
+            froggerInternal.error(`Failed to drain ${toDrain.length} metrics:`, error)
+        }
     }
 }
 

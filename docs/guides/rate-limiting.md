@@ -18,6 +18,10 @@ See [Presets](../configuration.md#presets) for what each preset bundles.
 Rate limiting guards the **server ingest endpoint** that client logs are beamed to. It does not
 limit how often you can call `logger.info()` in your own code — only how many batches the server
 will accept from a given source.
+
+When [metrics](/guides/metrics) are enabled, the metrics ingest endpoint
+(`/api/_frogger/metrics`) checks the same budget, so log and metric batches
+from one IP share a window.
 :::
 
 ## The four tiers

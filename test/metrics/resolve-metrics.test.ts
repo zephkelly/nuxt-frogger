@@ -12,6 +12,7 @@ import { resolveFroggerOptions } from '../../src/runtime/shared/utils/resolve-op
 import {
     metricFileTransport,
     metricMemoryTransport,
+    metricObserveTransport,
 } from '../../src/runtime/metrics/shared/transports/factories'
 
 describe('resolveMetricsOptions', () => {
@@ -116,6 +117,83 @@ describe('resolveMetricsOptions', () => {
             if (r === false) throw new Error('expected resolved metrics')
             const file = r.transports.server[0] as { options: { directory: string } }
             expect(file.options.directory).toBe('logs/metrics')
+        })
+    })
+
+    describe('observe transport', () => {
+        it('expands a server-side entry with header auth, the metrics ingest path and caps', () => {
+            const r = resolveMetricsOptions({
+                transports: [metricObserveTransport({ url: 'https://observe.app.com', key: 'k' })],
+            })
+            if (r === false) throw new Error('expected resolved metrics')
+            expect(r.transports.client).toEqual([])
+            expect(r.transports.server).toEqual([{
+                type: 'http',
+                name: 'observe (https://observe.app.com)',
+                baseUrl: 'https://observe.app.com',
+                endpoint: '/api/observe/ingest/frogger/metrics',
+                headers: {},
+                apiKey: 'k',
+                apiKeyLocation: 'header',
+                timeout: undefined,
+                retryOnFailure: undefined,
+                maxRetries: undefined,
+                retryDelay: undefined,
+                maxBatchEvents: 500,
+                maxBodyBytes: 950 * 1024,
+            }])
+        })
+
+        it('normalises a url with a path down to its origin', () => {
+            const r = resolveMetricsOptions({
+                transports: [metricObserveTransport({ url: 'https://observe.app.com/some/path', key: 'k' })],
+            })
+            if (r === false) throw new Error('expected resolved metrics')
+            const server = r.transports.server[0] as { baseUrl: string; endpoint: string }
+            expect(server.baseUrl).toBe('https://observe.app.com')
+            expect(server.endpoint).toBe('/api/observe/ingest/frogger/metrics')
+        })
+
+        it('client: true adds a query-auth, publicKeyOk client entry', () => {
+            const r = resolveMetricsOptions({
+                transports: [metricObserveTransport({ url: 'https://observe.app.com', key: 'k', client: true })],
+            })
+            if (r === false) throw new Error('expected resolved metrics')
+            expect(r.transports.server).toHaveLength(1)
+            expect(r.transports.client).toHaveLength(1)
+            expect(r.transports.client[0]).toMatchObject({
+                apiKey: 'k',
+                apiKeyLocation: 'query',
+                publicKeyOk: true,
+                endpoint: '/api/observe/ingest/frogger/metrics',
+            })
+        })
+
+        it('server: false, client: true yields a client-only entry', () => {
+            const r = resolveMetricsOptions({
+                transports: [metricObserveTransport({ url: 'https://observe.app.com', key: 'k', server: false, client: true })],
+            })
+            if (r === false) throw new Error('expected resolved metrics')
+            expect(r.transports.server).toEqual([])
+            expect(r.transports.client).toHaveLength(1)
+        })
+
+        it('never embeds the key in the transport name', () => {
+            const r = resolveMetricsOptions({
+                transports: [metricObserveTransport({ url: 'https://observe.app.com', key: 'super-secret' })],
+            })
+            if (r === false) throw new Error('expected resolved metrics')
+            const server = r.transports.server[0] as { name: string }
+            expect(server.name).not.toContain('super-secret')
+        })
+
+        it('skips an observe entry with an invalid url', () => {
+            const r = resolveMetricsOptions({
+                transports: [metricObserveTransport({ url: 'not a url', key: 'k' })],
+            })
+            if (r === false) throw new Error('expected resolved metrics')
+            expect(r.transports.server).toEqual([])
+            expect(r.transports.client).toEqual([])
         })
     })
 

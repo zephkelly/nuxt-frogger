@@ -1,3 +1,5 @@
+import type { MetricContext } from './metric-batch'
+
 /**
  * The metrics subsystem's raw event type. Deliberately shares ZERO types with
  * the logging pipeline's {@link LoggerObject}: a metric is a trace-linked
@@ -5,18 +7,18 @@
  *
  * The whole subsystem stores raw, per-event deltas and aggregates on read
  * (percentiles/bucketing are computed by whatever consumes the JSON-lines
- * file or the downstream store) — nothing here is ever pre-aggregated into a
+ * file or the downstream store) - nothing here is ever pre-aggregated into a
  * series at ingest, which is the cardinality/`metric→trace`-severing footgun
  * that killed Sentry's pre-aggregated custom metrics.
  */
 
-/** Locked at definition — never inferred, never changed after the fact. */
+/** Locked at definition - never inferred, never changed after the fact. */
 export type MetricKind = 'counter' | 'gauge' | 'histogram'
 
 /**
  * Indexed dimensions only: low-cardinality values safe to build a series index
  * on (a web-vital `rating`, a route *pattern*). NEVER ids, urls or free-form
- * user input — those belong in {@link MetricObject.attr}.
+ * user input - those belong in {@link MetricObject.attr}.
  */
 export type MetricLabels = Record<string, string | number | boolean>
 
@@ -42,18 +44,32 @@ export interface MetricObject {
     /**
      * Indexed dimensions ONLY (rating, route pattern). Every distinct label
      * combination is a distinct series on read, so this stays bounded and
-     * low-cardinality by construction — ids/urls/deltas go in {@link attr}.
+     * low-cardinality by construction - ids/urls/deltas go in {@link attr}.
      */
     labels?: MetricLabels
 
     /** Which side, and which phase, produced the measurement. */
     env: 'ssr' | 'csr' | 'client' | 'server'
 
-    /** Producer of the metric (library name + version). */
+    /**
+     * Origin app (name + version), stamped from the batch envelope's `app` at
+     * ingest - the same idiom as `log.source`. A relay re-batches under its own
+     * identity, so downstream attribution reads this, never the outer batch.
+     */
     source?: { name: string; version: string }
 
     /**
-     * Exemplar pointer to the trace this measurement belongs to — a pointer,
+     * Device/network envelope, denormalised from the batch's `context` onto
+     * each point at ingest so it survives the bare-array transport contract.
+     * Collected and transmitted once per batch; never part of {@link labels}.
+     */
+    context?: MetricContext
+
+    /** Session identity + sampling decision, denormalised like {@link context}. */
+    session?: { id: string; sampled: boolean }
+
+    /**
+     * Exemplar pointer to the trace this measurement belongs to - a pointer,
      * not a log. The referenced trace's logs may not exist (a sampled-out
      * session still emits metrics), so consumers must treat this as a
      * best-effort link, never a foreign key.

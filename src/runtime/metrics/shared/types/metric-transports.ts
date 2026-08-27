@@ -2,9 +2,9 @@ import type { FileOptions } from '../../../shared/types/file'
 
 /**
  * Declarative metric-transport destinations. A deliberately separate union
- * from the log `FroggerTransportConfig` — the two pipelines share no body
- * types and no transport list. v1 ships file + memory sinks only; the HTTP
- * metric transport (client + server fan-out) lands in Phase 2.
+ * from the log `FroggerTransportConfig` - the two pipelines share no body
+ * types and no transport list. v1 shipped file + memory sinks; the observe
+ * HTTP transport (server relay + browser-direct fan-out) is first-class.
  */
 
 /**
@@ -28,10 +28,44 @@ export interface MetricMemoryTransportConfig {
     server?: boolean
 }
 
+/**
+ * Declarative destination for a nuxt-observe deployment's METRICS ingest.
+ * Encodes the observe contract (ingest path, header-vs-query auth, batch caps)
+ * so a single `metricObserveTransport({ url, key })` entry is enough to ship
+ * metrics there. The metrics sibling of the log `ObserveTransportConfig`.
+ */
+export interface MetricObserveTransportConfig {
+    type: 'observe'
+    /** Observe deployment origin, e.g. `https://observe.app.com`. */
+    url: string
+    /** Ingest API key. Sent as `x-api-key` (server) or `?key=` (browser). */
+    key: string
+    /**
+     * Fan out directly from the browser metrics queue. The key becomes
+     * bundle-visible; observe write keys are public by design, so no build
+     * warning is emitted.
+     *
+     * @default false
+     */
+    client?: boolean
+    /**
+     * Relay from the Nitro server metrics queue.
+     *
+     * @default true
+     */
+    server?: boolean
+    name?: string
+    timeout?: number
+    retryOnFailure?: boolean
+    maxRetries?: number
+    retryDelay?: number
+}
+
 /** Any declarative metric-transport entry, tagged by `type`. */
 export type FroggerMetricTransportConfig =
     | MetricFileTransportConfig
     | MetricMemoryTransportConfig
+    | MetricObserveTransportConfig
 
 /**
  * A single normalised metric file transport as emitted into
@@ -53,13 +87,45 @@ export interface ResolvedMetricMemoryTransport {
     name: string
 }
 
-/** A server-bound metric transport is a file or memory destination (v1). */
+/**
+ * A single normalised HTTP metric transport - a field-compatible subset of the
+ * log `ResolvedHttpTransport`, kept separate so the two pipelines stay
+ * type-independent. `apiKey` is discrete (never folded into `headers`) so
+ * send-site code applies auth uniformly and diagnostics can redact it.
+ */
+export interface ResolvedMetricHttpTransport {
+    type: 'http'
+    name: string
+    baseUrl: string
+    endpoint: string
+    apiKey?: string
+    /** Where `apiKey` is applied at send time. @default 'header' */
+    apiKeyLocation?: 'header' | 'query'
+    /** Does NOT include `x-api-key`; that's applied at send time from `apiKey`. */
+    headers: Record<string, string>
+    timeout?: number
+    retryOnFailure?: boolean
+    maxRetries?: number
+    retryDelay?: number
+    /** Max events per outgoing batch chunk (observe: 500). Unset = no cap. */
+    maxBatchEvents?: number
+    /** Max serialized body bytes per chunk (observe: ~950 KiB). Unset = no cap. */
+    maxBodyBytes?: number
+    /**
+     * Suppresses the bundle-visible-apiKey build warning for a client entry.
+     * Set for observe browser keys (write-only public by design).
+     */
+    publicKeyOk?: boolean
+}
+
+/** A server-bound metric transport: file, memory or HTTP relay. */
 export type ResolvedMetricServerTransport =
     | ResolvedMetricFileTransport
     | ResolvedMetricMemoryTransport
+    | ResolvedMetricHttpTransport
 
 /**
- * Client-bound metric transports (HTTP fan-out) are a Phase 2 capability; the
- * alias exists so the resolved shape's split is stable now.
+ * A client-bound metric transport (browser-direct HTTP fan-out).
+ * ⚠️ Lands in `public` runtime config - its `apiKey` ships in the bundle.
  */
-export type ResolvedMetricClientTransport = never
+export type ResolvedMetricClientTransport = ResolvedMetricHttpTransport

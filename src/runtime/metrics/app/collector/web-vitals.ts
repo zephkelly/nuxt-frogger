@@ -5,7 +5,7 @@ import type { MetricObject } from '../../shared/types/metric'
 /**
  * Web Vitals collector. `web-vitals` touches browser globals at import, so the
  * library itself is loaded via a dynamic `import()` inside {@link registerWebVitals}
- * (only ever invoked from the client plugin) — the module top level imports the
+ * (only ever invoked from the client plugin) - the module top level imports the
  * `Metric` *type* only, which is erased, so {@link webVitalToMetric} stays a
  * pure, unit-testable mapping importable from a plain Node context.
  */
@@ -37,8 +37,6 @@ const VITAL_SPECS: Record<Metric['name'], VitalSpec> = {
     TTFB: { name: 'web.vital.ttfb', unit: 'second', toBase: MS_TO_SECONDS },
 }
 
-const SOURCE = { name: 'web-vitals', version: '5' }
-
 /**
  * Convert a `web-vitals` `Metric` into a Frogger {@link MetricObject}. `rating`
  * and the route *pattern* are indexed labels; the high-cardinality instance
@@ -60,7 +58,8 @@ export function webVitalToMetric(metric: Metric, stamp: WebVitalStamp = {}): Met
         unit: spec.unit,
         labels,
         env: 'client',
-        source: SOURCE,
+        // `source` is NOT stamped here: it is reserved for the origin app,
+        // denormalised from the batch envelope at server ingest.
         ...(stamp.trace ? { trace: stamp.trace } : {}),
         attr: {
             id: metric.id,

@@ -143,6 +143,21 @@ describe('LogQueueService client transport fan-out', () => {
         expect(fetchMock).not.toHaveBeenCalled()
     })
 
+    it('relay app (serverModule:false, default endpoint, baseUrl set) sends the primary POST to the relay origin', async () => {
+        setConfig({ serverModule: false, baseUrl: 'https://api.example.com', transports: [] })
+
+        const queue = new LogQueueService()
+        queue.enqueueLog(makeLog())
+        await queue.flush()
+        await tick()
+
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+        const [url, opts] = fetchMock.mock.calls[0]!
+        expect(url).toBe(DEFAULT_ENDPOINT)
+        expect(opts.baseURL).toBe('https://api.example.com')
+        expect(opts.method).toBe('POST')
+    })
+
     it('endpoint:false suppresses the primary POST but still fans out to client transports', async () => {
         setConfig({ serverModule: true, endpoint: false, transports: [OBSERVE] })
 

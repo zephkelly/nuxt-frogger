@@ -12,7 +12,8 @@ import {
 
 import { defu } from 'defu'
 
-import { DEFAULT_LOGGING_ENDPOINT, DEFAULT_METRICS_ENDPOINT } from './runtime/shared/types/module-options'
+import { DEFAULT_METRICS_ENDPOINT } from './runtime/shared/types/module-options'
+import { hasPrimaryLogSink } from './runtime/shared/utils/primary-sink'
 
 import type { ModuleOptions } from './runtime/shared/types/module-options'
 import { loadFroggerConfig } from './runtime/shared/utils/frogger-config'
@@ -207,53 +208,65 @@ export default defineNuxtModule<ModuleOptions>({
         })
 
         _nuxt.hook('nitro:build:before', () => {
-            // Genuine misconfiguration warning (shown at warn level and above —
-            // i.e. in dev by default, suppressed in production unless opted in).
-            // Skipped when the app deliberately fans out to a client transport
-            // instead of its own backend (e.g. a static app → observe direct).
-            if (
-                allowInternal('warn')
-                && !serverModuleEnabled
-                && resolved.public.endpoint === DEFAULT_LOGGING_ENDPOINT
-                && resolved.transports.client.length === 0
-            ) {
+            const publicEndpoint = resolved.public.endpoint;
+            const publicBaseUrl = resolved.public.baseUrl;
+            const serverTransports = resolved.transports.server;
+            const clientTransports = resolved.transports.client;
+            const transportNames = (ts: { name: string }[]) =>
+                ts.map(t => `\x1b[36m${t.name}\x1b[0m`).join(', ');
+
+            // The one shared predicate for "do client logs leave this app";
+            // the batch queue and the immediate-send path defer to it too, so
+            // the banner can never disagree with what the runtime does.
+            const primarySink = hasPrimaryLogSink({
+                serverModuleEnabled,
+                endpoint: publicEndpoint,
+                baseUrl: publicBaseUrl,
+            });
+
+            // Genuinely sinkless: nothing durable anywhere, warn (shown at warn
+            // level and above, i.e. in dev by default, suppressed in production
+            // unless opted in). A relay app (public.baseUrl set) or a custom
+            // endpoint no longer trips this: its sink is the remote ingest.
+            if (allowInternal('warn') && !primarySink && clientTransports.length === 0) {
                 console.warn(
                     '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
-                    `You are using Frogger with \x1b[36mserverModule\x1b[0m set to \x1b[36mfalse\x1b[0m and no \x1b[36mpublic.endpoint\x1b[0m
-                set in your \x1b[36mfrogger.config.ts\x1b[0m. Your logs will never leave the client!`
+                    publicEndpoint === false
+                        ? `\x1b[36mpublic.endpoint\x1b[0m is \x1b[36mfalse\x1b[0m and no client transport is configured: `
+                        + `logs never leave the client. Add a client transport, or re-enable the endpoint.`
+                        : `No log sink is configured: \x1b[36mserverModule\x1b[0m is \x1b[36mfalse\x1b[0m, `
+                        + `\x1b[36mpublic.endpoint\x1b[0m is the default and \x1b[36mpublic.baseUrl\x1b[0m is unset, `
+                        + `so logs never leave the client. Set \x1b[36mpublic.baseUrl\x1b[0m to your ingest app's origin, `
+                        + `or add a client transport.`
                 );
             }
 
-            // Client transports are compiled into the public bundle — any
-            // apiKey on one is therefore NOT a secret. Warn (once per keyed
-            // transport) so the author knows before it ships. observe browser
-            // keys are write-only public by design (`publicKeyOk`) — skipped.
+            // Ingesting locally but nowhere durable downstream: console only.
+            if (allowInternal('warn') && serverModuleEnabled && serverTransports.length === 0) {
+                console.warn(
+                    '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
+                    `Ingesting logs but no server transport is configured: logs stop at the \x1b[36mconsole\x1b[0m `
+                    + `and are not persisted. Add \x1b[36mfileTransport()\x1b[0m for local files, or `
+                    + `\x1b[36mobserveTransport()\x1b[0m / \x1b[36mhttpTransport()\x1b[0m to forward them. `
+                    + `Ignore this if you register a transport imperatively via \x1b[36maddGlobalTransport()\x1b[0m.`
+                );
+            }
+
+            // Client transports are compiled into the public bundle, so any
+            // apiKey on one is NOT a secret. Warn (once per keyed transport)
+            // so the author knows before it ships. observe browser keys are
+            // write-only public by design (`publicKeyOk`) and skipped.
             if (allowInternal('warn')) {
-                for (const t of resolved.transports.client) {
+                for (const t of clientTransports) {
                     if (t.apiKey && !t.publicKeyOk) {
                         console.warn(
                             '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
                             `Client transport \x1b[36m${t.name}\x1b[0m carries an \x1b[36mapiKey\x1b[0m that will be `
                             + `compiled into the public browser bundle. Only use a write-only, per-service, `
-                            + `rate-limited ingest key here — never a read/admin key.`
+                            + `rate-limited ingest key here, never a read/admin key.`
                         );
                     }
                 }
-            }
-
-            // No persistent transport configured → logs reach console only and
-            // are never persisted. One-time dev nudge toward an explicit sink.
-            if (
-                allowInternal('warn')
-                && resolved.transports.server.length === 0
-                && resolved.transports.client.length === 0
-            ) {
-                console.warn(
-                    '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
-                    `No persistent transport is configured — logs go to the \x1b[36mconsole\x1b[0m only and are not persisted. `
-                    + `Add \x1b[36mfileTransport()\x1b[0m for local files, or \x1b[36mobserveTransport()\x1b[0m / \x1b[36mhttpTransport()\x1b[0m `
-                    + `to forward them. Ignore this if you register a transport imperatively via \x1b[36maddGlobalTransport()\x1b[0m.`
-                );
             }
 
             // The single concise "ready" line: dev only, suppressed entirely at
@@ -263,6 +276,36 @@ export default defineNuxtModule<ModuleOptions>({
                     '🐸 \x1b[32mFROGGER\x1b[0m',
                     `Ready to log`
                 );
+
+                // One line stating the resolved delivery topology, so "where do
+                // my logs actually go" is answered at boot instead of by
+                // dumping runtime config. Mirrors `hasPrimaryLogSink` exactly.
+                let summary: string | null = null;
+                if (serverModuleEnabled) {
+                    const ingest = publicEndpoint === false
+                        ? `Client log POST disabled (\x1b[36mpublic.endpoint: false\x1b[0m)`
+                        : `Ingesting client logs at \x1b[36m${publicEndpoint}\x1b[0m`;
+                    if (serverTransports.length > 0) {
+                        summary = `${ingest}; forwarding via ${serverTransports.length} server transport(s): ${transportNames(serverTransports)}`;
+                    }
+                    // Zero server transports already warned above; no summary line.
+                }
+                else if (primarySink && publicBaseUrl) {
+                    summary = `Relaying client logs to \x1b[36m${publicBaseUrl}${publicEndpoint}\x1b[0m `
+                        + `(emitter only: ingest, scrubbing and persistence run on the relay app)`;
+                }
+                else if (primarySink) {
+                    summary = `Shipping client logs to \x1b[36m${publicEndpoint}\x1b[0m on this app's origin`;
+                }
+                else if (clientTransports.length > 0) {
+                    summary = `Fanning client logs out to ${clientTransports.length} client transport(s): ${transportNames(clientTransports)}`;
+                }
+                if (summary && primarySink && clientTransports.length > 0) {
+                    summary += `; also fanning out to ${clientTransports.length} client transport(s): ${transportNames(clientTransports)}`;
+                }
+                if (summary) {
+                    console.log('🐸 \x1b[32mFROGGER\x1b[0m', summary);
+                }
 
                 // Scrubbing is fully opt-in: enabling it does not add any rules.
                 // Surface the active rule count so `0 rules active` is visible

@@ -12,7 +12,7 @@ import { handleRateLimit } from '../../rate-limiter/utils/limit-handler';
 import { SimpleConsoleLogger } from '../../logger/other/console-frogger';
 
 import { parseAppInfoConfig } from '../../app-info/parse';
-import { DEFAULT_LOGGING_ENDPOINT } from '../../shared/types/module-options';
+import { hasPrimaryLogSink } from '../../shared/utils/primary-sink';
 import { froggerInternal } from '../../shared/utils/internal-log';
 import { splitLoggerBatch } from '../../shared/utils/split-batch';
 
@@ -246,12 +246,11 @@ export class LogQueueService {
     private shouldSendToPrimary(): boolean {
         // `public.endpoint: false` deliberately disables the client POST to the
         // app's own route; client transports (if any) still fan out.
-        if (this.endpoint === false) return false;
-        if (!this.endpoint) return false;
-        if (!this.serverModuleEnabled && this.endpoint === DEFAULT_LOGGING_ENDPOINT && !this.baseUrl) {
-            return false;
-        }
-        return true;
+        return hasPrimaryLogSink({
+            serverModuleEnabled: this.serverModuleEnabled,
+            endpoint: this.endpoint,
+            baseUrl: this.baseUrl,
+        });
     }
 
     private async sendLogs(): Promise<void> {

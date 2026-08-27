@@ -11,7 +11,7 @@ import type { LoggerObject, LogContext } from '../../shared/types/log';
 import type { LoggerObjectBatch } from '../../shared/types/batch';
 import { parseAppInfoConfig } from '../../app-info/parse';
 
-import { DEFAULT_LOGGING_ENDPOINT } from '../../shared/types/module-options';
+import { hasPrimaryLogSink } from '../../shared/utils/primary-sink';
 import { normalizeContextErrors } from '../../shared/utils/normalize-errors';
 import { runSpanWithEvent } from '../../shared/utils/span-events';
 import { runWithLogger } from '../active-context.client';
@@ -153,8 +153,14 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
     }
 
     private async sendLogImmediate(logObj: LoggerObject): Promise<void> {
-        if (!this.options.endpoint) return;
-        if (this.serverModuleEnabled === false && this.options.endpoint === DEFAULT_LOGGING_ENDPOINT) return;
+        // Same gate as the batch queue's primary send: a relay app (baseUrl
+        // set) MUST send here too, or the unbatched/fallback path silently
+        // drops logs the queue path would have delivered.
+        if (!hasPrimaryLogSink({
+            serverModuleEnabled: this.serverModuleEnabled,
+            endpoint: this.options.endpoint,
+            baseUrl: this.options.baseUrl,
+        })) return;
 
         const batch: LoggerObjectBatch = {
             logs: [logObj],

@@ -75,6 +75,43 @@ describe('client delivery never silently drops a log', () => {
         expect(consoleError).not.toHaveBeenCalled()
     })
 
+    it('relay app (serverModule:false, default endpoint, baseUrl set): the fallback direct send still delivers', async () => {
+        // Regression: the old sendLogImmediate guard ignored baseUrl and
+        // silently dropped exactly this configuration's fallback sends.
+        setConfig({ serverModule: false, baseUrl: 'https://api.example.com' })
+        vi.spyOn(LogQueueService.prototype, 'enqueueLog').mockImplementation(() => {
+            throw new Error('queue exploded')
+        })
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const logger = new ClientFrogger(ref(true), { consoleOutput: false })
+        logger.info('important')
+
+        await tick()
+        await tick()
+
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+        expect(fetchMock.mock.calls[0]![0]).toBe(DEFAULT_ENDPOINT)
+        expect(fetchMock.mock.calls[0]![1].baseURL).toBe('https://api.example.com')
+        expect(consoleError).not.toHaveBeenCalled()
+    })
+
+    it('sinkless app (serverModule:false, default endpoint, no baseUrl): the direct send is skipped, not attempted', async () => {
+        setConfig({ serverModule: false, baseUrl: '' })
+        vi.spyOn(LogQueueService.prototype, 'enqueueLog').mockImplementation(() => {
+            throw new Error('queue exploded')
+        })
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const logger = new ClientFrogger(ref(true), { consoleOutput: false })
+        logger.info('nowhere to go')
+
+        await tick()
+        await tick()
+
+        expect(fetchMock).not.toHaveBeenCalled()
+    })
+
     it('surfaces an ungated console error when BOTH the queue and the direct send fail', async () => {
         vi.spyOn(LogQueueService.prototype, 'enqueueLog').mockImplementation(() => {
             throw new Error('queue exploded')

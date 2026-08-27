@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.24
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.23...v0.1.24)
+
+### 🩹 Fixes
+
+- Frogger startup messaging with relay transport pattern ([ba9e398](https://github.com/zephkelly/nuxt-frogger/commit/ba9e398))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.23
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.22...v0.1.23)

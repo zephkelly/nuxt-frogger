@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.25
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.24...v0.1.25)
+
+### 🚀 Enhancements
+
+- Improved metrics integration and new observe metrics transport ([bf1a278](https://github.com/zephkelly/nuxt-frogger/commit/bf1a278))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.24
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.23...v0.1.24)

@@ -69,6 +69,14 @@ export interface MetricObject {
     session?: { id: string; sampled: boolean }
 
     /**
+     * Correlation id for the acting user, mirroring the log pipeline's
+     * `ctx.user` convention. A top-level field and explicitly NOT a label:
+     * every distinct label combination is a series, so a user id in
+     * {@link labels} would multiply the series count by the user count.
+     */
+    user?: string
+
+    /**
      * Exemplar pointer to the trace this measurement belongs to - a pointer,
      * not a log. The referenced trace's logs may not exist (a sampled-out
      * session still emits metrics), so consumers must treat this as a

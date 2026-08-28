@@ -16,6 +16,8 @@ import { getActiveLogger } from '../../../logger/active-context.client'
 import { parseTraceparent } from '../../../shared/utils/trace-headers'
 import { uuidv7 } from '../../../shared/utils/uuid'
 import { froggerInternal } from '../../../shared/utils/internal-log'
+import { setSpanMetricSink } from '../../../shared/utils/span-metric-sink'
+import { froggerMetrics } from '../utils/metrics'
 import type { IFroggerLogger } from '../../../logger/types'
 
 /** Best-effort {traceId, spanId} from a logger's W3C trace headers. */
@@ -132,6 +134,23 @@ export default defineNuxtPlugin({
                 metric => queue.enqueueMetric(metric),
                 resolveStamp,
             ).catch(err => froggerInternal.error('Failed to register web-vitals collector:', err))
+        }
+
+        // Turn every existing span call site into latency data. Registered
+        // here, not imported by the logger, so the two trees stay independent.
+        setSpanMetricSink((name, durationSeconds, ok, labels) => {
+            froggerMetrics.histogram('span.duration', durationSeconds, {
+                unit: 'second',
+                labels: { span: name, ok, ...labels },
+            })
+        })
+
+        // SPA navigation is the page boundary `maxEventsPerPage` is named for.
+        try {
+            app.$router?.afterEach?.(() => queue.resetPage())
+        }
+        catch {
+            // No router (or a stubbed one): the cap stays per app boot.
         }
 
         if (import.meta.client && typeof window !== 'undefined') {

@@ -83,8 +83,17 @@ describe('createAmbientFrogger', () => {
         const fn = vi.fn(async () => 'result')
 
         await expect(frogger.span('checkout', fn)).resolves.toBe('result')
-        expect(logger.span).toHaveBeenCalledWith('checkout', fn)
+        expect(logger.span).toHaveBeenCalledWith('checkout', fn, undefined)
         expect(resolve).toHaveBeenCalled()
+    })
+
+    it('forwards span options to the resolved logger', async () => {
+        const fn = vi.fn(async () => 'result')
+        const options = { metric: true, labels: { tier: 'paid' } }
+
+        await frogger.span('checkout', fn, options)
+
+        expect(logger.span).toHaveBeenCalledWith('checkout', fn, options)
     })
 
     it('delegates startSpan to the resolved logger', () => {

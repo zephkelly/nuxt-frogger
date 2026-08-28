@@ -1,4 +1,6 @@
 import { ServerMetricsQueueService } from '../services/server-metrics-queue'
+import { setSpanMetricSink } from '../../../shared/utils/span-metric-sink'
+import { froggerMetrics } from '../utils/metrics'
 
 //@ts-ignore
 import { defineNitroPlugin } from '#imports'
@@ -12,6 +14,15 @@ import { defineNitroPlugin } from '#imports'
 //@ts-ignore
 export default defineNitroPlugin((nitroApp) => {
     const queue = ServerMetricsQueueService.getInstance()
+
+    // Turn every existing span call site into latency data. Registered here,
+    // not imported by the logger, so the two trees stay independent.
+    setSpanMetricSink((name, durationSeconds, ok, labels) => {
+        froggerMetrics.histogram('span.duration', durationSeconds, {
+            unit: 'second',
+            labels: { span: name, ok, ...labels },
+        })
+    })
 
     // Graceful shutdown: drain the batch window (sorting window included) so
     // buffered metrics are not lost on deploys/restarts - log-queue parity.

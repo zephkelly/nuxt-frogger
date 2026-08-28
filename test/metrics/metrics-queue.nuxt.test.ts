@@ -82,9 +82,40 @@ describe('MetricsQueueService', () => {
         const q = new MetricsQueueService()
         q.setSession({ id: 's', sampled: true })
 
-        q.enqueueMetric(metric())
-        q.enqueueMetric(metric())
-        q.enqueueMetric(metric())
+        q.enqueueMetric(metric({ name: 'app.custom' }))
+        q.enqueueMetric(metric({ name: 'app.custom' }))
+        q.enqueueMetric(metric({ name: 'app.custom' }))
+        await Promise.resolve()
+
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('exempts web vitals from the per-page cap', async () => {
+        setConfig({ endpoint: '/api/_frogger/metrics', batch: false, maxEventsPerPage: 1 })
+        const q = new MetricsQueueService()
+        q.setSession({ id: 's', sampled: true })
+
+        q.enqueueMetric(metric({ name: 'app.custom' }))
+        q.enqueueMetric(metric({ name: 'app.custom' }))
+        q.enqueueMetric(metric({ name: 'web.vital.lcp' }))
+        q.enqueueMetric(metric({ name: 'web.vital.cls' }))
+        await Promise.resolve()
+
+        // One custom metric before the cap, then both vitals regardless of it.
+        expect(fetchMock).toHaveBeenCalledTimes(3)
+    })
+
+    it('resetPage restores the budget on SPA navigation', async () => {
+        setConfig({ endpoint: '/api/_frogger/metrics', batch: false, maxEventsPerPage: 1 })
+        const q = new MetricsQueueService()
+        q.setSession({ id: 's', sampled: true })
+
+        q.enqueueMetric(metric({ name: 'app.custom' }))
+        q.enqueueMetric(metric({ name: 'app.custom' }))
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+
+        q.resetPage()
+        q.enqueueMetric(metric({ name: 'app.custom' }))
         await Promise.resolve()
 
         expect(fetchMock).toHaveBeenCalledTimes(2)

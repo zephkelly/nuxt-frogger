@@ -119,9 +119,15 @@ export interface ModuleOptions {
      * logs inside it. On by default at `info`; pass `{ level }` to change the
      * level or `false` to make spans pure correlation scopes again.
      *
-     * @default { level: 'info' }
+     * `metric: true` additionally records a `span.duration` histogram per span,
+     * which is how existing span call sites become latency data without a
+     * single call-site edit. To get the histogram WITHOUT the log volume, pin
+     * the level below the logger's own (`{ level: 'debug', metric: true }`):
+     * the row is filtered before any transport, the metric is not.
+     *
+     * @default { level: 'info', metric: false }
      */
-    spans?: boolean | { level?: LogType }
+    spans?: boolean | { level?: LogType, metric?: boolean }
 
     /**
      * Ingest-endpoint rate limiting. Off by default; `true` enables it with

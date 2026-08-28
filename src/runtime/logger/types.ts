@@ -1,6 +1,7 @@
 import type { IFroggerReporter } from "./_reporters/types";
 import type { FroggerOptions } from "../shared/types/options";
 import type { LogType } from "consola";
+import type { SpanOptions } from "../shared/utils/span-events";
 
 
 
@@ -130,7 +131,7 @@ export interface IFroggerLogger {
      * });
      * ```
      */
-    span<T>(name: string, fn: () => T | Promise<T>): Promise<T>;
+    span<T>(name: string, fn: () => T | Promise<T>, options?: SpanOptions): Promise<T>;
 
     /**
      * Create a named child logger parented under the current span, to hold on

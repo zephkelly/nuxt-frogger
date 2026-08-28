@@ -223,6 +223,28 @@ export class LogScrubber {
         };
     }
 
+    /**
+     * Scrub an arbitrary record with the same rules, copy-on-write semantics
+     * and depth bound as a log's `ctx`, returning the scrubbed copy rather than
+     * swapping it into a carrier object. This is what lets a non-log pipeline
+     * (metric labels and attributes) reuse the one ruleset instead of growing a
+     * second, weaker redaction path.
+     */
+    public scrubRecord<T>(value: T): { value: T; modified: boolean; fieldsModified: string[] } {
+        if (!this.config.enabled) {
+            return { value, modified: false, fieldsModified: [] };
+        }
+
+        this.scrubStats.totalProcessed++;
+
+        const result = this.scrubValue(value, 0, new WeakSet());
+        if (result.modified) {
+            this.scrubStats.totalScrubbed++;
+        }
+
+        return { value: result.value as T, modified: result.modified, fieldsModified: result.fieldsModified };
+    }
+
     public scrubBatch(batch: LoggerObject[]): ScrubResult[] {
         const results: ScrubResult[] = [];
 

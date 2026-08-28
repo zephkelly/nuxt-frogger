@@ -94,6 +94,22 @@ argument position), never by sniffing a `context` property — `context` is a le
 headers into `event.context.frogger`. Client↔server handoff means "last log on the client is the
 parent of the first log on the server" (and vice-versa).
 
+**A logger that has not logged yet reserves its first span id.** `getHeaders()` used to advertise
+`lastSpanId`, but a child is SEEDED with its parent's span id, so calling it at the top of a span
+(before that span logs) advertised the PARENT's row: the downstream request became a sibling of the
+span instead of its child. `outgoingSpanId()` now returns `lastSpanId` only once `hasEmitted` is
+true, and otherwise mints and caches `reservedSpanId`, which `generateTraceContext` consumes as the
+next row's `spanId`. So the id handed downstream resolves to a real row as soon as anything logs on
+that logger, the reservation is stable across repeated `getHeaders()` calls, and post-first-log
+behaviour is byte-identical to before. `setTraceContext` and `reset()` both clear the pair.
+
+Caveat worth knowing: a logger that advertises headers and then never logs (a span with no rows whose
+span-end event is disabled or filtered below the logger level) leaves a dangling parent id, where the
+old code pointed at a real but wrong row. That is deliberate: a correct tree with a visible gap beats
+a silently mis-parented one, and observe reports dangling parents explicitly. Regression coverage is
+the `outgoing trace headers (getHeaders)` describe in
+[test/logger/span-parentage.nuxt.test.ts](test/logger/span-parentage.nuxt.test.ts).
+
 ## Metrics subsystem (opt-in, fully parallel pipeline)
 
 `nuxt-frogger` also has a **metrics** subsystem under [src/runtime/metrics/](src/runtime/metrics/). It
@@ -106,23 +122,57 @@ zero mutable state** with it: separate wire type ([`MetricObject`](src/runtime/m
 (no plugin/route/runtime-config keys/singleton) — verified inert.
 
 - **v1 collects**: Web Vitals (LCP/CLS/INP/FCP/TTFB → gauges `web.vital.*`, timings in **seconds**,
-  CLS unitless) via the `web-vitals` dependency, plus a per-batch device/network envelope. No userland
-  API yet (config-driven auto-collection).
+  CLS unitless) via the `web-vitals` dependency, plus a per-batch device/network envelope.
+- **Manual API** ([metrics/shared/api/](src/runtime/metrics/shared/api/)): `froggerMetrics`
+  (`counter`/`gauge`/`histogram`/`timer`/`time`), auto-imported on **both** runtimes and registered
+  ONLY when metrics are on, so a bare install never pulls the queue into either bundle. Three pieces:
+  `build-metric.ts` (pure; returns `null` for a non-finite value, empty name or non-positive time,
+  mirroring what an ingest would reject, so a doomed point is never queued), `facade.ts`
+  (`createMetricsFacade(record, resolveStamp)`, both called per point and never at import time, with
+  every path swallowing failures because recording must not break the code being measured), and
+  `types.ts`. Bound per runtime in `metrics/app/utils/metrics.ts` and `metrics/server/utils/metrics.ts`.
+- **Correlation**: a point carries `trace`/`session`/`user` and a `route` **label**, stamped at record
+  time by the runtime binding. Server stamp order mirrors the ambient logger (active span logger, then
+  `event.context.frogger`, then nothing, never a fabricated trace); client prefers an open span, else
+  the ambient client logger. `user` is top-level and **never** a label (a user id in `labels`
+  multiplies the series count by the user count); set it once via `setFroggerMetricsUser()`, not per
+  point. Route is read at RECORD time, unlike the vitals collector which freezes it at init: CLS/INP
+  report at page hide, so for a vital the init reading is the correct attribution, and the two must
+  not share a helper. `correlate: false` opts one point out of all of it.
+- **Span duration**: `spans: { metric: true }` records a `span.duration` histogram per span
+  (labels `span`, `ok`), turning every existing `span()` call site into latency data with no
+  call-site edit. The logger tree does NOT import the metrics tree: the metrics plugins register a
+  sink into [shared/utils/span-metric-sink.ts](src/runtime/shared/utils/span-metric-sink.ts) and the
+  logger reads it. `runSpanWithEvent` runs its timer whenever an `onEnd` exists, so pinning
+  `{ level: 'debug', metric: true }` under a level-3 logger yields the histogram with the span-end
+  row filtered before any transport. With no sink and no flag, `spanMetricEnd` returns `undefined`
+  and the timer is skipped entirely, so a span costs exactly what it did before.
 - **Cardinality model**: `labels` = indexed dims (rating, route **pattern**), `attr` = non-indexed
   detail (id, delta, navigationType); device context is transmitted **once per batch**, then
-  denormalised onto each point at server ingest (`source`/`context`/`session`, `??=` so relay hops
-  stay idempotent — `source` is the **origin app**, matching `log.source`). Raw events stored,
-  **aggregate on read** — never pre-aggregate at ingest.
+  denormalised onto each point at server ingest (`source`/`context`/`session`/`user`, `??=` so relay
+  hops stay idempotent, and `source` is the **origin app**, matching `log.source`). Raw events stored,
+  **aggregate on read**, never pre-aggregated at ingest.
+- **Scrubbing**: `labels`/`attr`/batch `context` pass through the log pipeline's own ruleset in
+  `ServerMetricsQueueService.enqueueBatch` ([scrub-metric-batch.ts](src/runtime/metrics/shared/utils/scrub-metric-batch.ts)),
+  the one hop every point crosses whether recorded locally or relayed. `LogScrubber.scrubRecord()` is
+  the public entry that reuses the same rules, copy-on-write and depth bound. `name` is deliberately
+  untouched (it is the series identifier and a compile-time constant at any sane call site) and so are
+  `user`/`session`, matching how the log pipeline treats `ctx.user`.
 - **Client** ([metrics/app/](src/runtime/metrics/app/)): `MetricsQueueService` (lazy via
   `getMetricsQueue(nuxtApp)`, `$froggerMetricsQueue` cache key), `collector/web-vitals.ts` (dynamic
   `import('web-vitals')` — client-only) + `collector/device.ts`, `session.ts` (decide-once sampling in
   `sessionStorage`), `plugins/metrics.client.ts` (captures the route pattern once at init; the page
   trace exemplar is resolved **lazily on the first vital** so setup never force-fires the one-shot
   `frogger:init` hook; flushes on `visibilitychange → hidden` + `pagehide` via `sendBeacon` with a
-  `fetch(keepalive)` fallback). The client queue also fans out to **client metric transports**
+  `fetch(keepalive)` fallback; resets the per-page budget on SPA navigation). `maxEventsPerPage` is
+  named for a page load, but a client-routed SPA has no page load after boot, so without that reset the
+  cap is really per app **boot** and a long-lived tab goes silent; `web.vital.*` points are exempt from
+  the budget entirely so a hot custom metric cannot take the five vitals down with it. The client queue
+  also fans out to **client metric transports**
   (browser-direct observe: query auth, per-chunk bounded retry, beacon exit with `?key=` on the URL).
 - **Server** ([metrics/server/](src/runtime/metrics/server/)): `ServerMetricsQueueService` (singleton,
-  no scrubber, **no aggregation** — raw fan-out), `api/metrics.post.ts` (**must** read `text/plain`
+  scrubs, **no aggregation**, raw fan-out; `enqueueMetric(metric)` is the single-point entry the manual
+  API uses, `enqueueBatch` stays the relay path), `api/metrics.post.ts` (**must** read `text/plain`
   beacon bodies via `readRawBody` + `JSON.parse`, not `readBody`; stamps `context.ua`; shares the log
   rate-limit budget via `getFroggerRateLimiter().check(event)`), lifecycle plugin (drains the batch
   window on nitro `close`, log-queue parity). The route is registered at the **resolved**
@@ -162,7 +212,7 @@ zero mutable state** with it: separate wire type ([`MetricObject`](src/runtime/m
 | `rate-limiter/` | Multi-tier rate limiting + KV layer + escalating blocks | [index.ts](src/runtime/rate-limiter/index.ts) |
 | `app-info/` | Parse `app` option into `{ name, version }` | [parse.ts](src/runtime/app-info/parse.ts) |
 | `shared/types/` | `LoggerObject`, `LoggerObjectBatch`, options, trace types | [log.ts](src/runtime/shared/types/log.ts), [batch.ts](src/runtime/shared/types/batch.ts) |
-| `shared/utils/` | Trace headers, log-level parser, uuid (v7), config loader, resolver, batch splitter | [resolve-options.ts](src/runtime/shared/utils/resolve-options.ts), [split-batch.ts](src/runtime/shared/utils/split-batch.ts) |
+| `shared/utils/` | Trace headers, log-level parser, uuid (v7), config loader, resolver, batch splitter, span events, the monotonic clock (`now.ts`), the span metric sink | [resolve-options.ts](src/runtime/shared/utils/resolve-options.ts), [split-batch.ts](src/runtime/shared/utils/split-batch.ts) |
 | `shared/transports/` | Declarative transport factories (`fileTransport`/`httpTransport`/`observeTransport`/`memoryTransport`) | [factories.ts](src/runtime/shared/transports/factories.ts) |
 | `options.ts` | Re-exports `defineFroggerOptions` + transport factories (the `#frogger/config` alias) | [options.ts](src/runtime/options.ts) |
 
@@ -171,11 +221,16 @@ zero mutable state** with it: separate wire type ([`MetricObject`](src/runtime/m
 **Client (auto-imported composables):**
 - `useFrogger(options?: ClientLoggerOptions): IFroggerLogger` — main logger factory (fresh instance = fresh span).
 - `frogger` — auto-imported **ambient** logger; a drop-in for `console.*` (variadic `log`/`info`/`warn`/`error`/`debug`/… plus `getHeaders`/`child`/`span`/`startSpan`/etc.). Backed by ONE app-scoped `ClientFrogger` (single span chain); inside `frogger.span(...)` it resolves to the active span's child instead. Impl: [app/frogger.ts](src/runtime/app/frogger.ts) (`getAmbientClientLogger`); shared facade [logger/ambient.ts](src/runtime/logger/ambient.ts); arg reconciliation [shared/utils/normalize-log-args.ts](src/runtime/shared/utils/normalize-log-args.ts) (trailing plain object → `ctx`, leading args → `msg`, `Error` → `ctx.error`). **Boot-context:** on first construction it stamps the static `context` object from `frogger.config.ts` (serialized into `public.frogger.context`), then fires the one-time `frogger:init` Nuxt hook with the logger so a client plugin can add dynamic base context (`frogger.addContext(...)`) that can't be serialized. The server ambient logger applies the same static `context` (per-request; no `frogger:init` hook there).
+- `froggerMetrics` / `setFroggerMetricsUser()` (metrics on only) - the manual metrics API; see the
+  metrics section above. Same names on the server.
 - `useFroggerWebSocket()` — fluent dev-only live-log subscriber (`.channel().levels().types().sources().tags().onMessage().connect()`). Only registered when `websocket` **and** `serverModule` are enabled.
 
 **Server (auto-imported, Nitro):**
 - `getFrogger(options?, event?): IFroggerLogger` — when `autoEventCapture` is on (default), the event is grabbed via `useEvent()`; otherwise pass it explicitly. NOTE the overload order differs between the two impls (see rough edges). Inside `frogger.span(...)` it returns a child of the active span logger (continues the tree) instead of re-branching from the request root.
 - `frogger` — auto-imported **ambient** logger; same drop-in `console.*` surface, backed by ONE per-request `ServerFroggerLogger` cached on `event.context.froggerAmbientLogger` (resolved via `useEvent()`, single span chain, trace-correlated with the client). Impl: [server/utils/frogger.ts](src/runtime/server/utils/frogger.ts). Resolution order: active span logger (see `span` below) → per-request cache → process-scoped fallback (outside a request / when `autoEventCapture` is off).
+- `froggerMetrics` (metrics on only) - the same manual metrics API as the client, backed by
+  `ServerMetricsQueueService.enqueueMetric`. Correlation resolves via the active span logger, then
+  `useEvent()`, then nothing: a point from a cron task carries no fabricated trace.
 - `HttpTransport` — class for forwarding logs to an external HTTP endpoint. Options gained `apiKeyLocation` (`'header'` default → `x-api-key`, `'query'` → `?key=`), `maxBatchEvents`/`maxBodyBytes` (outgoing batch splitting via [shared/utils/split-batch.ts](src/runtime/shared/utils/split-batch.ts)). Its retry loop is now live (see rough edges — the old body silently swallowed all send failures).
 - `addGlobalTransport(transport)` / `createHttpTransport(endpoint|options)` — imperative transport registration ([server/utils/transport.ts](src/runtime/server/utils/transport.ts)).
 
@@ -195,9 +250,12 @@ zero mutable state** with it: separate wire type ([`MetricObject`](src/runtime/m
 - Levels (consola-based): `fatal`/`error` (0), `warn` (1), `log` (2), `info`/`success`/`fail`/`ready`/`start` (3), `debug` (4), `trace` (5), plus `silent` (-999), `verbose` (999), and dynamic `logLevel(type, msg, ctx)`.
 - Context: `addContext(ctx, { overwrite? })` / `setContext` / `clearContext`. `addContext` deep-merges via `defu`; incoming wins on key conflicts by default (`defu(ctx, existing)`, last-write-wins) so re-stamped keys like `route`/`user` update instead of freezing, and `{ overwrite: false }` flips to `defu(existing, ctx)` (fill only unset keys). `setContext` replaces wholesale; `clearContext` empties.
 - Children: `child(options)` (snapshot context; explicitly passed `context` keys override inherited ones) and `reactiveChild(options)` (live-inherits parent context via a Vue `computed`).
-- Spans: `span(name, fn)` runs `fn` with a named child installed as the **active logger** — every ambient `frogger.*` call (and `getFrogger()`) inside `fn`, however deeply nested, resolves to that child, so logs auto-nest under the span; restored on exit, nestable, concurrency-safe on the server. `startSpan(name, options?)` returns the same named child (with `ctx.span = name`) to hold and pass around manually, without changing the active logger. `span()` also emits ONE **span-end event** per span (msg = span name, `ctx.spanEvent: 'end'`, `durationMs`, `ok`), OTel-style, so a span is visible even when nothing logs inside it; configured by the `spans` module option (default `{ level: 'info' }`, `false` disables). The thrown error is never attached to the event. Impl: [shared/utils/span-events.ts](src/runtime/shared/utils/span-events.ts); tests: the span-end describe in [test/logger/span-parentage.nuxt.test.ts](test/logger/span-parentage.nuxt.test.ts). Mechanism: [logger/active-context.server.ts](src/runtime/logger/active-context.server.ts) (`AsyncLocalStorage` from `node:async_hooks`) / [logger/active-context.client.ts](src/runtime/logger/active-context.client.ts) (module variable, best-effort under interleaved async). The `.server` file must NEVER be imported (even transitively) from client-bundled code — impl is selected by import site.
+- Spans: `span(name, fn)` runs `fn` with a named child installed as the **active logger** — every ambient `frogger.*` call (and `getFrogger()`) inside `fn`, however deeply nested, resolves to that child, so logs auto-nest under the span; restored on exit, nestable, concurrency-safe on the server. `span(name, fn, options?)` takes an optional third argument (`{ metric?, labels? }`) to record a
+  `span.duration` histogram for that one span. `startSpan(name, options?)` returns the same named child (with `ctx.span = name`) to hold and pass around manually, without changing the active logger. `span()` also emits ONE **span-end event** per span (msg = span name, `ctx.spanEvent: 'end'`, `durationMs`, `ok`), OTel-style, so a span is visible even when nothing logs inside it; configured by the `spans` module option (default `{ level: 'info', metric: false }`, `false` disables).
+  `metric: true` adds the duration histogram; read back out of runtime config by `spanEventsFromConfig`,
+  which tolerates a config written by an older build rather than casting. The thrown error is never attached to the event. Impl: [shared/utils/span-events.ts](src/runtime/shared/utils/span-events.ts); tests: the span-end describe in [test/logger/span-parentage.nuxt.test.ts](test/logger/span-parentage.nuxt.test.ts). Mechanism: [logger/active-context.server.ts](src/runtime/logger/active-context.server.ts) (`AsyncLocalStorage` from `node:async_hooks`) / [logger/active-context.client.ts](src/runtime/logger/active-context.client.ts) (module variable, best-effort under interleaved async). The `.server` file must NEVER be imported (even transitively) from client-bundled code — impl is selected by import site.
 - Reporters: `addReporter` / `removeReporter` / `getReporters` / `clearReporters`.
-- Tracing: `getHeaders(customVendor?)`. Plus `reset()`.
+- Tracing: `getHeaders(customVendor?)` (see the span-id reservation note above). Plus `reset()`.
 
 **Signature:** `info(message: string, context?: object)` — message first (a static human string), context object second (dynamic data). The emitted record is `LoggerObject` ([src/runtime/shared/types/log.ts](src/runtime/shared/types/log.ts)): `{ time, lvl, type, msg, ctx, tags?, env, source?, trace }`. `ctx` is typed `Record<string, any>` (untyped).
 
@@ -245,6 +303,11 @@ is gone too (nothing consumed it in the `getFrogger` utils — those reads were 
 
 These are the current pain points; an improvement plan lives in [ROADMAP.md](ROADMAP.md).
 - ~~**Console noise**~~ / ~~**Build/startup spam**~~ — **RESOLVED (Theme A)**. All internal `console.*` diagnostics now route through a leveled internal channel ([shared/utils/internal-log.ts](src/runtime/shared/utils/internal-log.ts), `froggerInternal.error/warn/info/debug`), gated by the `verbose` / `logLevel` module options (default `warn` in dev, `silent` in production). The `🐸 FROGGER` build banners are gated too: dev prints **one** "Ready to log" line, production prints nothing. NOTE: the `ConsoleReporter` and the `console-frogger` fallback still call `console.*` directly — that is the user's *log output* (product), not internal chatter, so it is NOT gated by `verbose`/`logLevel`. It is instead gated by the separate `consoleOutput` module option (see below). When adding new runtime diagnostics, use `froggerInternal.*`, not `console.*`.
+- **Durations are monotonic, timestamps are not.** Every elapsed-time measurement goes through
+  [shared/utils/now.ts](src/runtime/shared/utils/now.ts) (`performance.now()` with a `Date.now()`
+  fallback), because wall-clock has 1ms granularity and steps under NTP correction, so a
+  sub-millisecond span used to read as `0` and a backwards step could produce a negative duration.
+  `LoggerObject.time` and `MetricObject.time` stay on `Date.now()`: they are compared across machines.
 - **Type debt:** ~63 `@ts-ignore`/`@ts-expect-error`, concentrated around untyped `useRuntimeConfig()` access ([src/module.ts](src/module.ts#L186), the `getFrogger` utils, `base-frogger`). `LogContext` / WS payloads are `any`.
 - **Duplication:** [server/utils/auto.ts](src/runtime/server/utils/auto.ts) and [server/utils/manual.ts](src/runtime/server/utils/manual.ts) have effectively identical bodies; only the public overload arg-order differs (`(options?, event?)` vs `(event?, options?)`).
 - **Misleading dead code (not a runtime bug):** `ServerFroggerLogger.createChild` sets `spanId: parentSpanId` ([server/index.ts](src/runtime/logger/server/index.ts#L103)), but `generateTraceContext` only consumes `traceId`/`parentId` and always mints a fresh `spanId` — so that field is never read.

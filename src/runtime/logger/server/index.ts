@@ -13,7 +13,7 @@ import { defu } from 'defu';
 import { useRuntimeConfig } from '#imports';
 import { froggerInternal } from '../../shared/utils/internal-log';
 import { normalizeContextErrors } from '../../shared/utils/normalize-errors';
-import { runSpanWithEvent } from '../../shared/utils/span-events';
+import { runSpanWithEvent, type SpanOptions } from '../../shared/utils/span-events';
 import { runWithLogger } from '../active-context.server';
 import type { FroggerOptions } from '../../shared/types/options';
 import type { IFroggerLogger } from '../types';
@@ -158,8 +158,8 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         return this.child(defu({ context: { span: name } }, options));
     }
 
-    public span<T>(name: string, fn: () => T | Promise<T>): Promise<T> {
+    public span<T>(name: string, fn: () => T | Promise<T>, options?: SpanOptions): Promise<T> {
         const child = this.startSpan(name);
-        return runSpanWithEvent(child, name, this.spanEvents, () => runWithLogger(child, fn));
+        return runSpanWithEvent(child, name, this.spanEvents, () => runWithLogger(child, fn), this.spanMetricEnd(name, options));
     }
 }

@@ -11,14 +11,19 @@ import { MetricsMemoryTransport } from '../../_transports/memory-metrics-transpo
 import { MetricsHttpTransport } from '../../_transports/http-metrics-transport'
 import { MetricsBatchTransport, createMetricsBatchTransport } from '../../_transports/batch-metrics-transport'
 import { froggerInternal } from '../../../shared/utils/internal-log'
+import { parseAppInfoConfig } from '../../../app-info/parse'
+import { LogScrubber } from '../../../scrubber'
+import { scrubMetricBatch } from '../../shared/utils/scrub-metric-batch'
+import type { ScrubberOptions } from '../../../scrubber/options'
 
 /**
  * Server-side metrics queue. The metrics analogue of `ServerLogQueueService` -
  * same `getInstance()` + `initialise()`-from-runtimeConfig singleton shape and
  * per-transport try/catch isolation - but it does NOT aggregate: raw metric
  * events fan out to the configured sinks unchanged (aggregation is a read-time
- * concern). No scrubber runs on metrics; their cardinality guard is the
- * labels-vs-attr split enforced at collection time.
+ * concern). Cardinality is guarded by the labels-vs-attr split enforced at
+ * collection time; `labels`/`attr` content is scrubbed here, on the one hop
+ * every point passes through, whether recorded locally or relayed.
  */
 export class ServerMetricsQueueService {
     private static instance: ServerMetricsQueueService | null = null
@@ -26,6 +31,11 @@ export class ServerMetricsQueueService {
     private batchTransporter?: MetricsBatchTransport
     private directTransporters: IFroggerMetricsTransport[] = []
     private downstreamTransporters: IFroggerMetricsTransport[] = []
+
+    /** This server's own identity, stamped onto points it produces itself. */
+    private appInfo: { name?: string, version?: string } | undefined
+
+    private scrubber: LogScrubber | null = null
 
     private initialised: boolean = false
 
@@ -46,6 +56,19 @@ export class ServerMetricsQueueService {
         const config = useRuntimeConfig()
         //@ts-ignore - frogger.metrics is injected by the module only when enabled
         const metricsConfig = config.frogger?.metrics as { batch?: BatchOptions | false } | undefined
+
+        // Points this server records itself carry its own identity; a relayed
+        // batch already carries the origin app's and is never re-stamped.
+        const publicFrogger = (config.public as { frogger?: { app?: unknown } } | undefined)?.frogger
+        const { isSet, name, version } = parseAppInfoConfig(publicFrogger?.app)
+        this.appInfo = isSet ? { name, version } : undefined
+
+        // Metrics share the log pipeline's ruleset; this is the only hop that
+        // can redact `labels`/`attr` before they reach a transport as raw JSON.
+        const scrubConfig = (config.frogger as { scrub?: ScrubberOptions | false } | undefined)?.scrub
+        if (scrubConfig) {
+            this.scrubber = new LogScrubber(scrubConfig)
+        }
 
         const batchingEnabled = (metricsConfig?.batch ?? false) !== false
 
@@ -112,11 +135,26 @@ export class ServerMetricsQueueService {
         return true
     }
 
+    /**
+     * Record one point produced by this server. The single-point entry the
+     * manual metrics API needs; `enqueueBatch` remains the relay path for
+     * batches POSTed by a browser.
+     */
+    public enqueueMetric(metric: MetricObject): void {
+        this.enqueueBatch({ metrics: [metric], app: this.appInfo })
+    }
+
     public enqueueBatch(batch: MetricObjectBatch): void {
         if (!this.ensureInitialised()) return
 
         const metrics = batch.metrics
         if (!metrics || metrics.length === 0) return
+
+        // Scrub before denormalising, so one pass covers the batch's shared
+        // context rather than every copy of it.
+        if (this.scrubber) {
+            scrubMetricBatch(batch, this.scrubber)
+        }
 
         // Transports receive a bare MetricObject[], so the batch envelope only
         // survives if it is denormalised onto each point first - the metrics
@@ -127,6 +165,7 @@ export class ServerMetricsQueueService {
             if (app?.name) m.source ??= { name: app.name, version: app.version ?? '' }
             m.context ??= batch.context
             m.session ??= batch.session
+            m.user ??= batch.user
         }
 
         if (this.batchTransporter) {

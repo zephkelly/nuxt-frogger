@@ -3,6 +3,7 @@ import type { LogType } from 'consola'
 import type { IFroggerLogger, AddContextOptions } from './types'
 import type { IFroggerReporter } from './_reporters/types'
 import type { FroggerOptions } from '../shared/types/options'
+import type { SpanOptions } from '../shared/utils/span-events'
 import { normalizeLogArgs } from '../shared/utils/normalize-log-args'
 
 /**
@@ -40,7 +41,7 @@ export interface FroggerAmbient {
     clearContext(): void
     child(options: FroggerOptions): IFroggerLogger
     reactiveChild(options: FroggerOptions): IFroggerLogger
-    span<T>(name: string, fn: () => T | Promise<T>): Promise<T>
+    span<T>(name: string, fn: () => T | Promise<T>, options?: SpanOptions): Promise<T>
     startSpan(name: string, options?: FroggerOptions): IFroggerLogger
     addReporter(reporter: IFroggerReporter): void
     removeReporter(reporter: IFroggerReporter): void
@@ -93,7 +94,7 @@ export function createAmbientFrogger(resolve: () => IFroggerLogger): FroggerAmbi
     facade.clearContext = () => resolve().clearContext()
     facade.child = (options: FroggerOptions) => resolve().child(options)
     facade.reactiveChild = (options: FroggerOptions) => resolve().reactiveChild(options)
-    facade.span = <T>(name: string, fn: () => T | Promise<T>) => resolve().span(name, fn)
+    facade.span = <T>(name: string, fn: () => T | Promise<T>, options?: SpanOptions) => resolve().span(name, fn, options)
     facade.startSpan = (name: string, options?: FroggerOptions) => resolve().startSpan(name, options)
     facade.addReporter = (reporter: IFroggerReporter) => resolve().addReporter(reporter)
     facade.removeReporter = (reporter: IFroggerReporter) => resolve().removeReporter(reporter)

@@ -485,12 +485,16 @@ function resolveScrub(value: ScrubberOptions | boolean | undefined): ScrubberOpt
  * Normalise the `spans` option: on by default (span-end events at info),
  * `false` disables, a partial object overrides the level.
  */
-function resolveSpans(value: boolean | { level?: string } | undefined): ResolvedSpanEvents {
+function resolveSpans(value: boolean | { level?: string, metric?: boolean } | undefined): ResolvedSpanEvents {
     if (value === false) return false
-    if (typeof value === 'object' && value !== null && value.level) {
-        return { level: value.level as Exclude<ResolvedSpanEvents, false>['level'] }
+
+    const defaults = structuredClone(DEFAULT_SPAN_EVENTS) as Exclude<ResolvedSpanEvents, false>
+    if (typeof value !== 'object' || value === null) return defaults
+
+    return {
+        level: (value.level ?? defaults.level) as Exclude<ResolvedSpanEvents, false>['level'],
+        metric: value.metric ?? defaults.metric,
     }
-    return structuredClone(DEFAULT_SPAN_EVENTS)
 }
 
 /**

@@ -28,6 +28,9 @@ import { splitMetricBatch } from '../../shared/utils/split-metric-batch'
 // the same budget, so each chunk stays well under it.
 const BEACON_MAX_BYTES = 16 * 1024
 
+/** Auto-collected vitals, exempt from the per-page custom-metric budget. */
+const RESERVED_METRIC_PREFIX = 'web.vital.'
+
 const MAX_RETRIES = 3
 const BASE_BACKOFF_MS = 2000
 const MAX_BACKOFF_MS = 60000
@@ -54,6 +57,7 @@ export class MetricsQueueService {
     private appInfo: { name?: string; version?: string } | undefined
     private context: MetricContext | undefined
     private session: { id: string; sampled: boolean } | undefined
+    private user: string | undefined
 
     private retryCount: number = 0
     private nextRetryAt: number = 0
@@ -101,6 +105,19 @@ export class MetricsQueueService {
         this.session = session
     }
 
+    getSession(): { id: string; sampled: boolean } | undefined {
+        return this.session
+    }
+
+    /**
+     * Stamp the acting user onto this session's batches. Set once at sign-in
+     * (and cleared at sign-out), never per point: it rides the batch envelope
+     * and is denormalised at ingest, exactly like the device context.
+     */
+    setUser(user: string | undefined): void {
+        this.user = user
+    }
+
     /** Whether this session collects at all (false ⇒ sampled out). */
     isSampled(): boolean {
         return this.session ? this.session.sampled : true
@@ -111,19 +128,37 @@ export class MetricsQueueService {
         return this.endpoint !== false && !!this.endpoint
     }
 
+    /**
+     * Reset the per-page budget. `maxEventsPerPage` is named for a page load,
+     * but a client-routed SPA has no page load after boot, so without this the
+     * cap is really per app boot and a long-lived tab goes silent for the rest
+     * of the session. Called on SPA navigation by the metrics plugin.
+     */
+    resetPage(): void {
+        this.eventsThisPage = 0
+        this.capWarned = false
+    }
+
     enqueueMetric(metric: MetricObject): void {
         if (!this.isSampled()) return
 
-        if (this.eventsThisPage >= this.maxEventsPerPage) {
-            if (!this.capWarned) {
-                this.capWarned = true
-                froggerInternal.warn(
-                    `Metrics per-page cap of ${this.maxEventsPerPage} reached - further metrics this page load are dropped.`,
-                )
+        // Web Vitals are bounded at five per page and are the reason the
+        // subsystem exists; a hot custom metric must not be able to exhaust
+        // the budget and take them down with it.
+        const reserved = metric.name.startsWith(RESERVED_METRIC_PREFIX)
+
+        if (!reserved) {
+            if (this.eventsThisPage >= this.maxEventsPerPage) {
+                if (!this.capWarned) {
+                    this.capWarned = true
+                    froggerInternal.warn(
+                        `Metrics per-page cap of ${this.maxEventsPerPage} reached - further custom metrics this page are dropped.`,
+                    )
+                }
+                return
             }
-            return
+            this.eventsThisPage++
         }
-        this.eventsThisPage++
 
         if (!this.batchingEnabled) {
             void this.send([metric]).catch(() => {
@@ -159,6 +194,7 @@ export class MetricsQueueService {
             app: this.appInfo,
             context: this.context,
             session: this.session,
+            user: this.user,
             meta: {
                 time: Date.now(),
                 processChain: this.appInfo?.name ? [this.appInfo.name] : [],

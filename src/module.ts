@@ -373,6 +373,19 @@ export default defineNuxtModule<ModuleOptions>({
 
             if (metricsEnabled) {
                 addPlugin(resolver.resolve('./runtime/metrics/app/plugins/metrics.client'))
+
+                // The manual metrics API is registered only with the subsystem,
+                // so a bare install never pulls the metrics queue into the bundle.
+                addImports([
+                    {
+                        name: 'froggerMetrics',
+                        from: resolver.resolve('./runtime/metrics/app/utils/metrics')
+                    },
+                    {
+                        name: 'setFroggerMetricsUser',
+                        from: resolver.resolve('./runtime/metrics/app/utils/metrics')
+                    }
+                ])
             }
 
             if (resolved.errorCapture.client) {
@@ -429,6 +442,13 @@ export default defineNuxtModule<ModuleOptions>({
             // `metrics.public.endpoint` serves where the client posts; `false`
             // registers no route at all.
             if (metricsEnabled) {
+                addServerImports([
+                    {
+                        name: 'froggerMetrics',
+                        from: resolver.resolve('./runtime/metrics/server/utils/metrics')
+                    }
+                ])
+
                 addServerPlugin(resolver.resolve('./runtime/metrics/server/plugins/metrics-queue.server'))
                 if (metrics.public.endpoint !== false) {
                     addServerHandler({

@@ -32,6 +32,7 @@ vi.mock('../../src/runtime/server/services/server-log-queue', () => ({
 
 import { ServerFroggerLogger } from '../../src/runtime/logger/server'
 import { getActiveLogger } from '../../src/runtime/logger/active-context.server'
+import { parseTraceparent } from '../../src/runtime/shared/utils/trace-headers'
 
 // Consola dispatches to reporters without awaiting, so captured logs land a
 // microtask later; flush before asserting.
@@ -262,5 +263,112 @@ describe('span end events (ServerFroggerLogger)', () => {
         const events = endEvents()
         expect(events).toHaveLength(1)
         expect(events[0]!.type).toBe('debug')
+    })
+})
+
+describe('outgoing trace headers (getHeaders)', () => {
+    let allLogs: LoggerObject[]
+    let root: ServerFroggerLogger
+
+    beforeEach(() => {
+        queueLogs.length = 0
+        allLogs = queueLogs as LoggerObject[]
+        root = new ServerFroggerLogger({ consoleOutput: false })
+    })
+
+    function parentIdOf(logger: IFroggerLogger): string {
+        const parsed = parseTraceparent(logger.getHeaders().traceparent!)
+        return parsed!.spanId!
+    }
+
+    function appLogs(): LoggerObject[] {
+        return allLogs.filter(l => l.ctx.spanEvent !== 'end')
+    }
+
+    it('advertises the last emitted row once the logger has logged', async () => {
+        root.info('r1')
+        await flush()
+
+        expect(parentIdOf(root)).toBe(appLogs()[0]!.trace.spanId)
+    })
+
+    it('advertises an id the first row then uses, when called before any log', async () => {
+        const child = root.startSpan('checkout')
+        const advertised = parentIdOf(child)
+
+        child.info('c1')
+        await flush()
+
+        expect(appLogs()[0]!.trace.spanId).toBe(advertised)
+    })
+
+    it('does not advertise the parent row, which would make the call a sibling', async () => {
+        root.info('r1')
+        await flush()
+        const rootSpanId = appLogs()[0]!.trace.spanId
+
+        const child = root.startSpan('checkout')
+
+        expect(parentIdOf(child)).not.toBe(rootSpanId)
+    })
+
+    it('keeps the reservation stable across repeated calls before the first log', () => {
+        const child = root.startSpan('checkout')
+
+        expect(parentIdOf(child)).toBe(parentIdOf(child))
+    })
+
+    it('reserves once, then follows the chain for later rows', async () => {
+        const child = root.startSpan('checkout')
+        const advertised = parentIdOf(child)
+
+        child.info('c1')
+        child.info('c2')
+        await flush()
+
+        const logs = appLogs()
+        expect(logs[0]!.trace.spanId).toBe(advertised)
+        expect(logs[1]!.trace.spanId).not.toBe(advertised)
+        expect(logs[1]!.trace.parentId).toBe(advertised)
+        expect(parentIdOf(child)).toBe(logs[1]!.trace.spanId)
+    })
+
+    it('still parents the span child under the parent row', async () => {
+        root.info('r1')
+        await flush()
+        const rootSpanId = appLogs()[0]!.trace.spanId
+
+        const child = root.startSpan('checkout')
+        parentIdOf(child)
+        child.info('c1')
+        await flush()
+
+        expect(appLogs()[1]!.trace.parentId).toBe(rootSpanId)
+    })
+
+    it("a fresh root logger's advertised id materialises on its first row", async () => {
+        const advertised = parentIdOf(root)
+
+        root.info('r1')
+        await flush()
+
+        expect(appLogs()[0]!.trace.spanId).toBe(advertised)
+    })
+
+    it('carries the logger trace id, not a new one', () => {
+        const child = root.startSpan('checkout')
+        const parsed = parseTraceparent(child.getHeaders().traceparent!)
+
+        expect(parsed!.traceId).toBe(parseTraceparent(root.getHeaders().traceparent!)!.traceId)
+    })
+
+    it('reset() drops a reservation rather than advertising it on a new trace', async () => {
+        const advertised = parentIdOf(root)
+        root.reset()
+
+        root.info('r1')
+        await flush()
+
+        expect(appLogs()[0]!.trace.spanId).not.toBe(advertised)
     })
 })

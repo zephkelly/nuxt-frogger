@@ -46,6 +46,9 @@ export interface MetricObjectBatch {
     /** One sampling decision per session (uuidv7 session id). */
     session?: { id: string; sampled: boolean }
 
+    /** Acting user, denormalised onto points at ingest like {@link context}. */
+    user?: string
+
     /** Same loop-detection convention as the log pipeline. */
     meta?: {
         processed?: true

@@ -11,8 +11,10 @@ import type {
  * `full` presets - enabling data collection is always an explicit choice.
  *
  * `metrics: true` turns on the free, bounded-cardinality signals only: Web
- * Vitals + a per-batch device envelope. Everything heavier (manual metrics API,
- * resource timing, server runtime metrics) gets its own flag in later phases.
+ * Vitals + a per-batch device envelope, plus the manual metrics API
+ * (`froggerMetrics`) on both runtimes, which costs nothing until called.
+ * Heavier auto-collection (resource timing, server runtime stats) gets its own
+ * flag in later phases.
  */
 export interface MetricsOptions {
     /**

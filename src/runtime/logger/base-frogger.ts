@@ -14,7 +14,8 @@ import { froggerInternal } from "../shared/utils/internal-log";
 import type { IFroggerReporter } from "./_reporters/types";
 import { LogScrubber } from "../scrubber";
 import type { ScrubberOptions } from "../scrubber/options";
-import { DEFAULT_SPAN_EVENTS, type ResolvedSpanEvents } from "../shared/utils/span-events";
+import { spanEventsFromConfig, type ResolvedSpanEvents, type SpanOptions } from "../shared/utils/span-events";
+import { getSpanMetricSink } from "../shared/utils/span-metric-sink";
 
 import { useRuntimeConfig } from "#imports";
 import { defu } from 'defu';
@@ -37,6 +38,21 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
 
     protected traceId: string;
     protected lastSpanId: string | null = null;
+
+    /**
+     * The id this logger's NEXT row will use, minted early because
+     * `getHeaders()` was called before that row existed. Consumed by
+     * {@link generateTraceContext} so the id handed to a downstream service
+     * turns into a real row rather than pointing at nothing.
+     */
+    protected reservedSpanId: string | null = null;
+
+    /**
+     * Whether this logger has emitted a row yet. `lastSpanId` cannot answer
+     * this: a child is seeded with its PARENT's span id, so a non-null value
+     * says nothing about whether this logger has logged.
+     */
+    protected hasEmitted: boolean = false;
     protected level: number;
     protected readonly consoleOutput: boolean;
     protected readonly scrub: boolean;
@@ -88,13 +104,12 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             this.scrubber = new LogScrubber(resolvedScrub);
         }
 
-        // Span-end events default ON at info; `spans: false` in module config
-        // turns them off. Resolved by the module, so a missing key (bare test
-        // configs) falls back to the same default the resolver would produce.
-        const moduleSpans = (config.public?.frogger as {
-            spans?: ResolvedSpanEvents
-        } | undefined)?.spans;
-        this.spanEvents = moduleSpans === false ? false : (moduleSpans ?? DEFAULT_SPAN_EVENTS);
+        // Span-end events default ON at info with no duration metric; `spans:
+        // false` turns them off. Read tolerantly rather than cast, so a bare
+        // test config and an older build's runtimeConfig both degrade to the
+        // same default the resolver would produce.
+        const moduleSpans = (config.public?.frogger as { spans?: unknown } | undefined)?.spans;
+        this.spanEvents = spanEventsFromConfig(moduleSpans);
 
         if (this.consoleOutput) {
             this.consoleReporter = new ConsoleReporter();
@@ -145,7 +160,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
 
         const headers = generateW3CTraceHeaders({
             traceId: this.traceId,
-            parentSpanId: this.lastSpanId || undefined,
+            parentSpanId: this.outgoingSpanId(),
             vendorData
         });
 
@@ -153,6 +168,31 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             traceparent: headers.traceparent,
             ...(headers.tracestate && { tracestate: headers.tracestate })
         };
+    }
+
+    /**
+     * The span id a downstream service should parent under.
+     *
+     * Once this logger has emitted, that is the row it last emitted, which is
+     * the documented "last log here is the parent of the first log there".
+     *
+     * Before it has emitted, `lastSpanId` still holds the PARENT's row, so
+     * advertising it would make the downstream call a SIBLING of this span
+     * instead of its child, which is what made a request issued at the top of a
+     * span hang off the wrong node. Reserve the id this logger's first row will
+     * use and advertise that instead; `generateTraceContext` consumes it, so
+     * the id resolves to a real row as soon as anything is logged here.
+     *
+     * The reservation is stable: repeated calls before the first row return the
+     * same id rather than minting a new one per outgoing request.
+     */
+    protected outgoingSpanId(): string {
+        if (this.hasEmitted && this.lastSpanId) {
+            return this.lastSpanId;
+        }
+
+        this.reservedSpanId ??= generateSpanId();
+        return this.reservedSpanId;
     }
 
     protected generateTraceContext(suppliedTraceContext?: TraceContext): TraceContext {
@@ -165,7 +205,10 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             }
         }
 
-        const newSpanId = generateSpanId();
+        // Consume any id `getHeaders()` already advertised, so the row that
+        // arrives IS the one a downstream service was told to parent under.
+        const newSpanId = this.reservedSpanId ?? generateSpanId();
+        this.reservedSpanId = null;
 
         const traceContext: TraceContext = {
             traceId: this.traceId,
@@ -177,6 +220,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         }
 
         this.lastSpanId = newSpanId;
+        this.hasEmitted = true;
 
         return traceContext;
     }
@@ -184,6 +228,12 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
     protected setTraceContext(traceId: string, parentSpanId: string | null = null): void {
         this.traceId = traceId;
         this.lastSpanId = parentSpanId;
+
+        // Re-seeding puts this logger at the start of a (possibly new) trace:
+        // it has emitted nothing here, and any id it advertised belonged to the
+        // trace it just left.
+        this.reservedSpanId = null;
+        this.hasEmitted = false;
     }
 
 
@@ -340,6 +390,8 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
 
         this.traceId = generateTraceId();
         this.lastSpanId = null;
+        this.reservedSpanId = null;
+        this.hasEmitted = false;
     }
 
 
@@ -378,6 +430,22 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         });
 
         await Promise.all(reporterPromises);
+    }
+
+    /**
+     * The span-end callback that records a `span.duration` histogram, or
+     * `undefined` when nothing would consume it. Returning `undefined` matters:
+     * it is what lets `runSpanWithEvent` skip its timer entirely on the default
+     * path, so a span costs exactly what it did before.
+     */
+    protected spanMetricEnd(name: string, options?: SpanOptions): ((durationSeconds: number, ok: boolean) => void) | undefined {
+        const enabled = options?.metric ?? (this.spanEvents ? this.spanEvents.metric : false);
+        if (!enabled) return undefined;
+
+        const sink = getSpanMetricSink();
+        if (!sink) return undefined;
+
+        return (durationSeconds: number, ok: boolean) => sink(name, durationSeconds, ok, options?.labels);
     }
 
     protected createChildTraceContext(): { traceId: string; parentSpanId: string | null } {

@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.28
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.27...v0.1.28)
+
+### 🩹 Fixes
+
+- Observe adapter ([033c6ef](https://github.com/zephkelly/nuxt-frogger/commit/033c6ef))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.27
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.26...v0.1.27)

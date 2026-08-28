@@ -42,6 +42,16 @@ export interface FroggerAmbient {
      */
     identify(user: string | { id: string, [key: string]: unknown } | null): void
     /**
+     * Pin this scope to a session, overriding the browser session the client
+     * logger seeds itself with. See {@link IFroggerLogger.setSession}.
+     */
+    setSession(session: { id: string, sampled: boolean } | undefined): void
+    /**
+     * Attach the matched route PATTERN (never a raw path) to every subsequent
+     * row in this scope. See {@link IFroggerLogger.setRoute}.
+     */
+    setRoute(route: string | undefined): void
+    /**
      * Record a business fact (`frogger.event('order.placed', { orderId })`).
      * See {@link IFroggerLogger.event}.
      */
@@ -100,6 +110,8 @@ export function createAmbientFrogger(resolve: () => IFroggerLogger): FroggerAmbi
 
     facade.getHeaders = (customVendor?: string) => resolve().getHeaders(customVendor)
     facade.identify = (user: string | { id: string, [key: string]: unknown } | null) => resolve().identify(user)
+    facade.setSession = (session: { id: string, sampled: boolean } | undefined) => resolve().setSession(session)
+    facade.setRoute = (route: string | undefined) => resolve().setRoute(route)
     facade.event = (name: string, attributes?: Record<string, unknown>) => resolve().event(name, attributes)
     facade.addContext = (context: object, options?: AddContextOptions) => resolve().addContext(context, options)
     facade.setContext = (context: object) => resolve().setContext(context)

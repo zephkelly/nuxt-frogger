@@ -96,14 +96,18 @@ export function getFrogger(
  * vendor's state at this hop.
  */
 /**
- * Attach the request's validated browser session to a server logger, so rows
- * emitted on the server join to the client rows from the same page load.
+ * Attach the request's validated session to a server logger, so rows emitted on
+ * the server carry the same `session` as the client rows that triggered them.
+ *
+ * That is the browser session unless the client pinned another id via
+ * `setSession()`, in which case this adopts whatever the client sent - which is
+ * the point: the two sides agree without the server being configured for it.
  */
 export function adoptRequestSession(logger: IFroggerLogger, event?: H3Event): void {
     const session = event?.context?.froggerSession as { id: string, sampled: boolean } | undefined;
     if (!session) return;
 
-    (logger as unknown as { setSession?: (s: { id: string, sampled: boolean }) => void }).setSession?.(session);
+    logger.setSession(session);
 }
 
 export function adoptInboundTracestate(logger: IFroggerLogger, event?: H3Event): void {

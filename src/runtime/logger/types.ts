@@ -296,6 +296,39 @@ export interface IFroggerLogger {
     identify(user: string | { id: string, [key: string]: unknown } | null): void;
 
     /**
+     * Attach this logger to a session, landing in the top-level `session`
+     * field, which is never scrubbed.
+     *
+     * The client logger seeds this with the browser session at construction, so
+     * calling this is only necessary to pin a DIFFERENT id - an auth session,
+     * say. Doing so is a deliberate trade: `session` is what joins a log row to
+     * a Web Vital from the same page load, and the metrics pipeline keeps
+     * sending the browser id, so an override splits that join.
+     *
+     * ```ts
+     * frogger.setSession({ id: authSessionId, sampled: true })
+     * ```
+     *
+     * The id rides `x-frogger-session` on outbound requests and is adopted by
+     * the receiving server logger, so both sides of a call agree without the
+     * server being configured separately.
+     */
+    setSession(session: { id: string, sampled: boolean } | undefined): void;
+
+    /**
+     * Attach this logger to a route, landing in the top-level `route` field,
+     * which is never scrubbed.
+     *
+     * Pass the matched ROUTE PATTERN (`/orders/[id]`), never a raw path: a raw
+     * path is unbounded cardinality and routinely carries ids in the URL.
+     *
+     * ```ts
+     * frogger.setRoute(route.matched[0]?.path)
+     * ```
+     */
+    setRoute(route: string | undefined): void;
+
+    /**
      * Annotate this span. Lands on the span record's own bounded attribute bag,
      * NOT in the log context of rows inside the span.
      *

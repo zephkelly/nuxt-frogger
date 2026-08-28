@@ -78,6 +78,12 @@ export class SimpleConsoleLogger implements IFroggerLogger {
         // A console-only logger carries no correlation keys: nothing downstream
         // would ever read them.
     }
+    setSession(_session: { id: string, sampled: boolean } | undefined): void {
+        // No-op for the same reason as identify().
+    }
+    setRoute(_route: string | undefined): void {
+        // No-op for the same reason as identify().
+    }
     getSpanContext(): TraceContext {
         // A console-only logger participates in no trace, so it has no span to
         // report. Callers treat a thrown/absent context as "no exemplar".

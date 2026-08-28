@@ -17,8 +17,24 @@ function createMockLogger() {
         addReporter: vi.fn(), removeReporter: vi.fn(),
         getReporters: vi.fn(() => []), clearReporters: vi.fn(),
         reset: vi.fn(),
+        identify: vi.fn(), setSession: vi.fn(), setRoute: vi.fn(),
+        setAttribute: vi.fn(), event: vi.fn(),
+        getSpanContext: vi.fn(() => ({ traceId: 'a'.repeat(32), spanId: 'b'.repeat(16) })),
     } as unknown as IFroggerLogger
 }
+
+/**
+ * Every non-log method the facade is supposed to hand through to the resolved
+ * logger. A name that reaches the FroggerAmbient interface but never gets a
+ * `facade.x = ...` line compiles fine and fails only at runtime, as `undefined`
+ * - which is exactly how setSession/setRoute went missing.
+ */
+const PASS_THROUGH_METHODS = [
+    'getHeaders', 'identify', 'setSession', 'setRoute', 'event',
+    'addContext', 'setContext', 'clearContext',
+    'child', 'reactiveChild', 'span', 'startSpan',
+    'addReporter', 'removeReporter', 'getReporters', 'clearReporters', 'reset',
+] as const
 
 describe('createAmbientFrogger', () => {
     let logger: ReturnType<typeof createMockLogger>
@@ -135,5 +151,56 @@ describe('createAmbientFrogger', () => {
                 frogger.timeEnd('t')
             }).not.toThrow()
         })
+    })
+})
+
+describe('createAmbientFrogger correlation setters', () => {
+    let logger: ReturnType<typeof createMockLogger>
+    let frogger: ReturnType<typeof createAmbientFrogger>
+
+    beforeEach(() => {
+        logger = createMockLogger()
+        frogger = createAmbientFrogger(() => logger)
+    })
+
+    it('wires every pass-through method onto the facade', () => {
+        for (const name of PASS_THROUGH_METHODS) {
+            expect(typeof (frogger as unknown as Record<string, unknown>)[name], `facade.${name} is not wired`).toBe('function')
+        }
+    })
+
+    it('forwards setSession to the resolved logger', () => {
+        frogger.setSession({ id: 'sess_9f2c', sampled: true })
+        expect(logger.setSession).toHaveBeenCalledWith({ id: 'sess_9f2c', sampled: true })
+    })
+
+    it('forwards a cleared session', () => {
+        frogger.setSession(undefined)
+        expect(logger.setSession).toHaveBeenCalledWith(undefined)
+    })
+
+    it('forwards setRoute to the resolved logger', () => {
+        frogger.setRoute('/orders/[id]')
+        expect(logger.setRoute).toHaveBeenCalledWith('/orders/[id]')
+    })
+
+    it('forwards identify alongside them', () => {
+        frogger.identify('user_4471')
+        expect(logger.identify).toHaveBeenCalledWith('user_4471')
+    })
+
+    it('resolves the logger per call, so a later scope sees its own', () => {
+        const first = createMockLogger()
+        const second = createMockLogger()
+        let current = first
+        const scoped = createAmbientFrogger(() => current)
+
+        scoped.setSession({ id: 's1', sampled: true })
+        current = second
+        scoped.setSession({ id: 's2', sampled: true })
+
+        expect(first.setSession).toHaveBeenCalledWith({ id: 's1', sampled: true })
+        expect(second.setSession).toHaveBeenCalledWith({ id: 's2', sampled: true })
+        expect(first.setSession).toHaveBeenCalledTimes(1)
     })
 })

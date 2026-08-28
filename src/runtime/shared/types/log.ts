@@ -68,8 +68,13 @@ export interface LoggerObject {
     trace: TraceContext;
 
     /**
-     * Browser session this row belongs to, shared with the metrics pipeline so
-     * a log and a Web Vital from the same page load can be joined.
+     * Session this row belongs to. Defaults to the browser session, which the
+     * metrics pipeline also sends, so a log and a Web Vital from the same page
+     * load join on it.
+     *
+     * That join holds only for the default. `setSession()` may pin a different
+     * id (an auth session, say), and metrics keeps sending the browser id, so
+     * an override splits the column by pipeline. Deliberate, but not free.
      *
      * TOP-LEVEL, not a `ctx` key, and NEVER SCRUBBED. `ctx` is user-owned and
      * arbitrarily shaped; these three are the reader's index keys and must be

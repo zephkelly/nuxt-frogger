@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.26
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.25...v0.1.26)
+
+### 🚀 Enhancements
+
+- Metrics enhancements ([9af3a9e](https://github.com/zephkelly/nuxt-frogger/commit/9af3a9e))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.25
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.24...v0.1.25)

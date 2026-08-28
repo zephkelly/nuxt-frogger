@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.29
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.28...v0.1.29)
+
+### 🩹 Fixes
+
+- Session user id stripping ([7f71725](https://github.com/zephkelly/nuxt-frogger/commit/7f71725))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.1.28
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.27...v0.1.28)

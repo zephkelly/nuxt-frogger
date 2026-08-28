@@ -16,7 +16,7 @@ function scrubber() {
 }
 
 function metric(overrides: Partial<MetricObject> = {}): MetricObject {
-    return { time: 1000, name: 'app.thing', kind: 'counter', value: 1, env: 'server', ...overrides }
+    return { id: 'fixture-id', time: 1000, name: 'app.thing', kind: 'counter', value: 1, env: 'server', ...overrides }
 }
 
 function batch(metrics: MetricObject[], rest: Partial<MetricObjectBatch> = {}): MetricObjectBatch {

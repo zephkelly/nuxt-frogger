@@ -76,7 +76,11 @@ const OBSERVE_METRICS_INGEST_PATH = '/api/observe/ingest/frogger/metrics'
 const OBSERVE_MAX_BATCH_EVENTS = 500
 const OBSERVE_MAX_BODY_BYTES = 950 * 1024
 
-const DEFAULT_WEB_VITALS: { reportAllChanges: boolean } = { reportAllChanges: false }
+const DEFAULT_WEB_VITALS: { reportAllChanges: boolean, attribution: boolean } = {
+    reportAllChanges: false,
+    // The attribution build is a larger bundle, so the extra detail is opt-in.
+    attribution: false,
+}
 
 /** Clamp a user-supplied sample rate into `[0, 1]`; default 1 when unset. */
 function resolveSampleRate(value: number | undefined): number {
@@ -203,10 +207,35 @@ export function resolveMetricsOptions(
         ? false
         : opts.webVitals === undefined || opts.webVitals === true
             ? true
-            : { reportAllChanges: opts.webVitals.reportAllChanges ?? false }
+            : {
+                reportAllChanges: opts.webVitals.reportAllChanges ?? false,
+                attribution: opts.webVitals.attribution ?? false,
+            }
+
+    // Runtime stats are opt-in even with metrics on: they run on a timer for
+    // the life of the process, which is a cost the app should choose.
+    const runtimeInput = opts.runtime === true
+        ? {}
+        : opts.runtime === false || opts.runtime === undefined
+            ? false
+            : opts.runtime
+
+    // Per-request instrumentation is opt-IN even with metrics on: it adds a
+    // measurement to every request, which is a volume decision the app owns.
+    const requestsInput = opts.requests === true
+        ? {}
+        : opts.requests === false || opts.requests === undefined
+            ? false
+            : opts.requests
 
     return {
         webVitals: normalizeToggle(webVitalsInput, DEFAULT_WEB_VITALS),
+        runtime: runtimeInput === false
+            ? false
+            : { intervalMs: Math.max(1000, runtimeInput.intervalMs ?? 15000) },
+        requests: requestsInput === false
+            ? false
+            : { serverTiming: requestsInput.serverTiming ?? false },
         deviceStats: opts.deviceStats !== false,
         sampleRate: resolveSampleRate(opts.sampleRate),
         maxEventsPerPage: opts.maxEventsPerPage ?? DEFAULT_MAX_EVENTS_PER_PAGE,

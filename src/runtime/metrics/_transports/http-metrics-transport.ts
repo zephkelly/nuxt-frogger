@@ -1,4 +1,4 @@
-import { useRuntimeConfig } from '#imports'
+import { useFroggerConfig, useFroggerServerConfig } from '../../shared/utils/use-frogger-config'
 
 import { parseAppInfoConfig } from '../../app-info/parse'
 import { splitMetricBatch } from '../shared/utils/split-metric-batch'
@@ -6,6 +6,8 @@ import { splitMetricBatch } from '../shared/utils/split-metric-batch'
 import { BaseMetricsTransport } from './base-metrics-transport'
 import type { MetricObject } from '../shared/types/metric'
 import type { MetricObjectBatch } from '../shared/types/metric-batch'
+import { METRIC_BATCH_SCHEMA } from '../shared/types/metric-batch'
+import type { FroggerResource } from '../../shared/types/resource'
 
 import { uuidv7 } from '../../shared/utils/uuid'
 import { froggerInternal } from '../../shared/utils/internal-log'
@@ -49,19 +51,19 @@ export class MetricsHttpTransport extends BaseMetricsTransport<Required<MetricsH
 
     protected options: Required<MetricsHttpTransportOptions>
     private retries: Map<string, number> = new Map()
+    private readonly resource: FroggerResource | undefined
 
     constructor(options: MetricsHttpTransportOptions) {
         super()
         this.transportId = `frogger-metrics-http-${uuidv7()}`
 
-        const config = useRuntimeConfig()
-        //@ts-ignore
-        const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app)
+        const config = useFroggerConfig()
+        const { isSet, name, version } = parseAppInfoConfig(config.app)
+        this.resource = useFroggerServerConfig().resource ?? config.resource
 
         this.options = {
             endpoint: options.endpoint,
-            //@ts-ignore
-            baseUrl: options.baseUrl || config.public.frogger.baseUrl || '',
+            baseUrl: options.baseUrl || config.baseUrl || '',
             appInfo: isSet
                 ? { name: name || 'unknown', version }
                 : { name: 'unknown', version: 'unknown' },
@@ -91,7 +93,9 @@ export class MetricsHttpTransport extends BaseMetricsTransport<Required<MetricsH
         const batch: MetricObjectBatch = {
             metrics,
             app: this.options.appInfo,
+            resource: this.resource,
             meta: {
+                schema: METRIC_BATCH_SCHEMA,
                 processed: true,
                 processChain: [this.transportId],
                 source: this.options.appInfo.name,
@@ -111,14 +115,6 @@ export class MetricsHttpTransport extends BaseMetricsTransport<Required<MetricsH
             : [batch]
 
         for (const chunk of chunks) {
-            // The splitter strips `meta`; restamp so every chunk carries the
-            // loop-detection chain (single-chunk fast path keeps the original).
-            chunk.meta ??= {
-                processed: true,
-                processChain: [this.transportId],
-                source: this.options.appInfo.name,
-                time: Date.now(),
-            }
             await this.sendChunk(chunk)
         }
     }

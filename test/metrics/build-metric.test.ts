@@ -1,7 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 
 import { buildMetric } from '../../src/runtime/metrics/shared/api/build-metric'
+import { resetMetricRegistry } from '../../src/runtime/metrics/shared/api/registry'
 import type { MetricStamp } from '../../src/runtime/metrics/shared/api/types'
+
+// A metric name's kind is locked at first use, process-wide, so each case
+// starts from a clean registry rather than inheriting the previous one's names.
+beforeEach(() => {
+    resetMetricRegistry()
+})
 
 const stamp: MetricStamp = { env: 'server' }
 
@@ -17,7 +24,9 @@ describe('buildMetric', () => {
     it('builds a minimal point from name, kind and value', () => {
         const m = buildMetric('app.thing', 'counter', 1, { time: 1000 }, stamp)
 
-        expect(m).toEqual({ time: 1000, name: 'app.thing', kind: 'counter', value: 1, env: 'server' })
+        expect(m).toMatchObject({ time: 1000, name: 'app.thing', kind: 'counter', value: 1, env: 'server' })
+        // uuidv7, so it is time-ordered and usable as a dedupe key downstream.
+        expect(m!.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
     })
 
     it('carries unit, labels and attr through unchanged', () => {

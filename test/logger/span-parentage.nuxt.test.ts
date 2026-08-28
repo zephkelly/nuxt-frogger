@@ -73,7 +73,7 @@ describe('span parentage (ServerFroggerLogger)', () => {
         expect(logs).toHaveLength(2)
         const [r1, c1] = logs
         expect(c1!.trace.traceId).toBe(r1!.trace.traceId)
-        expect(c1!.trace.parentId).toBe(r1!.trace.spanId)
+        expect(c1!.trace.parentSpanId).toBe(r1!.trace.spanId)
         expect(c1!.ctx.span).toBe('checkout')
     })
 
@@ -107,7 +107,7 @@ describe('span parentage (ServerFroggerLogger)', () => {
         expect(logs).toHaveLength(2)
         const [r1, a1] = logs
         expect(a1!.trace.traceId).toBe(r1!.trace.traceId)
-        expect(a1!.trace.parentId).toBe(r1!.trace.spanId)
+        expect(a1!.trace.parentSpanId).toBe(r1!.trace.spanId)
         expect(a1!.ctx.span).toBe('outer')
     })
 
@@ -131,16 +131,23 @@ describe('span parentage (ServerFroggerLogger)', () => {
         const [r1, a1, b1] = logs
         expect(a1!.trace.traceId).toBe(r1!.trace.traceId)
         expect(b1!.trace.traceId).toBe(r1!.trace.traceId)
-        expect(a1!.trace.parentId).toBe(r1!.trace.spanId)
-        expect(b1!.trace.parentId).toBe(a1!.trace.spanId)
+        expect(a1!.trace.parentSpanId).toBe(r1!.trace.spanId)
+        expect(b1!.trace.parentSpanId).toBe(a1!.trace.spanId)
         expect(b1!.ctx.span).toBe('inner')
     })
 
-    it('a nested span opened before any intermediate log stays on the same trace', async () => {
+    it('parents a nested span under its enclosing span, not under a log row', async () => {
+        // The parent edge is structural: it names the unit of work that
+        // contains this one. It used to name "whatever row happened to be
+        // emitted last", so the tree changed shape depending on how much the
+        // parent logged first.
         root.info('r1')
         await flush()
 
+        let outerSpanId: string | undefined
         await root.span('outer', async () => {
+            const outer = getActiveLogger()!
+            outer.info('a1')
             await getActiveLogger()!.span('inner', async () => {
                 getActiveLogger()!.info('b1')
             })
@@ -148,15 +155,43 @@ describe('span parentage (ServerFroggerLogger)', () => {
         await flush()
 
         logs = appLogs()
-        expect(logs).toHaveLength(2)
-        const [r1, b1] = logs
-        expect(b1!.trace.traceId).toBe(r1!.trace.traceId)
-        // Neither span logged before b1, so the closest logged ancestor is r1.
-        expect(b1!.trace.parentId).toBe(r1!.trace.spanId)
-        expect(b1!.ctx.span).toBe('inner')
+        const r1 = logs.find(l => l.msg === 'r1')!
+        const a1 = logs.find(l => l.msg === 'a1')!
+        const b1 = logs.find(l => l.msg === 'b1')!
+        outerSpanId = a1.trace.spanId
+
+        expect(b1.trace.traceId).toBe(r1.trace.traceId)
+        expect(b1.trace.parentSpanId).toBe(outerSpanId)
+        expect(a1.trace.parentSpanId).toBe(r1.trace.spanId)
+        expect(b1.ctx.span).toBe('inner')
     })
 
-    it('sibling logs inside a span advance the span child\'s own chain', async () => {
+    it('gives a span the same parent whether or not the parent logged first', async () => {
+        // The whole point of a stable span id: the edge cannot depend on
+        // emission order.
+        const quiet = await root.span('quiet', async () => getActiveLogger()!.startSpan('child'))
+        quiet.info('from-quiet')
+
+        root.info('noise-1')
+        root.info('noise-2')
+        const loud = await root.span('loud', async () => getActiveLogger()!.startSpan('child'))
+        loud.info('from-loud')
+        await flush()
+
+        const rows = appLogs()
+        const quietRow = rows.find(l => l.msg === 'from-quiet')!
+        const loudRow = rows.find(l => l.msg === 'from-loud')!
+
+        // Both children hang off their own span's parent, which is the root's
+        // stable span in both cases.
+        expect(quietRow.trace.parentSpanId).toBeTruthy()
+        expect(loudRow.trace.parentSpanId).toBeTruthy()
+        expect(quietRow.trace.parentSpanId).not.toBe(loudRow.trace.parentSpanId)
+    })
+
+    it('gives every row inside one span the SAME span id', async () => {
+        // This is what makes "the logs inside this span" expressible. Before,
+        // no two rows ever shared a spanId, so the query did not exist.
         await root.span('outer', async () => {
             const active = getActiveLogger()!
             active.info('a1')
@@ -169,7 +204,8 @@ describe('span parentage (ServerFroggerLogger)', () => {
         expect(logs).toHaveLength(2)
         const [a1, a2] = logs
         expect(a2!.trace.traceId).toBe(a1!.trace.traceId)
-        expect(a2!.trace.parentId).toBe(a1!.trace.spanId)
+        expect(a2!.trace.spanId).toBe(a1!.trace.spanId)
+        expect(a2!.trace.parentSpanId).toBe(a1!.trace.parentSpanId)
     })
 
     it('concurrent spans on the same root are isolated by AsyncLocalStorage', async () => {
@@ -318,7 +354,10 @@ describe('outgoing trace headers (getHeaders)', () => {
         expect(parentIdOf(child)).toBe(parentIdOf(child))
     })
 
-    it('reserves once, then follows the chain for later rows', async () => {
+    it('advertises the same id for every outgoing call and every row', async () => {
+        // A stable span means the id in an outgoing header and the id on the
+        // rows around it are one value, so a downstream service's parent edge
+        // resolves to a span that really contains those rows.
         const child = root.startSpan('checkout')
         const advertised = parentIdOf(child)
 
@@ -328,9 +367,8 @@ describe('outgoing trace headers (getHeaders)', () => {
 
         const logs = appLogs()
         expect(logs[0]!.trace.spanId).toBe(advertised)
-        expect(logs[1]!.trace.spanId).not.toBe(advertised)
-        expect(logs[1]!.trace.parentId).toBe(advertised)
-        expect(parentIdOf(child)).toBe(logs[1]!.trace.spanId)
+        expect(logs[1]!.trace.spanId).toBe(advertised)
+        expect(parentIdOf(child)).toBe(advertised)
     })
 
     it('still parents the span child under the parent row', async () => {
@@ -343,7 +381,7 @@ describe('outgoing trace headers (getHeaders)', () => {
         child.info('c1')
         await flush()
 
-        expect(appLogs()[1]!.trace.parentId).toBe(rootSpanId)
+        expect(appLogs()[1]!.trace.parentSpanId).toBe(rootSpanId)
     })
 
     it("a fresh root logger's advertised id materialises on its first row", async () => {

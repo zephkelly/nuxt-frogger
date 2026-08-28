@@ -1,12 +1,15 @@
 import { type ConsolaInstance, createConsola } from "consola/core";
 import { ConsoleReporter } from "../_reporters/console-reporter";
 import { froggerInternal } from "../../shared/utils/internal-log";
+import { uuidv7 } from "../../shared/utils/uuid";
 
 import type { LogObject, LogType } from 'consola';
 import type { LoggerObject } from "../../shared/types/log";
+import { levelOf, severityOf } from "../../shared/types/log";
 import type { IFroggerLogger, AddContextOptions } from "../types";
 import type { IFroggerReporter } from "../_reporters/types";
 import type { LogContext } from "../../shared/types/log";
+import type { TraceContext } from "../../shared/types/trace-headers";
 import type { FroggerOptions } from "../../shared/types/options";
 
 export interface SimpleLoggerOptions {
@@ -65,6 +68,21 @@ export class SimpleConsoleLogger implements IFroggerLogger {
     getHeaders(customVendor?: string): Record<string, string> {
         throw new Error("Method not implemented.");
     }
+    event(name: string, attributes?: Record<string, unknown>): void {
+        this.consola.info(name, attributes)
+    }
+    setAttribute(_key: string, _value: string | number | boolean): void {
+        // A console-only logger emits no span record for an attribute to land on.
+    }
+    identify(_user: string | { id: string, [key: string]: unknown } | null): void {
+        // A console-only logger carries no correlation keys: nothing downstream
+        // would ever read them.
+    }
+    getSpanContext(): TraceContext {
+        // A console-only logger participates in no trace, so it has no span to
+        // report. Callers treat a thrown/absent context as "no exemplar".
+        throw new Error("Method not implemented.");
+    }
     addContext(context: Object, options?: AddContextOptions): void {
         throw new Error("Method not implemented.");
     }
@@ -111,8 +129,10 @@ export class SimpleConsoleLogger implements IFroggerLogger {
 
     private createLoggerObject(logObj: LogObject): LoggerObject {
         return {
+            id: uuidv7(),
             time: logObj.date.getTime(),
-            lvl: logObj.level,
+            lvl: levelOf(logObj.type),
+            sev: severityOf(logObj.type),
             msg: logObj.args?.[0],
             //@ts-expect-error
             trace: undefined,

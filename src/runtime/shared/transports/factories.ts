@@ -2,6 +2,7 @@ import type { FileOptions } from '../types/file'
 import type {
     FileTransportConfig,
     HttpTransportConfig,
+    StdoutTransportConfig,
     ObserveTransportConfig,
     MemoryTransportConfig,
 } from '../types/transports'
@@ -27,6 +28,23 @@ import type {
  */
 export function fileTransport(options: FileOptions & { name?: string } = {}): FileTransportConfig {
     return { type: 'file', ...options }
+}
+
+/**
+ * JSON-lines to stdout. Server-only.
+ *
+ * The zero-infrastructure persistent sink: it works on every Nitro preset
+ * including edge, where `fileTransport()` cannot go, and every platform's log
+ * collector (Vector, Fluent Bit, Promtail, Docker, the host's own log view)
+ * already reads it.
+ *
+ * ```ts
+ * transports: [stdoutTransport()]
+ * transports: [stdoutTransport({ minLevel: 'warn' })]
+ * ```
+ */
+export function stdoutTransport(options: Omit<StdoutTransportConfig, 'type'> = {}): StdoutTransportConfig {
+    return { type: 'stdout', ...options }
 }
 
 /**

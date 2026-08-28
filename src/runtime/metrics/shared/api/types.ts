@@ -31,6 +31,14 @@ export interface MetricOptions {
      * identity at all (an aggregate counter over a whole process, say).
      */
     correlate?: false
+
+    /**
+     * Exemplar override for a point whose subject is NOT the ambient span.
+     * The span-duration sink needs this: it fires after the measured span's
+     * context has exited, so the ambient trace is the parent's, and a span's
+     * own latency measurement pointing at a different span is worse than none.
+     */
+    trace?: { traceId: string, spanId?: string, flags?: string }
 }
 
 /**

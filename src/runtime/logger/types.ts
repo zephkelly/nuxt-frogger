@@ -2,6 +2,7 @@ import type { IFroggerReporter } from "./_reporters/types";
 import type { FroggerOptions } from "../shared/types/options";
 import type { LogType } from "consola";
 import type { SpanOptions } from "../shared/utils/span-events";
+import type { TraceContext } from "../shared/types/trace-headers";
 
 
 
@@ -256,8 +257,66 @@ export interface IFroggerLogger {
 
 
     /**
-     * Reset the logger to its initial state
-     * This will clear all reporters and context
+     * Reset the logger to its initial state: global context is cleared, and a
+     * fresh trace is started (new trace id, no parent span, nothing emitted).
+     *
+     * User reporters added with {@link addReporter} are also removed. The
+     * built-in console output is NOT a user reporter and survives - a logger
+     * that stopped printing to the console after `reset()` would be silently
+     * broken for the rest of the process.
      */
     reset(): void;
+
+    /**
+     * This logger's own span identity: `{ traceId, spanId, parentSpanId,
+     * flags }`. Stable for the logger's lifetime.
+     *
+     * Exists so a metric exemplar can read the span directly instead of
+     * round-tripping through `getHeaders()` and re-parsing a traceparent - and
+     * so it can carry the sampling decision, which a parsed header lost.
+     */
+    getSpanContext(): TraceContext;
+
+    /**
+     * Attach the acting user to every row this logger emits from now on.
+     *
+     * ```ts
+     * frogger.identify(user.id)
+     * frogger.identify({ id: user.id, plan: 'pro' })  // extras join ctx
+     * frogger.identify(null)                          // on sign-out
+     * ```
+     *
+     * The id lands in the top-level `user` field, which is never scrubbed and
+     * is what a reader indexes on. Any additional properties are ordinary
+     * context and ARE scrubbed like anything else in `ctx`.
+     *
+     * Server-side this is request-scoped (it is set on the per-request logger),
+     * so one request's identity can never leak into another's.
+     */
+    identify(user: string | { id: string, [key: string]: unknown } | null): void;
+
+    /**
+     * Annotate this span. Lands on the span record's own bounded attribute bag,
+     * NOT in the log context of rows inside the span.
+     *
+     * ```ts
+     * const span = frogger.startSpan('checkout')
+     * span.setAttribute('cart.items', items.length)
+     * ```
+     */
+    setAttribute(key: string, value: string | number | boolean): void;
+
+    /**
+     * Record a business fact: something the product did, not something that
+     * went wrong.
+     *
+     * ```ts
+     * frogger.event('order.placed', { orderId, total })
+     * ```
+     *
+     * Reuses the entire log pipeline - scrubbing, batching, transports, trace
+     * correlation - and stamps `kind: 'event'` so a reader can split activity
+     * from diagnostics with one predicate. Emitted at `info`.
+     */
+    event(name: string, attributes?: Record<string, unknown>): void;
 }

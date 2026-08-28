@@ -42,11 +42,18 @@ describe('splitLoggerBatch', () => {
         expect(chunks.map(c => c.logs.length)).toEqual([4, 4]);
     });
 
-    it('preserves app on every chunk and drops meta for a fresh stamp', () => {
-        const chunks = splitLoggerBatch(makeBatch(5), { maxEvents: 2 });
+    it('carries app, resource and meta onto every chunk', () => {
+        // Chunks are all the same hop, so they must carry the same schema
+        // version, resource block and process chain as the batch they came from.
+        const source = makeBatch(5);
+        source.resource = { 'service.name': 'app', 'deployment.environment': 'test' };
+        source.meta = { schema: 'frogger.logs/1', time: 123, processChain: ['a'] };
+
+        const chunks = splitLoggerBatch(source, { maxEvents: 2 });
         for (const chunk of chunks) {
             expect(chunk.app).toEqual({ name: 'app', version: '1' });
-            expect(chunk.meta).toBeUndefined();
+            expect(chunk.resource).toEqual(source.resource);
+            expect(chunk.meta).toEqual(source.meta);
         }
     });
 

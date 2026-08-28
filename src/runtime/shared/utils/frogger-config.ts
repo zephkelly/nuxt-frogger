@@ -34,8 +34,16 @@ export async function loadFroggerConfig(rootDir: string): Promise<ModuleOptions 
         return config
     }
     catch (error) {
-        froggerInternal.warn('Failed to load frogger.config.ts file!', error)
-        return null
+        // Hard-fail rather than warn-and-continue. This runs at build time,
+        // where `froggerInternal` resolves to silent, so the old path reverted
+        // to a completely different configuration with no output at all - and
+        // there is no scenario where silently running a config the author did
+        // not write is what they wanted.
+        throw new Error(
+            `🐸FROGGER: failed to load ${configFile}. Fix the config file or remove it.\n`
+            + `  ${error instanceof Error ? error.message : String(error)}`,
+            { cause: error },
+        )
     }
 }
 

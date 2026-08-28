@@ -48,22 +48,22 @@ describe('LogLevelParser', () => {
             const result = LogLevelParser.parse(5);
             expect(result).toEqual({
                 lvl: 5,
-                types: ['trace']
+                types: ['trace', 'verbose']
             });
         });
 
-        it('should parse level 999 (verbose)', () => {
-            const result = LogLevelParser.parse(999);
+        it('should parse level 5 as the trace tier, which now includes verbose', () => {
+            const result = LogLevelParser.parse(5);
             expect(result).toEqual({
-                lvl: 999,
-                types: ['verbose']
+                lvl: 5,
+                types: ['trace', 'verbose']
             });
         });
 
-        it('should parse level -999 (silent)', () => {
-            const result = LogLevelParser.parse(-999);
+        it('should parse level -1 (silent)', () => {
+            const result = LogLevelParser.parse(-1);
             expect(result).toEqual({
-                lvl: -999,
+                lvl: -1,
                 types: ['silent']
             });
         });
@@ -72,8 +72,9 @@ describe('LogLevelParser', () => {
             expect(() => LogLevelParser.parse(99)).toThrow('Invalid log level: 99');
         });
 
-        it('should throw error for negative invalid level', () => {
-            expect(() => LogLevelParser.parse(-1)).toThrow('Invalid log level: -1');
+        it('should throw error for a level outside the table', () => {
+            expect(() => LogLevelParser.parse(-2)).toThrow('Invalid log level: -2');
+            expect(() => LogLevelParser.parse(999)).toThrow('Invalid log level: 999');
         });
     });
 
@@ -122,22 +123,14 @@ describe('LogLevelParser', () => {
             const result = LogLevelParser.parse('5');
             expect(result).toEqual({
                 lvl: 5,
-                types: ['trace']
+                types: ['trace', 'verbose']
             });
         });
 
-        it('should parse string "999" as level 999', () => {
-            const result = LogLevelParser.parse('999');
+        it('should parse string "-1" as level -1', () => {
+            const result = LogLevelParser.parse('-1');
             expect(result).toEqual({
-                lvl: 999,
-                types: ['verbose']
-            });
-        });
-
-        it('should parse string "-999" as level -999', () => {
-            const result = LogLevelParser.parse('-999');
-            expect(result).toEqual({
-                lvl: -999,
+                lvl: -1,
                 types: ['silent']
             });
         });
@@ -236,18 +229,20 @@ describe('LogLevelParser', () => {
             });
         });
 
-        it('should parse "verbose" as level 999', () => {
+        // `verbose` shares the trace tier: consola gives it +Infinity, which
+        // JSON-serialises to null and can never pass a finite threshold.
+        it('should parse "verbose" into the trace tier', () => {
             const result = LogLevelParser.parse('verbose');
             expect(result).toEqual({
-                lvl: 999,
+                lvl: 5,
                 types: ['verbose']
             });
         });
 
-        it('should parse "silent" as level -999', () => {
+        it('should parse "silent" as level -1', () => {
             const result = LogLevelParser.parse('silent');
             expect(result).toEqual({
-                lvl: -999,
+                lvl: -1,
                 types: ['silent']
             });
         });
@@ -344,15 +339,15 @@ describe('LogLevelParser', () => {
             expect(LogLevelParser.isValidLevel(3)).toBe(true);
             expect(LogLevelParser.isValidLevel(4)).toBe(true);
             expect(LogLevelParser.isValidLevel(5)).toBe(true);
-            expect(LogLevelParser.isValidLevel(999)).toBe(true);
-            expect(LogLevelParser.isValidLevel(-999)).toBe(true);
+            expect(LogLevelParser.isValidLevel(-1)).toBe(true);
         });
 
         it('should return false for invalid numeric levels', () => {
             expect(LogLevelParser.isValidLevel(6)).toBe(false);
             expect(LogLevelParser.isValidLevel(10)).toBe(false);
-            expect(LogLevelParser.isValidLevel(-1)).toBe(false);
-            expect(LogLevelParser.isValidLevel(100)).toBe(false);
+            expect(LogLevelParser.isValidLevel(-2)).toBe(false);
+            expect(LogLevelParser.isValidLevel(999)).toBe(false);
+            expect(LogLevelParser.isValidLevel(-999)).toBe(false);
         });
     });
 
@@ -398,8 +393,8 @@ describe('LogLevelParser', () => {
             expect(LogLevelParser.getLevelForType('start')).toBe(3);
             expect(LogLevelParser.getLevelForType('debug')).toBe(4);
             expect(LogLevelParser.getLevelForType('trace')).toBe(5);
-            expect(LogLevelParser.getLevelForType('verbose')).toBe(999);
-            expect(LogLevelParser.getLevelForType('silent')).toBe(-999);
+            expect(LogLevelParser.getLevelForType('verbose')).toBe(5);
+            expect(LogLevelParser.getLevelForType('silent')).toBe(-1);
         });
 
         it('should be case-insensitive', () => {

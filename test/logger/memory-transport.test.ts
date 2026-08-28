@@ -11,8 +11,10 @@ import type { LoggerObject } from '../../src/runtime/shared/types/log'
 
 function makeLog(overrides: Partial<LoggerObject> = {}): LoggerObject {
     return {
+        id: 'fixture-id',
         time: 0,
         lvl: 3,
+        sev: 9,
         type: 'info',
         msg: 'hello',
         ctx: {},
@@ -93,9 +95,9 @@ describe('MemoryTransport', () => {
 
 describe('filterLogs', () => {
     const logs: LoggerObject[] = [
-        makeLog({ lvl: 1, type: 'warn', msg: 'disk almost full, redeploy soon' }),
-        makeLog({ lvl: 0, type: 'error', msg: 'boom', trace: { traceId: 'trace-b', spanId: 's' } }),
-        makeLog({ lvl: 3, type: 'info', msg: 'user signed in', ctx: { userId: 42 } }),
+        makeLog({ lvl: 1, sev: 9, type: 'warn', msg: 'disk almost full, redeploy soon' }),
+        makeLog({ lvl: 0, sev: 9, type: 'error', msg: 'boom', trace: { traceId: 'trace-b', spanId: 's' } }),
+        makeLog({ lvl: 3, sev: 9, type: 'info', msg: 'user signed in', ctx: { userId: 42 } }),
     ]
 
     it('filters by level name', () => {

@@ -6,7 +6,9 @@
 
 ## What Frogger is
 
-`nuxt-frogger` is a **logging + W3C tracing module for Nuxt 3** (depends on `@nuxt/kit`/`nuxt` ^3.19). The pitch: log from anywhere —
+`nuxt-frogger` is an all-in-one **logging, metrics and tracing collection module for Nuxt 4**
+(`@nuxt/kit` ^4.4.8; `nuxt` ^4.0.0 is a declared peer dependency and the module's `compatibility`
+meta enforces it). The pitch: log from anywhere —
 server (Nitro), SSR, or client (CSR) — and every log lands in the same place. Client logs are
 **batched and "beamed" back to the server** over HTTP. A bare install logs to **console only**;
 persistent destinations are opt-in via declarative `transports` (rotated JSON-lines files with
@@ -226,7 +228,7 @@ zero mutable state** with it: separate wire type ([`MetricObject`](src/runtime/m
 - `useFroggerWebSocket()` — fluent dev-only live-log subscriber (`.channel().levels().types().sources().tags().onMessage().connect()`). Only registered when `websocket` **and** `serverModule` are enabled.
 
 **Server (auto-imported, Nitro):**
-- `getFrogger(options?, event?): IFroggerLogger` — when `autoEventCapture` is on (default), the event is grabbed via `useEvent()`; otherwise pass it explicitly. NOTE the overload order differs between the two impls (see rough edges). Inside `frogger.span(...)` it returns a child of the active span logger (continues the tree) instead of re-branching from the request root.
+- `getFrogger(event?, options?)` / `getFrogger(options?, event?)` — ONE implementation ([server/utils/get-frogger.ts](src/runtime/server/utils/get-frogger.ts)) with both overload orders; h3's `isEvent()` brand check disambiguates the positions. When `autoEventCapture` is on (default), the event is grabbed via `useEvent()`; otherwise pass it explicitly. Inside `frogger.span(...)` it returns a child of the active span logger (continues the tree) instead of re-branching from the request root.
 - `frogger` — auto-imported **ambient** logger; same drop-in `console.*` surface, backed by ONE per-request `ServerFroggerLogger` cached on `event.context.froggerAmbientLogger` (resolved via `useEvent()`, single span chain, trace-correlated with the client). Impl: [server/utils/frogger.ts](src/runtime/server/utils/frogger.ts). Resolution order: active span logger (see `span` below) → per-request cache → process-scoped fallback (outside a request / when `autoEventCapture` is off).
 - `froggerMetrics` (metrics on only) - the same manual metrics API as the client, backed by
   `ServerMetricsQueueService.enqueueMetric`. Correlation resolves via the active span logger, then
@@ -308,11 +310,10 @@ These are the current pain points; an improvement plan lives in [ROADMAP.md](ROA
   fallback), because wall-clock has 1ms granularity and steps under NTP correction, so a
   sub-millisecond span used to read as `0` and a backwards step could produce a negative duration.
   `LoggerObject.time` and `MetricObject.time` stay on `Date.now()`: they are compared across machines.
-- **Type debt:** ~63 `@ts-ignore`/`@ts-expect-error`, concentrated around untyped `useRuntimeConfig()` access ([src/module.ts](src/module.ts#L186), the `getFrogger` utils, `base-frogger`). `LogContext` / WS payloads are `any`.
-- **Duplication:** [server/utils/auto.ts](src/runtime/server/utils/auto.ts) and [server/utils/manual.ts](src/runtime/server/utils/manual.ts) have effectively identical bodies; only the public overload arg-order differs (`(options?, event?)` vs `(event?, options?)`).
-- **Misleading dead code (not a runtime bug):** `ServerFroggerLogger.createChild` sets `spanId: parentSpanId` ([server/index.ts](src/runtime/logger/server/index.ts#L103)), but `generateTraceContext` only consumes `traceId`/`parentId` and always mints a fresh `spanId` — so that field is never read.
+- ~~**Type debt around runtime config**~~ — **RESOLVED**. The resolved config shape is declared once in [shared/types/runtime-config.ts](src/runtime/shared/types/runtime-config.ts), which `module.ts` writes against and every reader reads through `useFroggerConfig()` / `useFroggerServerConfig()` ([shared/utils/use-frogger-config.ts](src/runtime/shared/utils/use-frogger-config.ts)). `@ts-ignore` is down from 75 to ~30, and the remainder are `#imports` macros and `FetchError` shapes, not config casts. An eslint rule bans new `@ts-ignore` under `src/runtime/`. `LogContext` stays `any` deliberately — it is a drop-in for `console.*`.
+- ~~**getFrogger duplication**~~ — **RESOLVED**. `auto.ts` and `manual.ts` were byte-identical apart from overload order; there is now one `get-frogger.ts`, registered unconditionally. There is no runtime branch on `autoEventCapture` and there should not be: `module.ts` sets `nitroConfig.experimental.asyncContext = autoEventCapture`, so with it off Nitro has no async context, `useEvent()` throws, and the logger falls back to a fresh trace. **The option genuinely works, structurally** — do not "fix" it.
 - ~~**HttpTransport silently swallowed send failures**~~ — **RESOLVED**. `performHttpRequest` caught every error and only logged `H3Error` (which `$fetch` never throws — it throws `FetchError`), never rethrowing, so `handleSendFailure` (the whole retry machinery) was dead code. It now rethrows; `sendChunk`/`handleSendFailure` classify: a non-429 4xx drops immediately (deterministic client error), 429/5xx/network back off up to `maxRetries`. Behavioral change (silent drop → retry-then-drop); covered by tests.
-- **Test coverage is uneven:** strong on parsers/scrubber/websocket/trace utils and now the resolver/transports/split-batch/memory-transport (+ the `toHaveLogged` matcher and the memory fan-out in the server-queue nuxt test); still thin on the core logger classes (the scrub/option-precedence paths now have [scrub-options.nuxt.test.ts](test/logger/scrub-options.nuxt.test.ts)) and the end-to-end client→server flow.
+- **Test coverage** now includes the previously-untested trust boundaries: [test/module-setup.test.ts](test/module-setup.test.ts) (the module's conditional wiring — run it before adding a branch to `module.ts`), [test/server/log-ingest.nuxt.test.ts](test/server/log-ingest.nuxt.test.ts) (the ingest handler), [test/rate-limiter/identifiers.test.ts](test/rate-limiter/identifiers.test.ts), [test/transports/file-transport.test.ts](test/transports/file-transport.test.ts) (rotation) and [test/websocket/transport.test.ts](test/websocket/transport.test.ts). Still thin: the end-to-end client→server flow, and `websocket-transport.ts` beyond channels/filters/throttling.
 
 ## Conventions
 
@@ -320,3 +321,36 @@ These are the current pain points; an improvement plan lives in [ROADMAP.md](ROA
 - Class-based runtime with abstract `BaseFroggerLogger`; transports/reporters implement small interfaces.
 - Commits: Conventional Commits (drives `changelogen`). Releases are `chore(release): vX.Y.Z`.
 - When you add runtime files, remember they must be wired in [src/module.ts](src/module.ts) (auto-imports, plugins, server handlers) to be exposed.
+
+
+## Invariants worth knowing before you change anything
+
+These are decisions, not accidents. Each one has a failure mode behind it.
+
+- **`session`, `user` and `route` are top-level fields on `LoggerObject` and are NEVER scrubbed.**
+  They are the reader's index keys. `ctx` is user-owned and IS scrubbed. Do not "fix" the
+  inconsistency by scrubbing them: it would break every join a backend can do while protecting
+  nothing.
+- **A metric's kind is locked at first use, and label cardinality is bounded at 200 combinations
+  per name.** A kind conflict drops the point; an overflow keeps the VALUE and replaces the labels
+  with `{ overflow: true }` (OTel's algorithm — never silently drop a measurement).
+- **Each logger owns ONE stable `spanId` for its lifetime.** Every row it emits carries that id;
+  `parentSpanId` names the span that created it. Do not re-mint per log — that is the bug 0.2.0
+  fixed, and it is what makes "the logs inside this span" expressible.
+- **A rate-limit key must never be derived from an unauthenticated header.** `trustProxy` defaults
+  to `false` for the same reason.
+- **`froggerInternal.always.*` is the data-loss channel and bypasses the level gate.** Everything
+  else is chatter and is correctly silent in production. Use `always` ONLY where data was, or is
+  about to be, dropped.
+- **`meta.schema` versions the wire format.** Bump it on a field removal or a semantic change;
+  additive fields do not bump it. The format is documented at
+  [docs/reference/wire-format.md](docs/reference/wire-format.md) and nuxt-observe consumes it.
+- **Route labels are always the matched PATTERN, never a raw path.** If no pattern is available,
+  drop the measurement. A raw URL is unbounded cardinality.
+- **The logger tree must not import the metrics tree.** Cross-tree communication goes through the
+  sink indirections in [shared/utils/](src/runtime/shared/utils/): `span-metric-sink.ts`,
+  `span-sink.ts`, `identity-sink.ts`. Metrics are opt-in and must stay out of a bare install's
+  bundle.
+- **`docs/configuration.md`'s ModuleOptions block is GENERATED** by
+  [scripts/generate-config-docs.mjs](scripts/generate-config-docs.mjs) from
+  `src/runtime/shared/types/module-options.ts`. Edit the type, then run `pnpm docs:generate`.

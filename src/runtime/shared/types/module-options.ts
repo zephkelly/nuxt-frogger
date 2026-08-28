@@ -9,6 +9,7 @@ import type { InternalLogLevel } from "../utils/internal-log";
 import type { FroggerTransportConfig } from "./transports";
 import type { LogContext } from "./log";
 import type { MetricsOptions } from "../../metrics/shared/types/metric-options";
+import type { SamplingOptions } from "../utils/sampling";
 
 export type {
     FroggerTransportConfig,
@@ -97,6 +98,39 @@ export interface ModuleOptions {
     app?: AppInfoOptions,
 
     /**
+     * Threshold for YOUR application logs. A level NAME, not a number:
+     * `'info'` (the default) admits info and everything more important;
+     * `'debug'` additionally admits `frogger.debug()`; `'trace'` admits
+     * everything.
+     *
+     * Without this, `frogger.debug()` and `frogger.trace()` were process-wide
+     * no-ops with no documented way to enable them.
+     *
+     * Pass an object to set each runtime independently - `{ server: 'debug' }`
+     * is the usual shape, since server volume is cheap and client volume is
+     * bandwidth. A per-logger `useFrogger({ level })` still overrides this.
+     *
+     * Not to be confused with {@link logLevel}, which governs Frogger's own
+     * internal diagnostics.
+     *
+     * @default 'info'
+     */
+    level?: LogType | { client?: LogType, server?: LogType }
+
+    /**
+     * Deployment environment stamped on every batch as
+     * `resource['deployment.environment']`. Without it, staging and production
+     * rows shipped to the same sink are indistinguishable.
+     *
+     * Falls back to `$NUXT_FROGGER_ENVIRONMENT`, then to `development` in dev
+     * and `production` otherwise. Prefer the env var over this option when one
+     * build is promoted across environments.
+     *
+     * @default 'development' in dev, 'production' otherwise
+     */
+    environment?: string
+
+    /**
      * Base context stamped onto every ambient `frogger.*` log at boot, without
      * needing a plugin. Use it for static, build-time-known fields shared by all
      * logs (service name, region, build/version metadata).
@@ -114,6 +148,26 @@ export interface ModuleOptions {
     batch?: BatchOptions | false
 
     /**
+     * Attach W3C trace headers to outbound `$fetch` calls from the browser, so
+     * a click and the server work it triggers land on one trace.
+     *
+     * SAME-ORIGIN ONLY by default, and that default is the safety property: a
+     * naive global patch leaks internal trace ids to every third-party endpoint
+     * the page calls. Pass `{ urls: [...] }` to allow specific extra
+     * destinations, or `false` to disable it.
+     *
+     * A RegExp matcher MUST be anchored - `/api\.example\.com/` also matches
+     * `https://evil.test/?x=api.example.com`.
+     *
+     * Opt out per call with `$fetch(url, { frogger: false })`.
+     *
+     * @default same-origin only
+     */
+    tracePropagation?: false | {
+        urls?: (string | RegExp | ((url: string) => boolean))[]
+    }
+
+    /**
      * Span-end events. Every `span()` emits one row carrying its duration and
      * ok/error status (OTel-style), so a span is visible even when nothing
      * logs inside it. On by default at `info`; pass `{ level }` to change the
@@ -128,6 +182,25 @@ export interface ModuleOptions {
      * @default { level: 'info', metric: false }
      */
     spans?: boolean | { level?: LogType, metric?: boolean }
+
+    /**
+     * Trace sampling: keep a fraction of traces, always keeping the ones that
+     * matter.
+     *
+     * Distinct from {@link level}, which is a hard severity threshold.
+     * Collapsing the two either loses errors under heavy sampling or fails to
+     * control cost at all.
+     *
+     * The decision is made once per trace and derived from a hash of the trace
+     * id, NOT from a fresh random draw - so a client/server hop samples
+     * identically on both sides. Without that, a meaningful fraction of traces
+     * come out half-present, which reads as a dropped request.
+     *
+     * Errors, failed spans and `ctx.forceKeep` are always kept.
+     *
+     * @default { rate: 1 } (no sampling)
+     */
+    sampling?: SamplingOptions
 
     /**
      * Ingest-endpoint rate limiting. Off by default; `true` enables it with
@@ -189,8 +262,6 @@ export interface ModuleOptions {
         baseUrl?: string
 
         batch?: BatchOptions | false
-
-        serverModule?: boolean
     }
 }
 

@@ -14,8 +14,14 @@ import { defu } from 'defu'
 
 import { DEFAULT_METRICS_ENDPOINT } from './runtime/shared/types/module-options'
 import { hasPrimaryLogSink } from './runtime/shared/utils/primary-sink'
+import { resolveBuildResource } from './runtime/shared/utils/resolve-resource'
+import { parseAppInfoConfig } from './runtime/app-info/parse'
 
 import type { ModuleOptions } from './runtime/shared/types/module-options'
+import type {
+    FroggerPublicRuntimeConfig,
+    FroggerServerRuntimeConfig,
+} from './runtime/shared/types/runtime-config'
 import { loadFroggerConfig } from './runtime/shared/utils/frogger-config'
 import { resolveFroggerOptions } from './runtime/shared/utils/resolve-options'
 import { resolveInternalLogLevel, type InternalLogLevel } from './runtime/shared/utils/internal-log'
@@ -26,6 +32,7 @@ import { resolveInternalLogLevel, type InternalLogLevel } from './runtime/shared
 export {
     fileTransport,
     httpTransport,
+    stdoutTransport,
     observeTransport,
     memoryTransport,
 } from './runtime/shared/transports/factories'
@@ -33,9 +40,19 @@ export type {
     FroggerTransportConfig,
     FileTransportConfig,
     HttpTransportConfig,
+    StdoutTransportConfig,
     ObserveTransportConfig,
     MemoryTransportConfig,
+    TransportMinLevel,
 } from './runtime/shared/types/transports'
+
+// The transport contract's TYPES only. The runtime values (`BaseTransport`,
+// `addGlobalTransport`, `getFroggerHealth`) live behind the
+// `nuxt-frogger/transport` subpath: re-exporting them here would pull the
+// runtime - and its `#imports` dependencies, which do not exist at build
+// time - into the build-time module graph.
+export type { IFroggerTransport } from './runtime/logger/_transports/types'
+export type { FroggerHealth, FroggerDropCounts } from './runtime/shared/utils/health'
 
 // Metric-transport factories + config types (parallel to the log factories).
 export {
@@ -50,6 +67,11 @@ export type {
     MetricObserveTransportConfig,
 } from './runtime/metrics/shared/types/metric-transports'
 export type { MetricsOptions } from './runtime/metrics/shared/types/metric-options'
+
+// Presets that run on a long-lived Node process with a writable filesystem.
+// Everything else (workers, edge runtimes, pure-static) cannot host a file
+// transport. Matched loosely so unknown self-hosted node-* presets pass.
+const NODE_COMPATIBLE_PRESETS = /^(node|nitro-dev|bun|deno-server|aws-lambda|azure-functions)/
 
 // Mirror of the level ordering in internal-log.ts so build-time banner gating
 // can compare thresholds without importing runtime mutable state.
@@ -67,6 +89,12 @@ export default defineNuxtModule<ModuleOptions>({
     meta: {
         name: 'nuxt-frogger',
         configKey: 'frogger',
+        // Declared so an incompatible install fails at install time rather
+        // than at first request. This also pins the Nitro hook availability the
+        // per-request instrumentation depends on.
+        compatibility: {
+            nuxt: '^4.0.0',
+        },
     },
     // Frogger owns ALL of its defaults in `resolveFroggerOptions`
     // (runtime/shared/utils/resolve-options.ts). This block is intentionally
@@ -120,6 +148,18 @@ export default defineNuxtModule<ModuleOptions>({
             internalLevelWeight >= INTERNAL_LEVEL_WEIGHT[level];
 
 
+        // Deployment identity, resolved once here and serialised into both
+        // halves of runtime config. `service.instance.id` is deliberately not
+        // resolved at build time - it must be per boot, so the server adds it.
+        const appInfo = parseAppInfoConfig(resolved.app);
+        const resource = resolveBuildResource({
+            appName: appInfo.name,
+            appVersion: appInfo.version,
+            environment: resolved.environment,
+            dev: _nuxt.options.dev,
+        });
+
+
         // The client only needs to know the websocket route when the live-stream
         // is actually enabled; otherwise we don't advertise one.
         const publicWebsocket = resolved.websocket
@@ -130,11 +170,21 @@ export default defineNuxtModule<ModuleOptions>({
             : undefined;
 
 
-        // Set runtime config
-        const moduleRuntimeConfig = {
+        // Typed against the same declaration every runtime reader uses, so a
+        // key written here and never read (or read and never written) is a
+        // compile error rather than an `undefined` nobody notices.
+        const moduleRuntimeConfig: {
+            public: { frogger: FroggerPublicRuntimeConfig }
+            frogger: FroggerServerRuntimeConfig
+        } = {
             public: {
                 frogger: {
                     app: resolved.app,
+                    resource,
+                    // The application-log threshold, per runtime. Public so the
+                    // client logger can read its own side; distinct from
+                    // `logLevel`, which is Frogger's internal diagnostics.
+                    level: resolved.level,
                     context: resolved.context,
                     logLevel: internalLogLevel,
                     // Both sides live in public config: they are plain booleans,
@@ -148,6 +198,7 @@ export default defineNuxtModule<ModuleOptions>({
                     batch: resolved.public.batch,
                     // Both runtimes' loggers read span-event config from here.
                     spans: resolved.spans,
+                    tracePropagation: resolved.tracePropagation,
                     scrub: resolved.scrub,
                     websocket: publicWebsocket,
                     errorCapture: resolved.errorCapture.client,
@@ -169,6 +220,7 @@ export default defineNuxtModule<ModuleOptions>({
             },
             frogger: {
                 serverModule: resolved.serverModule,
+                resource,
                 context: resolved.context,
                 logLevel: internalLogLevel,
 
@@ -177,6 +229,7 @@ export default defineNuxtModule<ModuleOptions>({
                 transports: resolved.transports.server,
 
                 batch: resolved.batch,
+                sampling: resolved.sampling,
                 rateLimit: resolved.rateLimit,
                 websocket: resolved.websocket,
                 scrub: resolved.scrub,
@@ -186,6 +239,8 @@ export default defineNuxtModule<ModuleOptions>({
                     metrics: {
                         transports: metrics.transports.server,
                         batch: metrics.batch,
+                        requests: metrics.requests,
+                        runtime: metrics.runtime,
                     },
                 } : {}),
             }
@@ -209,7 +264,24 @@ export default defineNuxtModule<ModuleOptions>({
             }
         })
 
-        _nuxt.hook('nitro:build:before', () => {
+        _nuxt.hook('nitro:build:before', (nitro: any) => {
+            // A file transport needs a writable filesystem and a long-lived
+            // process. On an edge/serverless preset it fails at first write with
+            // no build-time signal at all, which is a silent loss of the primary
+            // documented local-persistence path - so this errors rather than warns.
+            const fileEntries = [
+                ...resolved.transports.server.filter(t => t.type === 'file'),
+                ...(metricsEnabled ? metrics.transports.server.filter(t => t.type === 'file') : []),
+            ];
+            const preset: string | undefined = nitro?.options?.preset;
+            if (fileEntries.length > 0 && preset && !NODE_COMPATIBLE_PRESETS.test(preset)) {
+                throw new Error(
+                    `🐸FROGGER: a fileTransport() is configured but the Nitro preset is "${preset}", `
+                    + `which has no writable filesystem. Use httpTransport() or observeTransport() to forward `
+                    + `logs off the instance, or stdoutTransport() to emit JSON lines the platform collects.`,
+                );
+            }
+
             const publicEndpoint = resolved.public.endpoint;
             const publicBaseUrl = resolved.public.baseUrl;
             const serverTransports = resolved.transports.server;
@@ -255,25 +327,28 @@ export default defineNuxtModule<ModuleOptions>({
             }
 
             // Client transports are compiled into the public bundle, so any
-            // apiKey on one is NOT a secret. Warn (once per keyed transport)
-            // so the author knows before it ships. observe browser keys are
-            // write-only public by design (`publicKeyOk`) and skipped.
-            // Metric client transports ship in the same bundle, so they get
-            // the same inspection.
-            if (allowInternal('warn')) {
-                const bundledTransports = [
-                    ...clientTransports,
-                    ...(metricsEnabled ? metrics.transports.client : []),
-                ];
-                for (const t of bundledTransports) {
-                    if (t.apiKey && !t.publicKeyOk) {
-                        console.warn(
-                            '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
-                            `Client transport \x1b[36m${t.name}\x1b[0m carries an \x1b[36mapiKey\x1b[0m that will be `
-                            + `compiled into the public browser bundle. Only use a write-only, per-service, `
-                            + `rate-limited ingest key here, never a read/admin key.`
-                        );
-                    }
+            // apiKey on one is NOT a secret. observe browser keys are
+            // write-only public by design (`publicKeyOk`) and skipped; metric
+            // client transports ship in the same bundle and get the same check.
+            //
+            // Deliberately NOT gated on the internal log level. The level
+            // resolves to silent in production, which is exactly the build that
+            // ships the key - so a gated warning is silent at the only moment
+            // it matters.
+            const bundledTransports = [
+                ...clientTransports,
+                ...(metricsEnabled ? metrics.transports.client : []),
+            ];
+            for (const t of bundledTransports) {
+                if (t.apiKey && !t.publicKeyOk) {
+                    console.warn(
+                        '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
+                        `Client transport \x1b[36m${t.name}\x1b[0m carries an \x1b[36mapiKey\x1b[0m that will be `
+                        + `compiled into the public browser bundle and is readable by every visitor. `
+                        + `Move the transport server-side (drop \x1b[36mclient: true\x1b[0m), or - if this really is `
+                        + `a write-only, per-service, rate-limited ingest key - set \x1b[36mpublicKeyOk: true\x1b[0m `
+                        + `to record that you have verified it.`
+                    );
                 }
             }
 
@@ -315,9 +390,9 @@ export default defineNuxtModule<ModuleOptions>({
                     console.log('🐸 \x1b[32mFROGGER\x1b[0m', summary);
                 }
 
-                // Scrubbing is fully opt-in: enabling it does not add any rules.
-                // Surface the active rule count so `0 rules active` is visible
-                // rather than silently doing nothing.
+                // Surface the active rule count so the resolved rule set is
+                // visible at a glance. The zero-rule case warns unconditionally
+                // below, dev or not.
                 if (resolved.scrub) {
                     const ruleCount = resolved.scrub.rules?.length ?? 0;
                     console.log(
@@ -325,6 +400,20 @@ export default defineNuxtModule<ModuleOptions>({
                         `scrubbing enabled: ${ruleCount} rule${ruleCount === 1 ? '' : 's'} active`
                     );
                 }
+            }
+
+            // A scrubber with no rules redacts nothing. Enabling scrubbing
+            // deliberately does not inject rules, so this is reachable only by
+            // writing `scrub: true` - and believing it does something is the
+            // whole failure. Ungated for the same reason as the apiKey warning:
+            // the production build is where the belief costs something.
+            if (resolved.scrub && (resolved.scrub.rules?.length ?? 0) === 0) {
+                console.warn(
+                    '🐸 \x1b[32mFROGGER\x1b[0m \x1b[33mWARN\x1b[0m',
+                    `Scrubbing is enabled but no rules are configured, so nothing is redacted. `
+                    + `Use \x1b[36mpreset: 'standard'\x1b[0m, or pass rules explicitly: `
+                    + `\x1b[36mscrub: { rules: [...RECOMMENDED_RULES] }\x1b[0m.`
+                );
             }
         })
 
@@ -359,6 +448,9 @@ export default defineNuxtModule<ModuleOptions>({
                 // Zero-ceremony ambient logger (drop-in for console.*)
                 name: 'frogger',
                 from: resolver.resolve('./runtime/app/frogger')
+            }, {
+                name: 'getFroggerHealth',
+                from: resolver.resolve('./runtime/shared/utils/health')
             }]
             if (resolved.websocket && serverModuleEnabled) {
                 clientComposables.push({
@@ -370,6 +462,10 @@ export default defineNuxtModule<ModuleOptions>({
 
             addImportsDir(resolver.resolve('./runtime/app/utils'))
             addPlugin(resolver.resolve('./runtime/app/plugins/log-queue.client'))
+
+            if (resolved.tracePropagation !== false) {
+                addPlugin(resolver.resolve('./runtime/app/plugins/trace-propagation.client'))
+            }
 
             if (metricsEnabled) {
                 addPlugin(resolver.resolve('./runtime/metrics/app/plugins/metrics.client'))
@@ -399,27 +495,32 @@ export default defineNuxtModule<ModuleOptions>({
         if (serverModuleEnabled) {
             _nuxt.options.alias['#frogger/server'] = resolver.resolve('./runtime/server');
 
-            if (autoEventCapture) {
-                addServerImports([
-                    {
-                        name: 'getFrogger',
-                        from: resolver.resolve('./runtime/server/utils/auto')
-                    }
-                ])
-            }
-            else {
-                addServerImports([
-                    {
-                        name: 'getFrogger',
-                        from: resolver.resolve('./runtime/server/utils/manual')
-                    }
-                ])
-            }
+            // One implementation, registered unconditionally. There is no
+            // runtime branch on `autoEventCapture` because there does not need
+            // to be: the nitro:config hook above sets
+            // `experimental.asyncContext = autoEventCapture`, so with it off
+            // `useEvent()` throws and the logger falls back to a fresh trace.
+            addServerImports([
+                {
+                    name: 'getFrogger',
+                    from: resolver.resolve('./runtime/server/utils/get-frogger')
+                }
+            ])
 
             addServerImports([
                 {
                     name: 'HttpTransport',
                     from: resolver.resolve('./runtime/logger/_transports/http-transport')
+                },
+                {
+                    // Makes "a log is never silently dropped" checkable rather
+                    // than aspirational.
+                    name: 'getFroggerHealth',
+                    from: resolver.resolve('./runtime/shared/utils/health')
+                },
+                {
+                    name: 'addGlobalTransport',
+                    from: resolver.resolve('./runtime/server/utils/transport')
                 },
                 {
                     // Zero-ceremony ambient logger (drop-in for console.*)
@@ -450,6 +551,16 @@ export default defineNuxtModule<ModuleOptions>({
                 ])
 
                 addServerPlugin(resolver.resolve('./runtime/metrics/server/plugins/metrics-queue.server'))
+
+                // Per-request instrumentation is its own opt-in inside metrics:
+                // it adds a measurement to every request.
+                if (metrics.requests) {
+                    addServerPlugin(resolver.resolve('./runtime/metrics/server/plugins/request-metrics.server'))
+                }
+
+                if (metrics.runtime) {
+                    addServerPlugin(resolver.resolve('./runtime/metrics/server/plugins/runtime-metrics.server'))
+                }
                 if (metrics.public.endpoint !== false) {
                     addServerHandler({
                         route: metrics.public.endpoint || DEFAULT_METRICS_ENDPOINT,

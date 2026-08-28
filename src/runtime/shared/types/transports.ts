@@ -1,4 +1,19 @@
+import type { LogType } from 'consola'
 import type { FileOptions } from './file'
+
+/**
+ * Severity threshold for one destination, as a level NAME.
+ *
+ * This is a threshold, not a set: `minLevel: 'warn'` sends warn and everything
+ * more important. It composes with the logger's own `level` the way pino's
+ * two-stage gate does - the logger decides what exists, each transport decides
+ * what it wants - so "warn and above to the HTTP sink, everything to the file"
+ * is one word of config per destination.
+ *
+ * The low-level `levels?: number[]` exact-membership escape hatch still exists
+ * on `BatchTransportOptions` for the rare case that wants it.
+ */
+export type TransportMinLevel = LogType
 
 /**
  * Declarative log-transport destination. Each entry in `transports` forwards
@@ -68,6 +83,17 @@ export interface HttpTransportConfig {
     /** Optional label for diagnostics / dedupe. Defaults to the resolved URL. */
     name?: string
 
+    /** Only send records at this level or more important. See {@link TransportMinLevel}. */
+    minLevel?: TransportMinLevel
+
+    /**
+     * Body shape. `'otlp-logs'` emits an OTLP/HTTP ExportLogsServiceRequest,
+     * which every OpenTelemetry-speaking backend accepts.
+     *
+     * @default 'frogger'
+     */
+    shape?: 'frogger' | 'otlp-logs'
+
     /** Standard HttpTransport tuning (falls back to HttpTransport defaults). */
     vendor?: string
     timeout?: number
@@ -85,6 +111,22 @@ export interface FileTransportConfig extends FileOptions {
     type: 'file'
     /** Optional label for diagnostics. */
     name?: string
+    /** Only write records at this level or more important. */
+    minLevel?: TransportMinLevel
+}
+
+/**
+ * Declarative JSON-lines-to-stdout destination. Server-only, needs no user
+ * infrastructure, and works on every Nitro preset including edge - which is
+ * where `fileTransport()` cannot go.
+ */
+export interface StdoutTransportConfig {
+    type: 'stdout'
+    name?: string
+    /** Only write records at this level or more important. */
+    minLevel?: TransportMinLevel
+    /** Emit from the Nitro server queue. @default true */
+    server?: boolean
 }
 
 /**
@@ -112,6 +154,8 @@ export interface ObserveTransportConfig {
      */
     server?: boolean
     name?: string
+    /** Only send records at this level or more important. */
+    minLevel?: TransportMinLevel
     timeout?: number
     retryOnFailure?: boolean
     maxRetries?: number
@@ -148,12 +192,15 @@ export interface MemoryTransportConfig {
      * @default true
      */
     server?: boolean
+    /** Only capture records at this level or more important. */
+    minLevel?: TransportMinLevel
 }
 
 /** Any declarative transport entry, tagged by `type`. */
 export type FroggerTransportConfig =
     | HttpTransportConfig
     | FileTransportConfig
+    | StdoutTransportConfig
     | ObserveTransportConfig
     | MemoryTransportConfig
 
@@ -186,6 +233,10 @@ export interface ResolvedHttpTransport {
      * Set for observe browser keys (write-only public by design).
      */
     publicKeyOk?: boolean
+    /** Resolved severity threshold for this destination. */
+    minLevel?: TransportMinLevel
+    /** Resolved body shape. @default 'frogger' */
+    shape?: 'frogger' | 'otlp-logs'
 }
 
 /**
@@ -196,6 +247,14 @@ export interface ResolvedFileTransport {
     type: 'file'
     name: string
     options: Required<FileOptions>
+    minLevel?: TransportMinLevel
+}
+
+/** A normalised stdout transport as emitted into `runtimeConfig.frogger`. */
+export interface ResolvedStdoutTransport {
+    type: 'stdout'
+    name: string
+    minLevel?: TransportMinLevel
 }
 
 /**
@@ -206,10 +265,12 @@ export interface ResolvedFileTransport {
 export interface ResolvedMemoryTransport {
     type: 'memory'
     name: string
+    minLevel?: TransportMinLevel
 }
 
-/** A server-bound transport is an HTTP, file, or memory destination. */
+/** A server-bound transport is an HTTP, file, stdout, or memory destination. */
 export type ResolvedServerTransport =
     | ResolvedHttpTransport
     | ResolvedFileTransport
+    | ResolvedStdoutTransport
     | ResolvedMemoryTransport

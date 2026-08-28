@@ -7,7 +7,7 @@ import { froggerInternal } from "../../shared/utils/internal-log";
  * 
  * Supports two modes:
  * 1. JSON filters parameter: `?channel=main&filters={"level":[0,1],"type":["error"]}`
- * 2. Individual parameters: `?channel=main&level=0,1&type=error&tags=api&sources=server`
+ * 2. Individual parameters: `?channel=main&level=0,1&type=error&sources=server`
  * 
  * @param url - The URL object containing search parameters
  * @returns Parsed channel and filters
@@ -43,10 +43,9 @@ export function parseUrlParams(url: URL): LogWebSocketParams {
     if (!filters) {
         const level = url.searchParams.get('level');
         const type = url.searchParams.get('type');
-        const tags = url.searchParams.get('tags');
         const sources = url.searchParams.get('sources');
 
-        if (level || type || tags || sources) {
+        if (level || type || sources) {
             filters = {};
 
             // Parse level parameter (can be comma-separated)
@@ -67,11 +66,6 @@ export function parseUrlParams(url: URL): LogWebSocketParams {
                 else {
                     filters.type = type as any;
                 }
-            }
-
-            // Parse tags (comma-separated)
-            if (tags) {
-                filters.tags = tags.split(',').map(t => t.trim());
             }
 
             // Parse sources (comma-separated)

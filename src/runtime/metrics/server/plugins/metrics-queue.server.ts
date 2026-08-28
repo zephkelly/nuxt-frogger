@@ -17,10 +17,14 @@ export default defineNitroPlugin((nitroApp) => {
 
     // Turn every existing span call site into latency data. Registered here,
     // not imported by the logger, so the two trees stay independent.
-    setSpanMetricSink((name, durationSeconds, ok, labels) => {
+    setSpanMetricSink((name, durationSeconds, ok, labels, trace) => {
         froggerMetrics.histogram('span.duration', durationSeconds, {
             unit: 'second',
             labels: { span: name, ok, ...labels },
+            // The span's OWN exemplar. Without it the ambient resolver runs
+            // after the span's scope has exited and attributes the measurement
+            // to the enclosing span.
+            trace,
         })
     })
 

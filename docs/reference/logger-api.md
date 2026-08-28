@@ -176,17 +176,28 @@ The record Frogger builds for every log:
 
 ```ts
 export interface LoggerObject {
-    time: number                 // epoch ms
-    lvl: number                  // numeric level
+    id: string                   // uuidv7 — dedupe and sort key
+    time: number                 // epoch ms, as the emitter claimed
+    obsTime?: number             // epoch ms, as the collector observed
+    lvl: number                  // frogger level — LOWER is more important
+    sev: number                  // OTel SeverityNumber — HIGHER is more serious
     type: LogType                // 'error' | 'warn' | 'info' | ...
+    kind?: 'event'               // set by frogger.event()
     msg: string                  // the human-readable message
-    ctx: LogContext              // your structured context
-    tags?: string[]
+    ctx: LogContext              // your structured context (scrubbed)
     env: 'ssr' | 'csr' | 'client' | 'server'
+    session?: { id: string; sampled: boolean }   // never scrubbed
+    user?: string                                // never scrubbed
+    route?: string                               // never scrubbed, always a pattern
     source?: { name: string; version: string }
-    trace: TraceContext          // { traceId, spanId, parentId?, flags? }
+    resource?: Record<string, string>            // denormalised at ingest
+    trace: TraceContext          // { traceId, spanId, parentSpanId?, flags? }
 }
 ```
+
+The full reader contract — which fields are always present, who stamps each
+one, and what is safe to index — is in the
+[wire format reference](/reference/wire-format).
 
 `msg` should be a static, human-readable string; put dynamic data in `ctx`. See
 [Getting Started → Log Anatomy](/getting-started#log-anatomy).

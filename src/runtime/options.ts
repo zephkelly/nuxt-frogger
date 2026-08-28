@@ -5,6 +5,7 @@ export { defineFroggerOptions } from "./shared/utils/frogger-config";
 export {
     fileTransport,
     httpTransport,
+    stdoutTransport,
     observeTransport,
     memoryTransport,
 } from "./shared/transports/factories";

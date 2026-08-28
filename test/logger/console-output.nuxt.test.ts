@@ -53,10 +53,12 @@ function flush(): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, 0))
 }
 
-// The ConsoleReporter is registered through addReporter(), so its presence in
-// getReporters() is exactly "this logger will print to the console".
+// The console reporter is deliberately NOT a user reporter: it is Frogger's own
+// output channel, held privately so `getReporters()` cannot leak it and
+// `clearReporters()` cannot silently kill console output. Reading the private
+// field is therefore the direct expression of "this logger will print".
 function printsToConsole(logger: IFroggerLogger): boolean {
-    return logger.getReporters().some(r => r instanceof ConsoleReporter)
+    return (logger as unknown as { consoleReporter: unknown }).consoleReporter instanceof ConsoleReporter
 }
 
 function client(options: FroggerOptions = {}): ClientFrogger {

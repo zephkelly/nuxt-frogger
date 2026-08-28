@@ -15,11 +15,16 @@ export interface TraceContext {
     spanId: string;
     
     /**
-     * Parent Span ID - reference to the parent operation
-     * 8-byte array as 16-character hex string
+     * Parent Span ID - the span that CREATED this one.
+     *
+     * Renamed from `parentId` in 0.2.0, along with the semantics: it used to
+     * mean "the log row emitted immediately before this one on this instance",
+     * which is not a parent edge and made the tree order-dependent. It now
+     * names the unit of work that contains this span.
      */
-    parentId?: string;
+    parentSpanId?: string;
 
+    /** W3C trace-flags byte, e.g. `'01'` for sampled. */
     flags?: string;
 }
 

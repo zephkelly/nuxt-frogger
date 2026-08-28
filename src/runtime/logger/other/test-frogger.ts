@@ -1,10 +1,12 @@
 import type { LogObject } from 'consola/basic';
 import { BaseFroggerLogger } from '../../logger/base-frogger';
 import type { LoggerObject } from '../../shared/types/log';
+import { levelOf, severityOf } from '../../shared/types/log';
 import type { TraceContext } from '../../shared/types/trace-headers';
 import type { IFroggerLogger } from '../types';
 import type { FroggerOptions } from '../../shared/types/options';
 import { Writable } from 'node:stream';
+import { uuidv7 } from '../../shared/utils/uuid';
 
 export interface TestFroggerLoggerOptions {
   level?: number;
@@ -127,7 +129,9 @@ export class TestFroggerLogger extends BaseFroggerLogger {
         };
 
         return {
-            lvl: logObj.level,
+            id: uuidv7(),
+            lvl: levelOf(logObj.type),
+            sev: severityOf(logObj.type),
             time: timestamp,
             type: logObj.type,
             msg: logObj.args?.[0] || '',

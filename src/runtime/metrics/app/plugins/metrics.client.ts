@@ -5,11 +5,9 @@ import { getMetricsQueue } from '../services/get-metrics-queue'
 import { collectDeviceContext } from '../collector/device'
 import { registerWebVitals, type WebVitalStamp } from '../collector/web-vitals'
 import {
-    METRICS_SESSION_STORAGE_KEY,
-    decideSampled,
-    parseSession,
+    resolveSession,
     type MetricsSession,
-} from '../session'
+} from '../../../shared/session'
 
 import { getAmbientClientLogger } from '../../../app/frogger'
 import { getActiveLogger } from '../../../logger/active-context.client'
@@ -17,22 +15,14 @@ import { parseTraceparent } from '../../../shared/utils/trace-headers'
 import { uuidv7 } from '../../../shared/utils/uuid'
 import { froggerInternal } from '../../../shared/utils/internal-log'
 import { setSpanMetricSink } from '../../../shared/utils/span-metric-sink'
+import { setIdentitySink } from '../../../shared/utils/identity-sink'
+import { traceFromLogger } from '../../shared/api/trace-of'
 import { froggerMetrics } from '../utils/metrics'
 import type { IFroggerLogger } from '../../../logger/types'
 
-/** Best-effort {traceId, spanId} from a logger's W3C trace headers. */
-function traceFromLogger(logger: IFroggerLogger): { traceId: string; spanId?: string } | undefined {
-    try {
-        const traceparent = logger.getHeaders().traceparent
-        if (!traceparent) return undefined
-        const parsed = parseTraceparent(traceparent)
-        if (parsed) return { traceId: parsed.traceId, spanId: parsed.spanId }
-    }
-    catch {
-        // logger without trace headers - no exemplar
-    }
-    return undefined
-}
+// The shared implementation: reads the logger's own stable span rather than
+// round-tripping through a traceparent, so the exemplar names the span that
+// actually contains the point, and keeps the sampling decision.
 
 /**
  * Metrics collector plugin. Registered only when the metrics subsystem and the
@@ -50,7 +40,7 @@ export default defineNuxtPlugin({
         const config = useRuntimeConfig()
         //@ts-ignore - public.frogger.metrics is present only when metrics are on
         const metricsConfig = config.public?.frogger?.metrics as {
-            webVitals?: { reportAllChanges: boolean } | false
+            webVitals?: { reportAllChanges: boolean, attribution?: boolean } | false
             deviceStats?: boolean
             sampleRate?: number
         } | undefined
@@ -60,25 +50,16 @@ export default defineNuxtPlugin({
         const app = nuxtApp as unknown as Record<string, any>
 
         // Load-or-mint the session sampling decision, persisted so it survives
-        // hard reloads within the tab.
-        let session: MetricsSession
-        try {
-            const existing = parseSession(sessionStorage.getItem(METRICS_SESSION_STORAGE_KEY))
-            if (existing) {
-                session = existing
-            }
-            else {
-                session = { id: uuidv7(), sampled: decideSampled(metricsConfig.sampleRate ?? 1, Math.random()) }
-                sessionStorage.setItem(METRICS_SESSION_STORAGE_KEY, JSON.stringify(session))
-            }
-        }
-        catch {
-            // sessionStorage unavailable (privacy mode) - decide in-memory only.
-            session = { id: uuidv7(), sampled: decideSampled(metricsConfig.sampleRate ?? 1, Math.random()) }
-        }
+        // hard reloads within the tab. Shared with the log pipeline, so a log
+        // and a Web Vital from the same page load carry the same session id.
+        const session: MetricsSession = resolveSession(metricsConfig.sampleRate ?? 1)
 
         const queue = getMetricsQueue(app)
         queue.setSession(session)
+
+        // One `frogger.identify()` sets the user for BOTH pipelines. Wired
+        // through a sink so the logger never imports the metrics tree.
+        setIdentitySink(user => queue.setUser(user))
 
         // A sampled-out session collects nothing - do no further work.
         if (!session.sampled) return
@@ -138,10 +119,14 @@ export default defineNuxtPlugin({
 
         // Turn every existing span call site into latency data. Registered
         // here, not imported by the logger, so the two trees stay independent.
-        setSpanMetricSink((name, durationSeconds, ok, labels) => {
+        setSpanMetricSink((name, durationSeconds, ok, labels, trace) => {
             froggerMetrics.histogram('span.duration', durationSeconds, {
                 unit: 'second',
                 labels: { span: name, ok, ...labels },
+                // The span's OWN exemplar. Without it the ambient resolver runs
+                // after the span's scope has exited and attributes the
+                // measurement to the enclosing span.
+                trace,
             })
         })
 

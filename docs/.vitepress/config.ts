@@ -39,8 +39,14 @@ export default defineConfig({
                     { text: 'Rate Limiting', link: '/guides/rate-limiting' },
                     { text: 'Error Capture', link: '/guides/error-capture' },
                     { text: 'Metrics', link: '/guides/metrics' },
-                    { text: 'Transports & HttpTransport', link: '/guides/transports' },
+                    { text: 'Transports', link: '/guides/transports' },
                     { text: 'Testing', link: '/guides/testing' },
+                ]
+            },
+            {
+                text: 'Migration',
+                items: [
+                    { text: 'Migrating to 0.2.0', link: '/migration/0.2' },
                 ]
             },
             {
@@ -48,6 +54,7 @@ export default defineConfig({
                 items: [
                     { text: 'Logger API', link: '/reference/logger-api' },
                     { text: 'Log Levels', link: '/reference/log-levels' },
+                    { text: 'Wire Format', link: '/reference/wire-format' },
                 ]
             }
         ],

@@ -55,7 +55,8 @@ export {
 } from './storage'
 
 export {
-    type RateLimitingOptions
+    type RateLimitingOptions,
+    type TrustProxyOption
 } from './options'
 
 export {

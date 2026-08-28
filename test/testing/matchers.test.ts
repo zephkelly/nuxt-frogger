@@ -6,8 +6,10 @@ import type { LoggerObject } from '../../src/runtime/shared/types/log'
 
 function makeLog(overrides: Partial<LoggerObject> = {}): LoggerObject {
     return {
+        id: 'fixture-id',
         time: 0,
         lvl: 3,
+        sev: 9,
         type: 'info',
         msg: 'hello',
         ctx: {},
@@ -23,8 +25,8 @@ beforeAll(async () => {
 
 describe('toHaveLogged', () => {
     const logs = [
-        makeLog({ lvl: 1, type: 'warn', msg: 'please redeploy' }),
-        makeLog({ lvl: 3, type: 'info', msg: 'all good' }),
+        makeLog({ lvl: 1, sev: 9, type: 'warn', msg: 'please redeploy' }),
+        makeLog({ lvl: 3, sev: 9, type: 'info', msg: 'all good' }),
     ]
 
     it('passes when a matching log exists', () => {

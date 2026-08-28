@@ -16,5 +16,19 @@ export default createConfigForNuxt({
   },
 })
   .append(
-    // your custom flat config here...
+    {
+      // The runtime reads its config through `useFroggerConfig()` /
+      // `useFroggerServerConfig()`, which are typed against the same
+      // declaration `module.ts` writes. A new `@ts-ignore` here is almost
+      // always a cast around that contract - and casting around it is how a
+      // documented option ends up with zero readers.
+      files: ['src/runtime/**/*.ts'],
+      rules: {
+        '@typescript-eslint/ban-ts-comment': ['error', {
+          'ts-ignore': true,
+          'ts-expect-error': 'allow-with-description',
+          minimumDescriptionLength: 10,
+        }],
+      },
+    },
   )

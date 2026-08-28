@@ -6,6 +6,7 @@ import type { MetricObjectBatch } from '../../src/runtime/metrics/shared/types/m
 
 function metric(overrides: Partial<MetricObject> = {}): MetricObject {
     return {
+        id: 'fixture-id',
         time: 0,
         name: 'web.vital.lcp',
         kind: 'gauge',
@@ -37,14 +38,18 @@ describe('splitMetricBatch', () => {
         expect(chunks.map(c => c.metrics.length)).toEqual([2, 1])
     })
 
-    it('preserves app / context / session on every chunk and drops meta', () => {
+    it('carries app / context / session / resource / meta onto every chunk', () => {
         const b = batch([metric(), metric(), metric()])
+        b.resource = { 'service.name': 'app', 'deployment.environment': 'test' }
+        b.meta = { schema: 'frogger.metrics/1', time: 123, processChain: ['a'] }
+
         const chunks = splitMetricBatch(b, { maxEvents: 2 })
         for (const chunk of chunks) {
             expect(chunk.app).toEqual({ name: 'app', version: '1' })
             expect(chunk.context).toEqual({ effectiveType: '4g' })
             expect(chunk.session).toEqual({ id: 's1', sampled: true })
-            expect(chunk.meta).toBeUndefined()
+            expect(chunk.resource).toEqual(b.resource)
+            expect(chunk.meta).toEqual(b.meta)
         }
     })
 

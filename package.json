@@ -22,6 +22,10 @@
       "types": "./dist/testing/index.d.ts",
       "import": "./dist/testing/index.js"
     },
+    "./transport": {
+      "types": "./dist/transport/index.d.ts",
+      "import": "./dist/transport/index.js"
+    },
     "./playwright": {
       "types": "./dist/playwright/index.d.ts",
       "import": "./dist/playwright/index.js"
@@ -35,6 +39,9 @@
       ],
       "testing": [
         "./dist/testing/index.d.ts"
+      ],
+      "transport": [
+        "./dist/transport/index.d.ts"
       ],
       "playwright": [
         "./dist/playwright/index.d.ts"
@@ -53,8 +60,10 @@
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:types": "vue-tsc --noEmit && cd playground && vue-tsc --noEmit",
-    "docs:dev": "vitepress dev docs",
-    "docs:build": "vitepress build docs",
+    "docs:generate": "node scripts/generate-config-docs.mjs",
+    "docs:check": "node scripts/generate-config-docs.mjs --check",
+    "docs:dev": "node scripts/generate-config-docs.mjs && vitepress dev docs",
+    "docs:build": "node scripts/generate-config-docs.mjs --check && vitepress build docs",
     "docs:preview": "vitepress preview docs"
   },
   "dependencies": {
@@ -67,6 +76,7 @@
   "peerDependencies": {
     "@nuxt/test-utils": "^3.0.0",
     "@playwright/test": "^1.0.0",
+    "nuxt": "^4.0.0",
     "vitest": "^2.0.0 || ^3.0.0"
   },
   "peerDependenciesMeta": {

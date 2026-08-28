@@ -1,6 +1,7 @@
 import { H3Event, createError, setResponseHeaders } from 'h3'
 
 import { useRuntimeConfig } from '#imports'
+import { useFroggerServerConfig } from '../shared/utils/use-frogger-config'
 
 import type {
     IRateLimitStorage,
@@ -25,10 +26,10 @@ export class SlidingWindowRateLimiter {
     private storage: IRateLimitStorage
     private config: RateLimitingOptions
     private isEnabled: boolean
+    private cleanupTimer: ReturnType<typeof setInterval> | null = null
 
     constructor() {
-        const runtimeConfig = useRuntimeConfig()
-        const rateLimiterConfig = runtimeConfig.frogger?.rateLimit as RateLimitingOptions | false | undefined
+        const rateLimiterConfig = useFroggerServerConfig().rateLimit as RateLimitingOptions | false | undefined
 
         this.isEnabled = rateLimiterConfig !== false && rateLimiterConfig != null
 
@@ -42,7 +43,20 @@ export class SlidingWindowRateLimiter {
 
         this.config = rateLimiterConfig
 
-        setInterval(async () => {
+        // Counters live in whatever unstorage driver is configured. With the
+        // default in-memory driver every instance keeps its OWN counters, so
+        // the effective limit is (configured limit x instance count) - which is
+        // a documented property, not a bug, but silently believing otherwise on
+        // a multi-instance deploy is.
+        if (!rateLimiterConfig.storage?.driver) {
+            froggerInternal.warn(
+                'Rate limiting is enabled with no storage driver, so limits are PER INSTANCE. '
+                + 'Behind a load balancer the effective limit is your configured limit times the '
+                + 'number of instances. Configure `rateLimit.storage.driver` (redis, etc.) for a shared budget.',
+            )
+        }
+
+        this.cleanupTimer = setInterval(async () => {
             try {
                 await this.cleanup()
             }
@@ -50,6 +64,9 @@ export class SlidingWindowRateLimiter {
                 froggerInternal.error('Failed to cleanup expired rate limit keys:', error)
             }
         }, 5 * 60 * 1000)
+
+        // A cleanup interval must never be the reason a process refuses to exit.
+        this.cleanupTimer.unref?.()
     }
 
     public static getInstance(): SlidingWindowRateLimiter {
@@ -60,6 +77,11 @@ export class SlidingWindowRateLimiter {
     }
 
     static resetInstance(): void {
+        // The interval was never cancelled here, so every reset leaked one.
+        if (SlidingWindowRateLimiter.instance?.cleanupTimer) {
+            clearInterval(SlidingWindowRateLimiter.instance.cleanupTimer)
+            SlidingWindowRateLimiter.instance.cleanupTimer = null
+        }
         SlidingWindowRateLimiter.instance = null
     }
 
@@ -444,7 +466,7 @@ export class SlidingWindowRateLimiter {
 
     async check(event: H3Event): Promise<void> {
         if (this.isRateLimitingEnabled()) {
-            const identifier = extractRateLimitIdentifier(event);
+            const identifier = extractRateLimitIdentifier(event, this.config.trustProxy ?? false);
             const rateLimitResults = await this.checkRateLimit(identifier);
 
             if (!rateLimitResults || rateLimitResults.length === 0) return;

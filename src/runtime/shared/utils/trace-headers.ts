@@ -129,19 +129,36 @@ export function createTraceparent(
  */
 export function parseTraceparent(traceparent: string): TraceContext | null {
     if (!traceparent) return null;
-    
+
     const parts = traceparent.split('-');
     if (parts.length !== 4) return null;
-    
+
     const [version, traceId, spanId, flags] = parts;
-    
+
     if (version !== '00') return null;
-    
+
+    // Ids come from an untrusted peer. An invalid one must not be adopted as
+    // this request's trace: a malformed or all-zero id would poison every row
+    // that continues from it.
+    if (!isValidTraceId(traceId!) || !isValidSpanId(spanId!)) return null;
+
+    // Flags are exactly two hex digits per the spec; anything else is dropped
+    // rather than propagated onward as a malformed header.
+    const validFlags = typeof flags === 'string' && /^[0-9a-f]{2}$/.test(flags)
+        ? flags
+        : undefined;
+
     return {
         traceId: traceId!,
         spanId: spanId!,
-        flags
+        ...(validFlags !== undefined && { flags: validFlags }),
     };
+}
+
+/** Whether a trace-flags byte has the `sampled` bit set. */
+export function isSampled(flags: string | undefined): boolean {
+    if (!flags) return true;
+    return (Number.parseInt(flags, 16) & 0x01) === 0x01;
 }
 
 
@@ -195,25 +212,59 @@ export function generateW3CTraceHeaders(options: {
     parentSpanId?: string;
     vendorData?: Record<string, string>;
     sampled?: boolean;
+    /**
+     * The trace-flags byte to re-emit. Set this to propagate an upstream
+     * sampling decision verbatim; it wins over `sampled`, which only
+     * synthesises one. Frogger propagates a decision, it does not make one.
+     */
+    flags?: string;
+    /** Incoming `tracestate` to carry forward, with frogger's entry prepended. */
+    inboundTracestate?: string;
 }): W3CTraceHeaders {
     const {
         traceId = generateTraceId(),
         parentSpanId,
         vendorData = {},
-        sampled = true
+        sampled = true,
+        flags: suppliedFlags,
+        inboundTracestate,
     } = options;
-    
+
     const newSpanId = generateSpanId();
-    const flags = sampled ? '01' : '00';
+    const flags = suppliedFlags && /^[0-9a-f]{2}$/.test(suppliedFlags)
+        ? suppliedFlags
+        : (sampled ? '01' : '00');
 
     const traceparent = `00-${traceId}-${parentSpanId ? parentSpanId : newSpanId}-${flags}`;
 
-    const tracestate = createTracestate(vendorData);
-    
+    const tracestate = mergeTracestate(vendorData, inboundTracestate);
+
     return {
         traceparent,
         tracestate
     };
+}
+
+/**
+ * Prepend this hop's vendor entries to an inbound `tracestate`, dropping any
+ * stale entry for a key we are re-writing. W3C puts the most recent mutator
+ * first, and caps the list at 32 entries.
+ */
+export function mergeTracestate(
+    vendorData: Record<string, string> = {},
+    inbound?: string,
+): string | undefined {
+    const own = createTracestate(vendorData);
+    if (!inbound) return own;
+
+    const ownKeys = new Set(Object.keys(vendorData));
+    const carried = inbound
+        .split(',')
+        .map(entry => entry.trim())
+        .filter(entry => entry.length > 0 && !ownKeys.has(entry.split('=')[0]!));
+
+    const entries = [...(own ? [own] : []), ...carried].slice(0, 32);
+    return entries.length > 0 ? entries.join(',') : undefined;
 }
 
 
@@ -223,15 +274,6 @@ export function generateW3CTraceHeaders(options: {
 export function extractTraceContext(headers: Record<string, string>): TraceContext | null {
     const traceparent = headers['traceparent'] || headers['Traceparent'];
     if (!traceparent) return null;
-    
-    const context = parseTraceparent(traceparent);
-    if (!context) return null;
-    
-    const tracestate = headers['tracestate'] || headers['Tracestate'];
-    if (tracestate) {
-        const stateData = parseTracestate(tracestate);
 
-    }
-    
-    return context;
+    return parseTraceparent(traceparent);
 }

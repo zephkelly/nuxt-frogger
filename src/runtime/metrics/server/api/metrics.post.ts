@@ -1,9 +1,10 @@
-import { H3Error, eventHandler, readRawBody, getHeader, createError } from 'h3'
+import { H3Error, eventHandler, getHeader, createError } from 'h3'
 
 import type { MetricObjectBatch } from '../../shared/types/metric-batch'
 import { ServerMetricsQueueService } from '../services/server-metrics-queue'
 import { getFroggerRateLimiter } from '../../../rate-limiter'
 import { froggerInternal } from '../../../shared/utils/internal-log'
+import { readBoundedRawBody, safeRequestIp } from '../../../server/utils/read-bounded-body'
 
 
 
@@ -33,18 +34,9 @@ function detectMetricsLoop(batch: MetricObjectBatch): { isLoop: boolean; reason?
     return { isLoop: false }
 }
 
+const MAX_REQUEST_BYTES = 1024 * 1024
+
 export default eventHandler(async (event) => {
-    const contentLength = getHeader(event, 'content-length')
-    const maxRequestSize = 1024 * 1024
-
-    if (contentLength && parseInt(contentLength) > maxRequestSize) {
-        throw createError({
-            statusCode: 413,
-            statusMessage: 'Request Too Large',
-            data: { error: 'REQUEST_TOO_LARGE', maxSize: maxRequestSize },
-        })
-    }
-
     // Shares the log ingest's per-IP rate-limit budget (inert when the
     // rateLimit subsystem is off) - a metrics burst counts against the same
     // window as logs, which is the right trade at web-vitals volume.
@@ -53,17 +45,18 @@ export default eventHandler(async (event) => {
     // Page-exit batches arrive via `navigator.sendBeacon`, which sends a
     // `text/plain;charset=UTF-8` body - h3's `readBody` only JSON-parses when
     // the content-type is exactly `application/json`, so a beacon body would be
-    // silently dropped. Read the raw string and parse it ourselves so both the
-    // in-session `$fetch` (application/json) and beacon (text/plain) paths work.
+    // silently dropped. Read the raw string (bounded, so a chunked POST with no
+    // content-length cannot skip the size guard) and parse it ourselves.
     let batch: MetricObjectBatch
     try {
-        const raw = await readRawBody(event)
-        if (!raw || typeof raw !== 'string') {
+        const raw = await readBoundedRawBody(event, MAX_REQUEST_BYTES)
+        if (!raw) {
             throw new Error('empty body')
         }
         batch = JSON.parse(raw) as MetricObjectBatch
     }
-    catch {
+    catch (error) {
+        if (error instanceof H3Error) throw error
         throw createError({
             statusCode: 400,
             statusMessage: 'Invalid metrics batch body',
@@ -95,6 +88,11 @@ export default eventHandler(async (event) => {
         const ua = getHeader(event, 'user-agent')
         if (ua) {
             batch.context = { ...batch.context, ua }
+        }
+
+        batch.meta = {
+            ...batch.meta,
+            received: { at: Date.now(), ip: safeRequestIp(event) },
         }
 
         ServerMetricsQueueService.getInstance().enqueueBatch(batch)

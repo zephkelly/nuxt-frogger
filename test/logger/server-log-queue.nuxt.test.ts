@@ -42,8 +42,10 @@ function memoryEntry(name = 'memory'): ResolvedServerTransport {
 
 function makeLog(overrides: Partial<LoggerObject> = {}): LoggerObject {
     return {
+        id: 'fixture-id',
         time: 0,
         lvl: 3,
+        sev: 9,
         type: 'info',
         msg: 'captured',
         ctx: {},

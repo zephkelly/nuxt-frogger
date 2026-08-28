@@ -4,23 +4,47 @@ import { generateTraceId, generateSpanId, generateW3CTraceHeaders } from "../sha
 
 import type { LogType, LogObject } from 'consola';
 import type { LoggerObject } from "../shared/types/log";
+import { levelOf } from "../shared/types/log";
 import type { IFroggerLogger, AddContextOptions } from "./types";
 import type { FroggerOptions } from "../shared/types/options";
 import type { LogContext } from "../shared/types/log";
 import type { TraceContext } from "../shared/types/trace-headers";
 import { ConsoleReporter } from "./_reporters/console-reporter";
 import { froggerInternal } from "../shared/utils/internal-log";
+import { recordPipelineError } from "../shared/utils/health";
 
 import type { IFroggerReporter } from "./_reporters/types";
 import { LogScrubber } from "../scrubber";
 import type { ScrubberOptions } from "../scrubber/options";
 import { spanEventsFromConfig, type ResolvedSpanEvents, type SpanOptions } from "../shared/utils/span-events";
-import { getSpanMetricSink } from "../shared/utils/span-metric-sink";
+import { getSpanMetricSink, type SpanExemplar } from "../shared/utils/span-metric-sink";
 
-import { useRuntimeConfig } from "#imports";
+import { useFroggerConfig } from "../shared/utils/use-frogger-config";
 import { defu } from 'defu';
 
 
+
+/**
+ * Resolve a logger's numeric threshold from a per-logger option and the
+ * module-wide setting. Names are the documented surface; a raw number stays
+ * accepted as the low-level escape hatch.
+ */
+function resolveLoggerLevel(
+    perLogger: LogType | number | undefined,
+    moduleLevel: LogType | undefined,
+): number {
+    if (typeof perLogger === 'number') return perLogger;
+    if (typeof perLogger === 'string') return levelOf(perLogger);
+    if (moduleLevel) return levelOf(moduleLevel);
+    return levelOf('info');
+}
+
+/**
+ * Internal marker moved from context onto the row's `kind` field. A symbol so
+ * it can never collide with a user context key, and so it cannot survive
+ * JSON - an inbound network batch can't forge an event.
+ */
+export const EVENT_MARKER: unique symbol = Symbol.for('frogger:event');
 
 export abstract class BaseFroggerLogger implements IFroggerLogger {
     protected consola: ConsolaInstance;
@@ -37,22 +61,55 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
     });
 
     protected traceId: string;
+
+    /**
+     * THE span this logger represents, minted once at construction and stable
+     * for its whole life. Every row it emits carries this id.
+     *
+     * It used to be re-minted on every single log call, so no two rows ever
+     * shared a spanId and "the logs inside this span" was not expressible at
+     * all. A reader had to walk a flat chain across thousands of rows and guess
+     * where the boundaries were.
+     */
+    protected spanId: string;
+
+    /**
+     * The span that created this logger: its parent edge. Set at construction
+     * (or by a trace continuation), never mutated by logging - which is what
+     * makes the tree deterministic regardless of how many rows the parent
+     * emitted first.
+     */
+    protected parentSpanId: string | null = null;
+
+    /**
+     * The last span id handed to the browser for the SSR -> CSR handoff. This
+     * is the ONE place "continue from the last server span" is the correct
+     * semantic, which is why it survives the move to stable spans.
+     */
     protected lastSpanId: string | null = null;
 
     /**
-     * The id this logger's NEXT row will use, minted early because
-     * `getHeaders()` was called before that row existed. Consumed by
-     * {@link generateTraceContext} so the id handed to a downstream service
-     * turns into a real row rather than pointing at nothing.
+     * The W3C trace-flags byte for this trace. Frogger PROPAGATES an upstream
+     * sampling decision; it does not make one, so an absent decision defaults
+     * to sampled (`01`) rather than being invented per hop.
      */
-    protected reservedSpanId: string | null = null;
+    protected traceFlags: string = '01';
 
-    /**
-     * Whether this logger has emitted a row yet. `lastSpanId` cannot answer
-     * this: a child is seeded with its PARENT's span id, so a non-null value
-     * says nothing about whether this logger has logged.
-     */
-    protected hasEmitted: boolean = false;
+    /** Inbound `tracestate`, carried forward so multi-hop vendor state survives. */
+    protected inboundTracestate: string | undefined;
+
+    /** Correlation id for the acting user, set via {@link identify}. */
+    protected user: string | undefined;
+
+    /** This span's own attributes, set via {@link setAttribute}. Bounded at emit. */
+    protected spanAttributes: Record<string, string | number | boolean> | undefined;
+
+    /** Matched route pattern for rows emitted here, never a raw path. */
+    protected route: string | undefined;
+
+    /** Browser session this logger belongs to, shared with the metrics queue. */
+    protected session: { id: string; sampled: boolean } | undefined;
+
     protected level: number;
     protected readonly consoleOutput: boolean;
     protected readonly scrub: boolean;
@@ -65,13 +122,26 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
 
     constructor(options: FroggerOptions = {}) {
         this.traceId = generateTraceId();
-        this.level = options.level ?? 3;
+        this.spanId = generateSpanId();
 
-        const config = useRuntimeConfig();
+        const config = useFroggerConfig();
 
-        const moduleConsoleOutput = (config.public?.frogger as {
-            consoleOutput?: boolean | { client?: boolean; server?: boolean }
-        } | undefined)?.consoleOutput;
+        // Threshold precedence: per-logger option > module `level` for this
+        // runtime > `info`. Read tolerantly: a runtimeConfig written by an
+        // older build has no `level` key at all, and that must degrade to the
+        // default rather than to `undefined`.
+        const moduleLevel = config.level;
+
+        const scopedModuleLevel = typeof moduleLevel === 'string'
+            ? moduleLevel
+            : moduleLevel?.[this.getConsoleScope()];
+
+        this.level = resolveLoggerLevel(options.level, scopedModuleLevel);
+
+        const moduleConsoleOutput = config.consoleOutput as
+            | boolean
+            | { client?: boolean; server?: boolean }
+            | undefined;
 
         // The resolver always hands us a per-runtime pair, but runtime config can
         // be overridden wholesale from nuxt.config, so a bare boolean is honoured
@@ -90,8 +160,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         // out entirely, an object REPLACES the module rules (compose module
         // rules back in explicitly via defineScrub().use(...) if wanted), and
         // `true`/unset falls back to whatever the module resolved.
-        //@ts-ignore
-        const moduleScrub = config.public.frogger.scrub as ScrubberOptions | false | undefined;
+        const moduleScrub = config.scrub;
         const resolvedScrub = options.scrub === false
             ? false
             : (typeof options.scrub === 'object' && options.scrub !== null)
@@ -108,7 +177,7 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         // false` turns them off. Read tolerantly rather than cast, so a bare
         // test config and an older build's runtimeConfig both degrade to the
         // same default the resolver would produce.
-        const moduleSpans = (config.public?.frogger as { spans?: unknown } | undefined)?.spans;
+        const moduleSpans = config.spans;
         this.spanEvents = spanEventsFromConfig(moduleSpans);
 
         if (this.consoleOutput) {
@@ -124,11 +193,6 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
                 await this.handleLog(logObj);
             }
         });
-
-        if (this.consoleReporter !== null) {
-            this.addReporter(this.consoleReporter);
-        }
-
 
         if (options.context) {
             this.globalContext.value = { ...options.context };
@@ -161,83 +225,108 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         const headers = generateW3CTraceHeaders({
             traceId: this.traceId,
             parentSpanId: this.outgoingSpanId(),
-            vendorData
+            vendorData,
+            // Re-emit the decision we were given rather than a hardcoded '01':
+            // fabricating `sampled` on every hop is how a deliberately
+            // unsampled trace silently becomes sampled again downstream.
+            flags: this.traceFlags,
+            inboundTracestate: this.inboundTracestate,
         });
 
         return {
             traceparent: headers.traceparent,
-            ...(headers.tracestate && { tracestate: headers.tracestate })
+            ...(headers.tracestate && { tracestate: headers.tracestate }),
+            // Lets the server side of a request join to the same browser
+            // session as the client rows that triggered it.
+            ...(this.session ? { 'x-frogger-session': this.session.id } : {}),
         };
     }
 
     /**
-     * The span id a downstream service should parent under.
+     * The span id a downstream service should parent under: this logger's own,
+     * always.
      *
-     * Once this logger has emitted, that is the row it last emitted, which is
-     * the documented "last log here is the parent of the first log there".
-     *
-     * Before it has emitted, `lastSpanId` still holds the PARENT's row, so
-     * advertising it would make the downstream call a SIBLING of this span
-     * instead of its child, which is what made a request issued at the top of a
-     * span hang off the wrong node. Reserve the id this logger's first row will
-     * use and advertise that instead; `generateTraceContext` consumes it, so
-     * the id resolves to a real row as soon as anything is logged here.
-     *
-     * The reservation is stable: repeated calls before the first row return the
-     * same id rather than minting a new one per outgoing request.
+     * No reservation, no "has it emitted yet" branch: because the id is stable
+     * from construction, the id advertised in a header and the id on every row
+     * this logger emits are the same value by construction. A request issued
+     * before the first log and one issued after it now hang off the same node.
      */
     protected outgoingSpanId(): string {
-        if (this.hasEmitted && this.lastSpanId) {
-            return this.lastSpanId;
-        }
-
-        this.reservedSpanId ??= generateSpanId();
-        return this.reservedSpanId;
+        return this.spanId;
     }
 
+    /**
+     * This logger's own span identity. Read directly rather than recovered by
+     * generating a traceparent and parsing it back: the round trip cost a
+     * string build and a parse per exemplar, and silently dropped the sampling
+     * decision on the floor.
+     */
+    public getSpanContext(): TraceContext {
+        return {
+            traceId: this.traceId,
+            spanId: this.spanId,
+            ...(this.parentSpanId ? { parentSpanId: this.parentSpanId } : {}),
+            flags: this.traceFlags,
+        };
+    }
+
+    /**
+     * The trace context stamped on a row.
+     *
+     * Pure with respect to span identity: it reads `spanId`/`parentSpanId` and
+     * mutates neither, so a row's position in the tree cannot depend on how
+     * many rows preceded it.
+     */
     protected generateTraceContext(suppliedTraceContext?: TraceContext): TraceContext {
         if (suppliedTraceContext) {
             if (suppliedTraceContext.traceId) {
                 this.traceId = suppliedTraceContext.traceId;
             }
-            if (suppliedTraceContext.parentId) {
-                this.lastSpanId = suppliedTraceContext.parentId;
+            if (suppliedTraceContext.parentSpanId) {
+                this.parentSpanId = suppliedTraceContext.parentSpanId;
+            }
+            if (suppliedTraceContext.flags) {
+                this.traceFlags = suppliedTraceContext.flags;
             }
         }
 
-        // Consume any id `getHeaders()` already advertised, so the row that
-        // arrives IS the one a downstream service was told to parent under.
-        const newSpanId = this.reservedSpanId ?? generateSpanId();
-        this.reservedSpanId = null;
-
         const traceContext: TraceContext = {
             traceId: this.traceId,
-            spanId: newSpanId
+            spanId: this.spanId,
+            flags: this.traceFlags,
         };
 
-        if (this.lastSpanId) {
-            traceContext.parentId = this.lastSpanId;
+        if (this.parentSpanId) {
+            traceContext.parentSpanId = this.parentSpanId;
         }
 
-        this.lastSpanId = newSpanId;
-        this.hasEmitted = true;
+        this.lastSpanId = this.spanId;
 
         return traceContext;
     }
 
-    protected setTraceContext(traceId: string, parentSpanId: string | null = null): void {
+    /**
+     * Re-seed this logger onto another trace, parented under `parentSpanId`.
+     * Used for the SSR -> CSR handoff and for server-side trace continuation.
+     * The logger keeps its OWN span id: it is still one unit of work, it has
+     * just been told where it sits.
+     */
+    protected setTraceContext(traceId: string, parentSpanId: string | null = null, flags?: string): void {
         this.traceId = traceId;
-        this.lastSpanId = parentSpanId;
+        this.parentSpanId = parentSpanId;
+        this.lastSpanId = null;
 
-        // Re-seeding puts this logger at the start of a (possibly new) trace:
-        // it has emitted nothing here, and any id it advertised belonged to the
-        // trace it just left.
-        this.reservedSpanId = null;
-        this.hasEmitted = false;
+        if (flags) {
+            this.traceFlags = flags;
+        }
     }
 
 
     // Reporter Management ------------------------------------------
+    // The console reporter is deliberately NOT in `customReporters`: it is
+    // Frogger's own output channel, not something the user registered. Keeping
+    // it out means `getReporters()` cannot leak an internal object and
+    // `clearReporters()` cannot silently kill console output as a side effect.
     public addReporter(reporter: IFroggerReporter): void {
         this.customReporters.push(reporter);
     }
@@ -257,6 +346,69 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
         return [...this.customReporters];
     }
 
+
+    /**
+     * Set (or clear) the acting user. Extra properties beyond `id` are ordinary
+     * context: the id is an index key and is never scrubbed, whereas anything
+     * else about the user is exactly what the scrubber is for.
+     */
+    public identify(user: string | { id: string, [key: string]: unknown } | null): void {
+        if (user === null) {
+            this.user = undefined;
+            return;
+        }
+
+        if (typeof user === 'string') {
+            this.user = user;
+            return;
+        }
+
+        const { id, ...rest } = user;
+        this.user = id;
+
+        if (Object.keys(rest).length > 0) {
+            this.addContext({ user: rest });
+        }
+    }
+
+    /**
+     * Annotate THIS span. Writes to the span's own bounded attribute bag, not
+     * to the child logger's log context: a span attribute describes the unit of
+     * work, whereas log context describes the rows inside it, and conflating
+     * them is how a nested span's name overwrote its parent's.
+     *
+     * ```ts
+     * const span = frogger.startSpan('checkout')
+     * span.setAttribute('cart.items', items.length)
+     * ```
+     */
+    public setAttribute(key: string, value: string | number | boolean): void {
+        this.spanAttributes ??= {};
+        this.spanAttributes[key] = value;
+    }
+
+    /** The route pattern rows from this logger belong to. Never a raw path. */
+    public setRoute(route: string | undefined): void {
+        this.route = route;
+    }
+
+    /** Attach this logger to a browser session. */
+    public setSession(session: { id: string; sampled: boolean } | undefined): void {
+        this.session = session;
+    }
+
+    /**
+     * The correlation keys stamped on every row: top-level, never scrubbed.
+     * Inherited from the parent when this logger has none of its own, so a
+     * span child does not lose the request's identity.
+     */
+    protected correlationFields(): Pick<LoggerObject, 'session' | 'user' | 'route'> {
+        return {
+            ...(this.session ? { session: this.session } : {}),
+            ...(this.user ? { user: this.user } : {}),
+            ...(this.route ? { route: this.route } : {}),
+        };
+    }
 
     // Context Management -------------------------------------------
     public addContext(context: LogContext, options?: AddContextOptions): void {
@@ -385,13 +537,32 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
     }
 
 
+    /**
+     * Record a business fact. See {@link IFroggerLogger.event}.
+     *
+     * Implemented as a normal `info` log carrying a marker in context, which
+     * `createLoggerObject` lifts to the top-level `kind` field. Going through
+     * the existing pipeline is the point: an event gets the same scrubbing,
+     * batching and trace correlation as everything else for free.
+     */
+    public event(name: string, attributes?: Record<string, unknown>): void {
+        this.consola.info(name, { ...attributes, [EVENT_MARKER]: true });
+    }
+
     public reset(): void {
         this.globalContext.value = {};
+        // Matches the documented contract. The console reporter is not a user
+        // reporter and is intentionally kept.
+        this.customReporters = [];
 
         this.traceId = generateTraceId();
+        // A reset logger is a NEW unit of work on a new trace, so it gets a
+        // fresh span identity rather than reusing the one it just abandoned.
+        this.spanId = generateSpanId();
+        this.parentSpanId = null;
         this.lastSpanId = null;
-        this.reservedSpanId = null;
-        this.hasEmitted = false;
+        this.traceFlags = '01';
+        this.inboundTracestate = undefined;
     }
 
 
@@ -415,11 +586,23 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
             await this.processLoggerObject(loggerObject);
         }
         catch (error) {
+            // This is a lost customer log, not chatter: count it so
+            // getFroggerHealth() can show that the pipeline is eating rows.
+            recordPipelineError(error);
             froggerInternal.error('Error in log handling pipeline:', error);
         }
     }
 
     private async emitToReporters(loggerObject: LoggerObject): Promise<void> {
+        if (this.consoleReporter) {
+            try {
+                await this.consoleReporter.log(loggerObject);
+            }
+            catch (error) {
+                froggerInternal.error('Error in console reporter:', error);
+            }
+        }
+
         const reporterPromises = this.customReporters.map(async (reporter) => {
             try {
                 await reporter.log(loggerObject);
@@ -438,21 +621,46 @@ export abstract class BaseFroggerLogger implements IFroggerLogger {
      * it is what lets `runSpanWithEvent` skip its timer entirely on the default
      * path, so a span costs exactly what it did before.
      */
-    protected spanMetricEnd(name: string, options?: SpanOptions): ((durationSeconds: number, ok: boolean) => void) | undefined {
+    protected spanMetricEnd(name: string, options?: SpanOptions): ((durationSeconds: number, ok: boolean, trace?: SpanExemplar) => void) | undefined {
         const enabled = options?.metric ?? (this.spanEvents ? this.spanEvents.metric : false);
         if (!enabled) return undefined;
 
         const sink = getSpanMetricSink();
         if (!sink) return undefined;
 
-        return (durationSeconds: number, ok: boolean) => sink(name, durationSeconds, ok, options?.labels);
+        return (durationSeconds: number, ok: boolean, trace?: SpanExemplar) =>
+            sink(name, durationSeconds, ok, options?.labels, trace);
     }
 
-    protected createChildTraceContext(): { traceId: string; parentSpanId: string | null } {
+    /**
+     * The trace position a child logger (a `child()`, `span()` or
+     * `startSpan()`) should take: same trace, parented under THIS logger's
+     * stable span.
+     *
+     * Previously this snapshotted whatever row happened to have been emitted
+     * last, so a child's parent edge depended on how many times the parent had
+     * logged first - an order-dependent side effect in what is supposed to be
+     * a structural relationship.
+     */
+    protected createChildTraceContext(): { traceId: string; parentSpanId: string; flags: string } {
         return {
             traceId: this.traceId,
-            parentSpanId: this.lastSpanId
+            parentSpanId: this.spanId,
+            // A child is part of the same trace, so it inherits the same
+            // sampling decision rather than defaulting back to sampled.
+            flags: this.traceFlags,
         };
+    }
+
+    /**
+     * Copy this logger's correlation keys onto a freshly created child. A span
+     * opened inside a request is the same user, session and route; without
+     * this, every span would silently lose the request's identity.
+     */
+    protected inheritCorrelation(child: BaseFroggerLogger): void {
+        child.user ??= this.user;
+        child.route ??= this.route;
+        child.session ??= this.session;
     }
 
     protected createChildContext(reactive: boolean = false): Ref<LogContext> | LogContext {

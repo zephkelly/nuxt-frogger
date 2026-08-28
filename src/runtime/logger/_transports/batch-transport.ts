@@ -1,13 +1,17 @@
 import { defu } from 'defu';
 import { useRuntimeConfig } from '#imports';
+import { useFroggerConfig } from '../../shared/utils/use-frogger-config';
 
 import { BaseTransport } from './base-transport';
 import type { BatchOptions } from '../../shared/types/batch';
-import type { LoggerObject } from '~/src/runtime/shared/types/log';
+import type { LoggerObject } from '../../shared/types/log';
+import type { SpanObject } from '../../shared/types/span';
 import type { IFroggerTransport } from './types';
 
 import { uuidv7 } from '../../shared/utils/uuid';
 import { froggerInternal } from '../../shared/utils/internal-log';
+import { recordDelivered, recordDropped, recordEnqueued } from '../../shared/utils/health';
+import { backoffDelay } from '../../shared/utils/backoff';
 
 
 
@@ -24,6 +28,26 @@ export interface BatchTransportOptions extends BatchOptions {
     clearTransporters?: () => void;
 
     getTransporterIds?: () => string[];
+
+    /**
+     * Completed spans to attach to the next flush. A getter rather than a
+     * buffer of its own: the queue owns the span buffer, and duplicating it
+     * here would mean two places that can disagree about what has been sent.
+     */
+    getPendingSpans?: () => SpanObject[];
+}
+
+/**
+ * A flush where some downstreams succeeded and others did not.
+ *
+ * Carries the failed set so the retry re-delivers to those alone, rather than
+ * re-sending to destinations that already stored the batch.
+ */
+export class PartialFlushError extends Error {
+    constructor(public readonly failed: IFroggerTransport[]) {
+        super(`${failed.length} downstream transport(s) failed: ${failed.map(t => t.name).join(', ')}`)
+        this.name = 'PartialFlushError'
+    }
 }
 
 /**
@@ -45,7 +69,7 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
         super();
         this.transportId = `frogger-batcher-${uuidv7()}`;
 
-        const config = useRuntimeConfig()
+        const config = useFroggerConfig()
 
         const defaultOptions: BatchTransportOptions = {
             downstreamTransporters: [],
@@ -54,9 +78,13 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
                     return;
                 }
                 
+                // Spans ride the same flush as the logs they bracket, so a
+                // reader sees a span and its rows in one envelope.
+                const spans = this.options.getPendingSpans?.() ?? [];
+
                 const promises = this.options.downstreamTransporters.map(async (reporter) => {
                     try {
-                        await reporter.logBatch(logs);
+                        await reporter.logBatch(logs, spans);
                     }
                     catch (err) {
                         froggerInternal.error(`Error in downstream reporter ${reporter.name}:`, err);
@@ -68,7 +96,7 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
             }
         };
         
-        this.options = defu(options, defaultOptions, config.public.frogger.batch) as Required<BatchTransportOptions>;
+        this.options = defu(options, defaultOptions, config.batch) as Required<BatchTransportOptions>;
     }
     
     log(logObj: LoggerObject): void {
@@ -112,7 +140,10 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
         for (const log of logs) {
             this.insertSorted(log);
         }
-        
+
+        recordEnqueued(logs.length);
+        this.enforceQueueCeiling();
+
         if (this.logs.length >= this.options.maxSize) {
             this.handleMaxSizeReached();
             return;
@@ -134,6 +165,24 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
             const waitTime = Math.max(0, (oldestLog.time + this.options.sortingWindowMs) - now);
             this.scheduleFlush(waitTime);
         }
+    }
+
+    /**
+     * Shed load rather than growing without bound.
+     *
+     * `maxSize` only ever SCHEDULED a flush - nothing discarded - so a dead
+     * downstream grew this buffer until the process died, taking the host
+     * application with it. Oldest-first, matching the client queue, so the two
+     * overflow paths agree on one documented policy.
+     */
+    private enforceQueueCeiling(): void {
+        const ceiling = this.options.maxQueueSize;
+        if (!ceiling || this.logs.length <= ceiling) return;
+
+        const overflow = this.logs.length - ceiling;
+        this.logs.splice(0, overflow);
+
+        recordDropped('overflow', overflow, `batch buffer exceeded maxQueueSize (${ceiling})`);
     }
 
     private insertSorted(log: LoggerObject): void {
@@ -173,36 +222,74 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
     }
 
     // Flush handling ------------------------------------------------------
-    private handleFlushFailure(batchId: string, logs: LoggerObject[]): void {
+    private handleFlushFailure(batchId: string, logs: LoggerObject[], error?: unknown): void {
         const retryCount = this.retries.get(batchId) || 0;
-        
+
+        // When the failure names its failed downstreams, retry only those.
+        const failedOnly = error instanceof PartialFlushError ? error.failed : undefined;
+
         if (retryCount >= this.options.maxRetries) {
             froggerInternal.error(`Maximum retry attempts (${this.options.maxRetries}) reached for batch ${batchId}. Dropping ${logs.length} logs.`);
             this.retries.delete(batchId);
+            recordDropped('retriesExhausted', logs.length, `batch ${batchId} exhausted ${this.options.maxRetries} retries`);
             return;
         }
-        
+
+        // Each in-flight retry pins its whole batch in a setTimeout closure.
+        // Without a ceiling, a sink that never recovers accumulates them until
+        // the process dies - the same unbounded growth the buffer ceiling
+        // above exists to prevent, just one level up.
+        const maxConcurrent = this.options.maxConcurrentRetries;
+        if (maxConcurrent && this.retries.size >= maxConcurrent && !this.retries.has(batchId)) {
+            const oldest = this.retries.keys().next().value;
+            if (oldest !== undefined) {
+                this.retries.delete(oldest);
+                recordDropped('overflow', 0, `abandoned retry for batch ${oldest}: too many concurrent retries`);
+            }
+        }
+
         this.retries.set(batchId, retryCount + 1);
         
-        const backoffDelay = this.options.retryDelay * Math.pow(2, retryCount);
-        
-        froggerInternal.warn(`Scheduling retry #${retryCount + 1} for batch ${batchId} in ${backoffDelay}ms`);
+        const delay = backoffDelay(retryCount, { baseMs: this.options.retryDelay });
+
+        froggerInternal.warn(`Scheduling retry #${retryCount + 1} for batch ${batchId} in ${delay}ms`);
         
         setTimeout(async () => {
         if (!this.retries.has(batchId)) {
             return;
         }
-        
+
         try {
-            await this.options.onFlush(logs);
+            // Re-deliver to the failed subset only. Anything that already
+            // stored this batch must not receive it twice.
+            await this.retryFailedOnly(logs, failedOnly);
             froggerInternal.debug(`Retry #${retryCount + 1} for batch ${batchId} succeeded`);
             this.retries.delete(batchId);
         }
         catch (error) {
             froggerInternal.error(`Retry #${retryCount + 1} for batch ${batchId} failed:`, error);
-            this.handleFlushFailure(batchId, logs);
+            this.handleFlushFailure(batchId, logs, error);
         }
-        }, backoffDelay);
+        }, delay);
+    }
+
+    /**
+     * Deliver a batch to a specific subset of downstreams, or through the
+     * configured `onFlush` when the failure did not name any (a custom
+     * `onFlush`, which owns its own fan-out).
+     */
+    private async retryFailedOnly(logs: LoggerObject[], failed: IFroggerTransport[] | undefined): Promise<void> {
+        if (!failed) {
+            await this.options.onFlush(logs);
+            return;
+        }
+
+        const results = await Promise.allSettled(failed.map(t => t.logBatch(logs)));
+        const stillFailing = failed.filter((_, i) => results[i]?.status === 'rejected');
+
+        if (stillFailing.length > 0) {
+            throw new PartialFlushError(stillFailing);
+        }
     }
 
     private scheduleFlush(delay: number = this.options.maxAge): void {
@@ -254,6 +341,7 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
             
             try {
                 await this.options.onFlush(logsToFlush);
+                recordDelivered(logsToFlush.length);
                 this.retries.delete(batchId);
                 this.lastFlushTime = Date.now();
             }
@@ -261,10 +349,11 @@ export class BatchTransport extends BaseTransport<Required<BatchTransportOptions
                 froggerInternal.error(`Failed to flush logs (batch ${batchId}):`, error);
                 
                 if (this.options.retryOnFailure) {
-                    this.handleFlushFailure(batchId, logsToFlush);
+                    this.handleFlushFailure(batchId, logsToFlush, error);
                 }
                 else {
                     froggerInternal.error(`Dropped ${logsToFlush.length} logs due to flush failure`);
+                    recordDropped('retriesExhausted', logsToFlush.length, 'retries disabled on the batch transport');
                 }
             }
         }

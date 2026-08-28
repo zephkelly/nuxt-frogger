@@ -93,10 +93,27 @@ export default defineNuxtConfig({
 })
 ```
 
-## Migrating to 0.2.x (breaking)
+## Migrating to 0.2.0 (breaking)
 
-- **File logging is no longer on by default.** A bare install logs to the console only. Add `fileTransport()` to `transports` to restore the previous rotated-file behaviour.
-- **The top-level `file` module option was removed.** Move its settings into `fileTransport({ ... })`. The resolver warns if a legacy `file` key is still present.
-- **`public.endpoint` now accepts `false`** to disable the browser POST to your app's own ingest route (the server route stays registered) — useful when the client fans out directly to an external sink.
-- **Plain `{ url, apiKey }` transport objects still work** (an untagged entry is treated as `httpTransport(...)`), so existing declarative transports need no changes.
-- **`HttpTransport` retry semantics were fixed.** Send failures used to be silently swallowed; they now retry (429/5xx/network) with exponential backoff and drop deterministically on a 4xx. If you depended on the old silent-drop behaviour, note that failing destinations will now be retried.
+Most applications need **no code changes**. The full page, with what to check
+and how to restore each old default, is at
+[docs/migration/0.2.md](docs/migration/0.2.md).
+
+The headlines:
+
+- **`preset: 'standard'` and `'full'` now actually redact.** They documented redaction and resolved to a scrubber with **zero rules**. They now seed `RECOMMENDED_RULES`.
+- **Frogger no longer takes over host shutdown.** The `SIGTERM`/`SIGINT` handlers that called `process.exit(0)` are off by default (`errorCapture.server.takeoverSignals` restores them).
+- **Error capture no longer ships secrets.** `includeHeaders`, `includeComponentProps` and `includeComponentOuterHTML` all default to `false`.
+- **Rate limiting ignores forwarding headers by default.** Set `rateLimit.trustProxy` if you run behind a proxy.
+- **`lvl` changed for `verbose` and `silent`** — they were ±Infinity, which serialises to `null`. Rows also gained `sev`, the OTel SeverityNumber.
+- **`trace.parentId` is now `trace.parentSpanId`**, and each logger owns one stable `spanId` for its lifetime.
+- **Removed:** `LoggerObject.tags` and its live-log filter (written by no code path), the dead websocket query scaffold, and `public.serverModule`.
+- **Nuxt 4 is a declared peer dependency.**
+
+Already shipped in 0.1.x, and still worth knowing:
+
+- **File logging is not on by default.** A bare install logs to the console only. Add `fileTransport()` to `transports`.
+- **The top-level `file` module option was removed.** Move its settings into `fileTransport({ ... })`.
+- **`public.endpoint` accepts `false`** to disable the browser POST to your app's own ingest route while keeping the server route registered.
+- **Plain `{ url, apiKey }` transport objects still work** (an untagged entry is treated as `httpTransport(...)`).
+- **`HttpTransport` retry semantics were fixed.** Failures used to be silently swallowed; they now retry (429/5xx/network) with jittered exponential backoff and drop deterministically on a non-429 4xx.

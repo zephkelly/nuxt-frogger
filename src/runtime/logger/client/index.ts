@@ -1,5 +1,9 @@
 import { type Ref } from 'vue';
-import { useNuxtApp, useState, useRuntimeConfig } from '#imports';
+import { useNuxtApp, useState } from '#imports';
+import { useFroggerConfig } from '../../shared/utils/use-frogger-config';
+import { resolveSession } from '../../shared/session';
+import { notifyIdentity } from '../../shared/utils/identity-sink';
+import type { FroggerResource } from '../../shared/types/resource';
 
 import { BaseFroggerLogger } from '../base-frogger';
 import { getLogQueue } from '../../app/services/get-log-queue';
@@ -8,8 +12,12 @@ import type { IFroggerLogger } from '../types';
 import type { ClientLoggerOptions, SSRTraceState } from './types';
 import type { LogObject } from 'consola/browser';
 import type { LoggerObject, LogContext } from '../../shared/types/log';
+import { levelOf, severityOf } from '../../shared/types/log';
+import { eventKind } from '../../shared/utils/event-kind';
 import type { LoggerObjectBatch } from '../../shared/types/batch';
+import { LOG_BATCH_SCHEMA } from '../../shared/types/batch';
 import { parseAppInfoConfig } from '../../app-info/parse';
+import { uuidv7 } from '../../shared/utils/uuid';
 
 import { hasPrimaryLogSink } from '../../shared/utils/primary-sink';
 import { normalizeContextErrors } from '../../shared/utils/normalize-errors';
@@ -26,6 +34,7 @@ import { defu } from 'defu';
 export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
     private options: Required<ClientLoggerOptions>;
     private serverModuleEnabled = false;
+    private readonly resource: FroggerResource | undefined;
     protected hasMounted: Ref<boolean>;
     private batchingEnabled = true;
 
@@ -36,15 +45,15 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
         this.hasMounted = hasMounted;
 
-        const config = useRuntimeConfig();
+        const config = useFroggerConfig();
 
-        //@ts-ignore
-        if (config.public.frogger.serverModule) {
+        if (config.serverModule) {
             this.serverModuleEnabled = true;
         }
 
-        //@ts-ignore
-        const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
+        this.resource = config.resource;
+
+        const { isSet, name, version } = parseAppInfoConfig(config.app);
 
         this.appInfo = isSet ? {
             name: name,
@@ -52,18 +61,15 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         } : undefined;
 
         this.options = {
-            //@ts-ignore
-            endpoint: config.public.frogger.endpoint,
-            //@ts-ignore
-            baseUrl: config.public.frogger.baseUrl || '',
+            endpoint: config.endpoint,
+            baseUrl: config.baseUrl || '',
 
             level: 3,
             context: {},
             // Scrub is opt-in: follow whatever the resolved runtime config says
             // (`false` when off, a config object when on). A per-logger
             // `useFrogger({ scrub: true })` in `...options` still overrides this.
-            //@ts-ignore
-            scrub: config.public.frogger.scrub ?? false,
+            scrub: config.scrub ?? false,
             ...options,
             // The RESOLVED value the base constructor already computed, not the
             // raw option. Children inherit `this.options`, so hardcoding `true`
@@ -74,8 +80,14 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
             consoleOutput: this.consoleOutput,
         }
 
-        //@ts-expect-error
-        this.batchingEnabled = config.public.frogger.batch !== false;
+        this.batchingEnabled = config.batch !== false;
+
+        // The session is shared with the metrics pipeline, so a log and a Web
+        // Vital from the same page load can be joined on it. Client-only: on
+        // the server there is no tab to have a session.
+        if (import.meta.client) {
+            this.session = resolveSession(1)
+        }
 
         this.setupTraceContext();
     }
@@ -93,9 +105,12 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
         if (import.meta.server) {
             // On server: store the trace ID and span ID for client hydration
+            // The server logger's span IS the SSR unit of work, and it is
+            // stable, so the handoff value is known here rather than needing to
+            // be re-written after every log.
             this.ssrTraceState.value = {
                 traceId: this.traceId,
-                lastServerSpanId: null,  // Will be updated after first log
+                lastServerSpanId: this.spanId,
                 isClientHydrated: false
             };
         }
@@ -117,23 +132,31 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
     /**
      * Create LoggerObject from Consola's LogObject
      */
+    /**
+     * Identify the acting user for logs AND metrics in one call.
+     *
+     * The metrics queue keeps its own copy because it stamps points outside the
+     * logger entirely; forwarding here is what stops the two pipelines
+     * disagreeing about who is acting.
+     */
+    override identify(user: string | { id: string, [key: string]: unknown } | null): void {
+        super.identify(user);
+        notifyIdentity(this.user);
+    }
+
     protected async createLoggerObject(logObj: LogObject): Promise<LoggerObject> {
         const traceContext = this.generateTraceContext();
-
-        if (import.meta.server) {
-            // On server: update the last server span ID
-            this.ssrTraceState.value = {
-                ...this.ssrTraceState.value,
-                lastServerSpanId: this.lastSpanId
-            };
-        }
 
         const env = (import.meta.server) ? 'ssr' :
             (import.meta.client && this.hasMounted.value) ? 'client' : 'csr';
 
         return {
+            id: uuidv7(),
             time: logObj.date.getTime(),
-            lvl: logObj.level,
+            // Derived from `type`, never copied off consola's LogObject: consola
+            // uses ±Infinity for silent/verbose, which JSON-serialise to null.
+            lvl: levelOf(logObj.type),
+            sev: severityOf(logObj.type),
             type: logObj.type,
             msg: logObj.args?.[0],
             // Errors in ctx are flattened to JSON-safe objects here, or their
@@ -149,6 +172,8 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
                 version: this.appInfo?.version || 'unknown',
             } : undefined,
             trace: traceContext,
+            ...this.correlationFields(),
+            ...eventKind(logObj.args?.slice(1)[0]),
         };
     }
 
@@ -164,10 +189,17 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
         const batch: LoggerObjectBatch = {
             logs: [logObj],
-            app: this.appInfo
+            app: this.appInfo,
+            resource: this.resource,
+            meta: {
+                schema: LOG_BATCH_SCHEMA,
+                time: Date.now(),
+            }
         };
 
-        return $fetch(this.options.endpoint, {
+        // `hasPrimaryLogSink` above already returned for `endpoint: false`, so
+        // this is a string by the time we get here.
+        return $fetch(this.options.endpoint as string, {
             baseURL: this.options.baseUrl || undefined,
             method: 'POST',
             body: batch,
@@ -241,6 +273,7 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
         const child = new ClientFrogger(this.hasMounted, childOptions);
 
         child.setTraceContext(traceId, parentSpanId);
+        this.inheritCorrelation(child);
 
         if (reactive) {
             child.parentGlobalContext = this.mergedGlobalContext;
@@ -263,6 +296,6 @@ export class ClientFrogger extends BaseFroggerLogger implements IFroggerLogger {
 
     public span<T>(name: string, fn: () => T | Promise<T>, options?: SpanOptions): Promise<T> {
         const child = this.startSpan(name);
-        return runSpanWithEvent(child, name, this.spanEvents, () => runWithLogger(child, fn), this.spanMetricEnd(name, options));
+        return runSpanWithEvent(child, name, this.spanEvents, () => runWithLogger(child, fn), this.spanMetricEnd(name, options), options);
     }
 }

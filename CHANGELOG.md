@@ -1,5 +1,101 @@
 # Changelog
 
+## v0.2.0 (unreleased)
+
+Breaking. See `docs/migration/0.2.md` for the full migration.
+
+### ⚠️ Breaking changes
+
+- **`preset: 'standard'` and `'full'` now actually redact.** Both presets seed
+  `RECOMMENDED_RULES`. Previously they resolved to a scrubber with zero rules
+  while documenting redaction as on, so a config that looked safe shipped
+  plaintext. A bare `scrub: true` still injects no rules, and the build now
+  warns when a scrubber resolves to zero.
+- **Frogger no longer takes over host shutdown.** The `SIGTERM`/`SIGINT`
+  handlers that drained and then called `process.exit(0)` are off by default
+  (`errorCapture.server.takeoverSignals: true` restores them), and
+  `uncaughtException` no longer forces `process.exit(1)`
+  (`errorCapture.server.exitOnUncaught: true` restores it). Nitro's `close`
+  hook already drains the queue.
+- **Error capture no longer ships secrets by default.** `includeHeaders`,
+  `includeComponentProps` and `includeComponentOuterHTML` all default to
+  `false`. When headers are enabled, `cookie`, `authorization` and friends are
+  replaced with `[redacted]` unconditionally; `outerHTML` is truncated to 4 KiB.
+- **`lvl` values changed for `verbose` and `silent`.** They were ±Infinity
+  copied off consola, which `JSON.stringify` turns into `null`. `verbose` now
+  shares the `trace` tier (5) and `silent` is `-1`. Every level is finite and
+  JSON-safe.
+- **Rate limiting ignores forwarding headers by default.** `rateLimit.trustProxy`
+  defaults to `false` (socket peer only). Set it to `true`, a hop count, or a
+  list of trusted peers if you run behind a proxy. The `reporter` and `app`
+  tiers are only keyed on when the request is authenticated.
+- **Nuxt 4 is now a declared peer dependency** (`^4.0.0`), enforced by the
+  module's `compatibility` meta.
+- **Removed:** the dead websocket historical-query message types, the
+  deduplicator, `reconnectSubscription`, and the unread `maxConcurrentQueries` /
+  `maxQueryResults` / `defaultQueryTimeout` / `cache` websocket options. None
+  were reachable, and none were in the package exports map.
+
+### 🚀 Enhancements
+
+- **Versioned wire envelope.** Every batch carries `meta.schema`
+  (`frogger.logs/1` / `frogger.metrics/1`), and every record carries a uuidv7
+  `id` that survives relay hops - a stable dedupe and sort key.
+- **Resource block.** Batches carry `resource` with `service.name`,
+  `service.version`, `deployment.environment`, `service.release` and a per-boot
+  `service.instance.id`, denormalised onto rows at ingest. New `environment`
+  option plus `NUXT_FROGGER_ENVIRONMENT` / `NUXT_FROGGER_RELEASE` /
+  `NUXT_FROGGER_INSTANCE_ID` env overrides, so one build can be promoted
+  across environments without a rebuild.
+- **A real `level` option.** `frogger.debug()` and `frogger.trace()` were
+  process-wide no-ops with no way to enable them. `level` accepts a level name
+  or `{ client, server }`; the default stays `'info'`.
+- **OTel `sev` on every row** (trace=1 … fatal=21), derived from `type`.
+- **Observed time.** Ingest stamps `meta.received.{at,ip}` and denormalises
+  `obsTime` onto each row, mirroring OTel's Timestamp/ObservedTimestamp split.
+
+### 🩹 Fixes
+
+- **Relay batches are no longer rejected.** The ingest route threw 400 on any
+  batch carrying `x-frogger-processed`, which `HttpTransport` sets on every
+  outgoing batch - so 100% of frogger-to-frogger relay traffic was dropped as a
+  4xx. Warnings are now split from rejections, and `processChain` appends
+  instead of being rebuilt, so genuine loop detection can actually fire.
+- **File rotation no longer corrupts itself.** Rotation renamed the file out
+  from under the open write stream and never reset the size counter, so after
+  the first rotation every line landed in the renamed file forever. It now
+  closes, renames, reopens and resets; rotated names are disambiguated
+  (`rename` silently overwrote same-millisecond rotations, destroying whole
+  files); the ESM-hostile `require('node:fs')` is gone; and a `fileTransport()`
+  against a preset with no filesystem now fails the build instead of failing at
+  first write.
+- **Client logs survive page exit.** The only exit path was a plain `$fetch` on
+  `pagehide`, which browsers cancel at unload. There is now a `sendBeacon` /
+  `fetch(keepalive)` ladder on `visibilitychange` and `pagehide`, with beacon
+  budgeting and chunk splitting.
+- **The scrubber can see inside `Map`, `Set` and `Headers`.** `Object.entries`
+  returns `[]` for all three, so they were emitted by reference, unredacted -
+  the mechanism behind the header leak.
+- **W3C sampled flag is propagated, not fabricated.** Incoming `traceparent`
+  ids are validated before adoption, the inbound flags byte is re-emitted
+  rather than hardcoded to `01`, and inbound `tracestate` is carried forward
+  with frogger's entry prepended.
+- **`span.duration` exemplars point at their own span.** The metrics sink fired
+  after the span's context scope had exited, so every nested span's latency was
+  attributed to its parent.
+- **Ingest hardening.** A chunked POST with no `content-length` could skip the
+  size guard entirely; the body is now read with a byte counter that aborts at
+  the cap. Batches are validated (log count, field types, message size) with
+  stable error codes, and a skewed client clock is clamped into a 24h/5m window.
+- **Websocket bursts are coalesced, not discarded.** The 100ms per-channel
+  throttle dropped whole batches; it now buffers and replays them, with a
+  bounded buffer and a `droppedRows` counter in `getStatus()`.
+- One `getFrogger` implementation instead of two identical copies. The console
+  reporter is no longer registered as a user reporter, so `getReporters()`
+  cannot leak it and `clearReporters()` cannot silently kill console output.
+- The rate limiter's cleanup interval is cancelled on reset and unref'd.
+
+
 ## v0.1.26
 
 [compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.25...v0.1.26)

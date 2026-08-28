@@ -1,4 +1,5 @@
-import { useRuntimeConfig } from '#imports'
+import { useFroggerConfig, useFroggerServerConfig } from '../../../shared/utils/use-frogger-config'
+import type { FroggerServerRuntimeConfig } from '../../../shared/types/runtime-config'
 
 import type { IFroggerMetricsTransport } from '../../_transports/types'
 import type { MetricObject } from '../../shared/types/metric'
@@ -14,6 +15,8 @@ import { froggerInternal } from '../../../shared/utils/internal-log'
 import { parseAppInfoConfig } from '../../../app-info/parse'
 import { LogScrubber } from '../../../scrubber'
 import { scrubMetricBatch } from '../../shared/utils/scrub-metric-batch'
+import { getServerResource } from '../../../shared/utils/resolve-resource'
+import type { FroggerResource } from '../../../shared/types/resource'
 import type { ScrubberOptions } from '../../../scrubber/options'
 
 /**
@@ -35,6 +38,9 @@ export class ServerMetricsQueueService {
     /** This server's own identity, stamped onto points it produces itself. */
     private appInfo: { name?: string, version?: string } | undefined
 
+    /** Resolved once per process, so it carries this boot's instance id. */
+    private resource: FroggerResource | undefined
+
     private scrubber: LogScrubber | null = null
 
     private initialised: boolean = false
@@ -53,19 +59,19 @@ export class ServerMetricsQueueService {
         if (this.initialised) return
         this.initialised = true
 
-        const config = useRuntimeConfig()
-        //@ts-ignore - frogger.metrics is injected by the module only when enabled
-        const metricsConfig = config.frogger?.metrics as { batch?: BatchOptions | false } | undefined
+        const config = useFroggerServerConfig()
+        const metricsConfig = config.metrics
 
         // Points this server records itself carry its own identity; a relayed
         // batch already carries the origin app's and is never re-stamped.
-        const publicFrogger = (config.public as { frogger?: { app?: unknown } } | undefined)?.frogger
-        const { isSet, name, version } = parseAppInfoConfig(publicFrogger?.app)
+        const { isSet, name, version } = parseAppInfoConfig(useFroggerConfig().app)
         this.appInfo = isSet ? { name, version } : undefined
+
+        this.resource = getServerResource(config.resource)
 
         // Metrics share the log pipeline's ruleset; this is the only hop that
         // can redact `labels`/`attr` before they reach a transport as raw JSON.
-        const scrubConfig = (config.frogger as { scrub?: ScrubberOptions | false } | undefined)?.scrub
+        const scrubConfig = config.scrub
         if (scrubConfig) {
             this.scrubber = new LogScrubber(scrubConfig)
         }
@@ -86,9 +92,8 @@ export class ServerMetricsQueueService {
         }
     }
 
-    private buildConfiguredTransports(config: ReturnType<typeof useRuntimeConfig>): IFroggerMetricsTransport[] {
-        //@ts-ignore - frogger.metrics.transports is injected by the module
-        const configured = (config.frogger?.metrics?.transports ?? []) as ResolvedMetricServerTransport[]
+    private buildConfiguredTransports(config: FroggerServerRuntimeConfig): IFroggerMetricsTransport[] {
+        const configured = config.metrics?.transports ?? []
 
         const transporters: IFroggerMetricsTransport[] = []
         for (const t of configured) {
@@ -141,7 +146,7 @@ export class ServerMetricsQueueService {
      * batches POSTed by a browser.
      */
     public enqueueMetric(metric: MetricObject): void {
-        this.enqueueBatch({ metrics: [metric], app: this.appInfo })
+        this.enqueueBatch({ metrics: [metric], app: this.appInfo, resource: this.resource })
     }
 
     public enqueueBatch(batch: MetricObjectBatch): void {
@@ -166,6 +171,7 @@ export class ServerMetricsQueueService {
             m.context ??= batch.context
             m.session ??= batch.session
             m.user ??= batch.user
+            m.resource ??= batch.resource
         }
 
         if (this.batchTransporter) {

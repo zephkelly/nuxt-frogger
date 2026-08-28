@@ -1,4 +1,5 @@
-import { useRuntimeConfig } from '#imports'
+import { useFroggerServerConfig } from '../../shared/utils/use-frogger-config'
+import type { FroggerServerRuntimeConfig } from '../../shared/types/runtime-config'
 
 import type { IFroggerTransport } from '../../logger/_transports/types'
 import { SCRUB_HANDLED } from '../../shared/types/log'
@@ -13,10 +14,18 @@ import { LogScrubber } from '../../scrubber'
 import { FileTransport } from '../../logger/_transports/file-transport'
 import { MemoryTransport } from '../../logger/_transports/memory-transport'
 import { HttpTransport } from '../../logger/_transports/http-transport'
+import { StdoutTransport } from '../../logger/_transports/stdout-transport'
+import { withMinLevel } from '../../logger/_transports/level-gate'
 import { WebSocketTransport } from '../../logger/_transports/websocket-transport'
 import { createWebSocketStateKVLayer } from '../../websocket/state/factory'
 import { BatchTransport, createBatchTransport } from '../../logger/_transports/batch-transport'
 import { froggerInternal } from '../../shared/utils/internal-log'
+import { getServerResource } from '../../shared/utils/resolve-resource'
+import { setSpanSink } from '../../shared/utils/span-sink'
+import { recordDropped } from '../../shared/utils/health'
+import { decideBatch, DEFAULT_SAMPLING, type ResolvedSampling } from '../../shared/utils/sampling'
+import type { SpanObject } from '../../shared/types/span'
+import type { FroggerResource } from '../../shared/types/resource'
 
 export class ServerLogQueueService {
     private static instance: ServerLogQueueService | null = null;
@@ -27,6 +36,21 @@ export class ServerLogQueueService {
 
     private scrubber: LogScrubber | null = null;
     private initialised: boolean = false
+    /** Resolved once per process, so it carries this boot's instance id. */
+    private resource: FroggerResource | undefined;
+
+    /**
+     * Completed spans awaiting delivery. Spans ride the log batch envelope, so
+     * they are buffered here and attached to the next outgoing batch rather
+     * than getting a pipeline of their own.
+     */
+    private spans: SpanObject[] = [];
+
+    /** Ceiling, for the same reason the log buffer has one. */
+    private readonly maxBufferedSpans = 2048;
+
+    /** Trace sampling policy. `rate: 1` means every decision is a keep. */
+    private sampling: ResolvedSampling = DEFAULT_SAMPLING;
 
     /**
      * Private to prevent direct instantiation
@@ -49,18 +73,23 @@ export class ServerLogQueueService {
 
         this.initialised = true
 
-        const config = useRuntimeConfig()
+        const config = useFroggerServerConfig()
 
-        const scrubConfig = config.frogger.scrub as ScrubberOptions | false;
+        this.resource = getServerResource(config.resource);
+        this.sampling = config.sampling ?? DEFAULT_SAMPLING;
+
+        // Completed spans land here and ride the next log batch.
+        setSpanSink(span => this.enqueueSpan(span));
+
+        const scrubConfig = config.scrub;
         if (scrubConfig) {
             this.scrubber = new LogScrubber(scrubConfig);
         }
 
-        const batchingEnabled = (config.frogger.batch as BatchOptions | false) !== false;
+        const batchingEnabled = config.batch !== false;
 
         let websocketTransport: IFroggerTransport | undefined;
-        //@ts-ignore
-        if (config.frogger.websocket) {
+        if (config.websocket) {
             try {
                 const stateLayer = createWebSocketStateKVLayer('frogger-websocket');
 
@@ -82,7 +111,10 @@ export class ServerLogQueueService {
             }
             this.downstreamTransporters.push(...configuredTransports);
 
-            const batchTransporter = createBatchTransport(this.downstreamTransporters);
+            const batchTransporter = createBatchTransport(this.downstreamTransporters, {
+                // Spans ride the same flush as the logs they bracket.
+                getPendingSpans: () => this.takeSpans(),
+            });
             this.batchTransporter = batchTransporter;
         }
         else {
@@ -100,37 +132,45 @@ export class ServerLogQueueService {
      * preserved; failures are isolated per-transport so one bad entry can't take
      * down the whole queue.
      */
-    private buildConfiguredTransports(config: ReturnType<typeof useRuntimeConfig>): IFroggerTransport[] {
-        //@ts-ignore — frogger.transports is injected by the module
-        const configured = (config.frogger.transports ?? []) as ResolvedServerTransport[];
+    private buildConfiguredTransports(config: FroggerServerRuntimeConfig): IFroggerTransport[] {
+        const configured = config.transports ?? [];
 
         const transporters: IFroggerTransport[] = [];
         for (const t of configured) {
             try {
+                // Every constructed transport is wrapped in its own severity
+                // gate, so `minLevel` works uniformly across built-in and
+                // user-authored destinations.
                 if (t.type === 'file') {
-                    transporters.push(new FileTransport(t.options));
+                    transporters.push(withMinLevel(new FileTransport(t.options), t.minLevel));
+                    continue;
+                }
+
+                if (t.type === 'stdout') {
+                    transporters.push(withMinLevel(new StdoutTransport({ name: t.name }), t.minLevel));
                     continue;
                 }
 
                 if (t.type === 'memory') {
-                    transporters.push(new MemoryTransport({ name: t.name }));
+                    transporters.push(withMinLevel(new MemoryTransport({ name: t.name }), t.minLevel));
                     continue;
                 }
 
-                transporters.push(new HttpTransport({
+                transporters.push(withMinLevel(new HttpTransport({
                     baseUrl: t.baseUrl,
                     endpoint: t.endpoint,
                     apiKey: t.apiKey,
                     apiKeyLocation: t.apiKeyLocation,
                     headers: t.headers,
                     vendor: t.vendor,
+                    shape: t.shape,
                     timeout: t.timeout,
                     retryOnFailure: t.retryOnFailure,
                     maxRetries: t.maxRetries,
                     retryDelay: t.retryDelay,
                     maxBatchEvents: t.maxBatchEvents,
                     maxBodyBytes: t.maxBodyBytes,
-                }));
+                }), t.minLevel));
             }
             catch (err) {
                 froggerInternal.error('ServerLogQueueService: failed to construct configured transport', t.name, err);
@@ -150,7 +190,18 @@ export class ServerLogQueueService {
     public enqueueBatch(loggerObjectBatch: LoggerObjectBatch): void {
         if (!this.ensureInitialised()) return;
 
-        const logs = loggerObjectBatch.logs;
+        // A relayed batch can carry spans as well as logs, and a spans-only
+        // batch is legitimate: a span that did work without logging inside it.
+        if (loggerObjectBatch.spans?.length) {
+            for (const span of loggerObjectBatch.spans) {
+                span.resource ??= loggerObjectBatch.resource ?? this.resource;
+                span.session ??= loggerObjectBatch.session;
+                span.user ??= loggerObjectBatch.user;
+                this.enqueueSpan(span);
+            }
+        }
+
+        let logs = loggerObjectBatch.logs;
         if (logs.length === 0) {
             return;
         }
@@ -164,6 +215,37 @@ export class ServerLogQueueService {
                 log.source ??= { name: originName, version: originVersion };
             }
         }
+
+        // Denormalise the envelope onto each row: transports receive a bare
+        // `LoggerObject[]`, so anything only present on the envelope is lost.
+        // `??=` so a row that already carries its origin's resource keeps it
+        // across a relay hop.
+        const resource = loggerObjectBatch.resource;
+        const observedAt = loggerObjectBatch.meta?.received?.at;
+        const session = loggerObjectBatch.session;
+        const user = loggerObjectBatch.user;
+
+        if (resource || observedAt !== undefined || session || user) {
+            for (const log of logs) {
+                if (resource) log.resource ??= resource;
+                if (observedAt !== undefined) log.obsTime ??= observedAt;
+                if (session) log.session ??= session;
+                if (user) log.user ??= user;
+            }
+        }
+
+        // Sampling is decided here rather than at emit time, because this is
+        // the first point that holds a COMPLETE unit of work: a per-line
+        // decision produces traces with holes, which read as dropped requests.
+        //
+        // `decideBatch` returns the SAME array when nothing is filtered, so the
+        // result replaces the local binding rather than mutating in place.
+        const sampled = decideBatch(logs, this.sampling);
+        if (sampled.length !== logs.length) {
+            recordDropped('overflow', logs.length - sampled.length, 'trace sampled out');
+        }
+        if (sampled.length === 0) return;
+        logs = sampled;
 
         // Rows stamped by an in-process server logger already carry that
         // logger's scrub disposition (rules or an explicit `scrub: false`);
@@ -194,12 +276,41 @@ export class ServerLogQueueService {
             }
         }
         else {
-            this.callDirectReporters('logBatch', logs);
+            this.callDirectReporters('logBatch', logs, this.takeSpans());
         }
+    }
+
+    /**
+     * Buffer one completed span. Bounded and drop-oldest, matching every other
+     * buffer in the pipeline - a span record must never be the thing that grows
+     * without limit.
+     */
+    public enqueueSpan(span: SpanObject): void {
+        span.resource ??= this.resource;
+
+        this.spans.push(span);
+
+        if (this.spans.length > this.maxBufferedSpans) {
+            const overflow = this.spans.length - this.maxBufferedSpans;
+            this.spans.splice(0, overflow);
+            recordDropped('overflow', overflow, 'span buffer exceeded its ceiling');
+        }
+    }
+
+    /** Take the buffered spans, leaving the buffer empty. */
+    public takeSpans(): SpanObject[] {
+        if (this.spans.length === 0) return [];
+        const taken = this.spans;
+        this.spans = [];
+        return taken;
     }
 
     public enqueueLog(logObj: LoggerObject): void {
         if (!this.ensureInitialised()) return;
+
+        // An in-process row never crosses an ingest route, so this is its only
+        // chance to pick up the deployment identity.
+        logObj.resource ??= this.resource;
 
         if (logObj[SCRUB_HANDLED]) {
             delete logObj[SCRUB_HANDLED];
@@ -373,14 +484,18 @@ export class ServerLogQueueService {
         return info;
     }
 
-    private callDirectReporters(method: 'log' | 'logBatch', data: LoggerObject | LoggerObject[]): void {
+    private callDirectReporters(
+        method: 'log' | 'logBatch',
+        data: LoggerObject | LoggerObject[],
+        spans?: SpanObject[],
+    ): void {
         for (const reporter of this.directTransporters) {
             try {
                 if (method === 'log') {
                     reporter.log(data as LoggerObject);
                 }
                 else {
-                    reporter.logBatch(data as LoggerObject[]);
+                    reporter.logBatch(data as LoggerObject[], spans);
                 }
             }
             catch (err) {

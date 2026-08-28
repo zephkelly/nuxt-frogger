@@ -154,12 +154,65 @@ function maskCard(card: string): string {
     return chars.join('')
 }
 
+/**
+ * Salted 64-bit FNV-1a, as two 32-bit halves.
+ *
+ * The strategy is a PSEUDONYMISER, not a redactor: it produces a stable token
+ * so the same value correlates across rows, and that is the entire point of
+ * using it over `REDACT`. It is deliberately NOT a security primitive - a
+ * hashed value with a known input space can be enumerated, which is why the
+ * recommended rules use `REDACT` for genuinely sensitive fields.
+ *
+ * The previous 32-bit variant hit a ~50% collision chance at roughly 77,000
+ * distinct values, so two unrelated users could pseudonymise to one token -
+ * which silently merges their rows.
+ *
+ * Synchronous by necessity: `applyStrategy` is synchronous, so Web Crypto's
+ * async digest does not fit, and `node:crypto` is server-only while this code
+ * runs on both sides.
+ */
 function simpleHash(input: string): string {
-    let hash = 0
-    for (let i = 0; i < input.length; i++) {
-        const char = input.charCodeAt(i)
-        hash = ((hash << 5) - hash) + char
-        hash = hash & hash
+    const salt = getScrubSalt()
+
+    let h1 = 0x811c9dc5
+    let h2 = 0x01000193
+
+    const value = salt + input
+
+    for (let i = 0; i < value.length; i++) {
+        const char = value.charCodeAt(i)
+
+        h1 ^= char
+        h1 = Math.imul(h1, 0x01000193) >>> 0
+
+        h2 ^= char + i
+        h2 = Math.imul(h2, 0x85ebca6b) >>> 0
     }
-    return `[HASH:${Math.abs(hash).toString(16)}]`
+
+    return `[HASH:${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}]`
+}
+
+let scrubSalt = ''
+
+/**
+ * Per-deployment salt for {@link simpleHash}, so tokens are not comparable
+ * across unrelated deployments (or guessable from a rainbow table of common
+ * values). Set from `NUXT_FROGGER_SCRUB_SALT` when present.
+ */
+function getScrubSalt(): string {
+    if (scrubSalt) return scrubSalt
+
+    try {
+        scrubSalt = (typeof process !== 'undefined' ? process.env?.NUXT_FROGGER_SCRUB_SALT : '') || ''
+    }
+    catch {
+        scrubSalt = ''
+    }
+
+    return scrubSalt
+}
+
+/** Test seam: forget the cached salt. */
+export function resetScrubSalt(): void {
+    scrubSalt = ''
 }

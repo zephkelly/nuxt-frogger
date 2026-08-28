@@ -1,5 +1,5 @@
 import type { IFroggerTransport } from "./types";
-import type { LoggerObject } from "~/src/runtime/shared/types/log"
+import type { LoggerObject } from "../../shared/types/log"
 
 
 

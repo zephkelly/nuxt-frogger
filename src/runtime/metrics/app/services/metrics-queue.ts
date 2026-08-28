@@ -1,7 +1,9 @@
-import { useRuntimeConfig } from '#imports'
+import { useFroggerConfig } from '../../../shared/utils/use-frogger-config'
 
 import type { MetricObject } from '../../shared/types/metric'
 import type { MetricObjectBatch, MetricContext } from '../../shared/types/metric-batch'
+import { METRIC_BATCH_SCHEMA } from '../../shared/types/metric-batch'
+import type { FroggerResource } from '../../../shared/types/resource'
 import type { ResolvedMetricClientTransport } from '../../shared/types/metric-transports'
 import type { BatchOptions } from '../../../shared/types/batch'
 
@@ -58,27 +60,28 @@ export class MetricsQueueService {
     private context: MetricContext | undefined
     private session: { id: string; sampled: boolean } | undefined
     private user: string | undefined
+    private resource: FroggerResource | undefined
 
     private retryCount: number = 0
     private nextRetryAt: number = 0
 
     constructor() {
-        const config = useRuntimeConfig()
-        //@ts-ignore - public.frogger.metrics is injected only when metrics are on
-        const metricsConfig = (config.public?.frogger?.metrics ?? {}) as {
+        const config = useFroggerConfig()
+        // Present only when the metrics subsystem is enabled.
+        const metricsConfig = (config.metrics ?? {}) as {
             endpoint?: string | false
             batch?: BatchOptions | false
             maxEventsPerPage?: number
             transports?: ResolvedMetricClientTransport[]
         }
 
-        //@ts-ignore
-        const { isSet, name, version } = parseAppInfoConfig(config.public?.frogger?.app)
+        const { isSet, name, version } = parseAppInfoConfig(config.app)
         this.appInfo = isSet ? { name, version } : { name: 'unknown', version: 'unknown' }
 
+        this.resource = config.resource
+
         this.endpoint = metricsConfig.endpoint ?? false
-        //@ts-ignore
-        this.baseUrl = config.public?.frogger?.baseUrl || ''
+        this.baseUrl = config.baseUrl || ''
 
         // Mirrors DEFAULT_MAX_EVENTS_PER_PAGE; not imported because pulling
         // resolve-metrics into the client bundle drags resolve-options along.
@@ -195,7 +198,9 @@ export class MetricsQueueService {
             context: this.context,
             session: this.session,
             user: this.user,
+            resource: this.resource,
             meta: {
+                schema: METRIC_BATCH_SCHEMA,
                 time: Date.now(),
                 processChain: this.appInfo?.name ? [this.appInfo.name] : [],
             },

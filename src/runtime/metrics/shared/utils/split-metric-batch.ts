@@ -16,9 +16,10 @@ export interface SplitMetricBatchCaps {
  * Count is applied first, then a greedy byte accumulation over
  * `JSON.stringify(metric).length` against `maxBytes` minus an envelope
  * allowance for the `app`/`context`/`session`/`meta` wrapper. Every chunk keeps
- * the original `app`/`context`/`session`; `meta` is dropped so the send site
- * can stamp a fresh one per chunk. When no caps are set the input is returned
- * as a single-element array (zero-copy fast path).
+ * the original envelope, `meta` included: the chunks are all the same hop, so
+ * they must carry the same schema version, resource block and process chain.
+ * When no caps are set the input is returned as a single-element array
+ * (zero-copy fast path).
  */
 export function splitMetricBatch(
     batch: MetricObjectBatch,
@@ -36,7 +37,9 @@ export function splitMetricBatch(
             app: batch.app,
             context: batch.context,
             session: batch.session,
-            meta: {},
+            user: batch.user,
+            resource: batch.resource,
+            meta: batch.meta,
         }).length + 256
         : 0
     const byteBudget = maxBytes ? Math.max(0, maxBytes - envelopeBytes) : 0
@@ -52,6 +55,9 @@ export function splitMetricBatch(
             app: batch.app,
             context: batch.context,
             session: batch.session,
+            user: batch.user,
+            resource: batch.resource,
+            meta: batch.meta,
         })
         current = []
         currentBytes = 0

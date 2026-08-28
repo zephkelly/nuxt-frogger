@@ -34,7 +34,7 @@ describe('resolveMetricsOptions', () => {
         if (r === false) throw new Error('expected resolved metrics')
 
         it('turns on web vitals + device stats', () => {
-            expect(r.webVitals).toEqual({ reportAllChanges: false })
+            expect(r.webVitals).toEqual({ reportAllChanges: false, attribution: false })
             expect(r.deviceStats).toBe(true)
         })
 
@@ -76,7 +76,7 @@ describe('resolveMetricsOptions', () => {
         it('carries reportAllChanges through', () => {
             const r = resolveMetricsOptions({ webVitals: { reportAllChanges: true } })
             if (r === false) throw new Error('expected resolved metrics')
-            expect(r.webVitals).toEqual({ reportAllChanges: true })
+            expect(r.webVitals).toEqual({ reportAllChanges: true, attribution: false })
         })
 
         it('clamps sampleRate into [0, 1]', () => {

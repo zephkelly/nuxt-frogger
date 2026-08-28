@@ -8,7 +8,6 @@ interface FroggerWebsocketInstance {
     levels(levels: LogLevelInput[]): FroggerWebsocketInstance
     type(types: string | string[]): FroggerWebsocketInstance
     sources(sources: string[]): FroggerWebsocketInstance
-    tags(tags: string[]): FroggerWebsocketInstance
     filters(filters: SubscriptionFilter): FroggerWebsocketInstance
     onMessage(handler: (ws: WebSocket, message: LogWebSocketMessage) => void): FroggerWebsocketInstance
     onConnected(handler: (ws: WebSocket) => void): FroggerWebsocketInstance
@@ -29,7 +28,6 @@ export const useFroggerWebSocket = () => {
             levels: () => ({}),
             type: () => ({}),
             sources: () => ({}),
-            tags: () => ({}),
             filters: () => ({}),
             onMessage: () => ({}),
             onConnected: () => ({}),
@@ -69,11 +67,6 @@ export const useFroggerWebSocket = () => {
 
         sources(sources: string[]) {
             filter.source = sources
-            return instance
-        },
-
-        tags(tags: string[]) {
-            filter.tags = tags
             return instance
         },
 

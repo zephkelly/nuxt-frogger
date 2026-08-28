@@ -11,9 +11,8 @@ signals and nothing else:
 - **A device / network envelope** — connection type, device memory, CPU cores,
   browser/OS and viewport, attached once per batch.
 
-There is no userland metrics API in this release: v1 is config-driven
-auto-collection. A manual `defineMetric()` / `useFroggerMetrics()` API is
-planned for a later release.
+Everything else is opt-in on top: a **manual metrics API** (`froggerMetrics`),
+**per-request server instrumentation**, and **Node runtime health**.
 
 ## Enable it
 
@@ -66,6 +65,132 @@ Metrics are stored **raw** — one event per measurement — and aggregated on
 read. Frogger never pre-aggregates into series at ingest, so percentiles are
 computed by whatever consumes the JSON-lines file (`jq` / DuckDB / SQLite) or
 your downstream store.
+
+## The manual metrics API
+
+`froggerMetrics` is auto-imported on **both runtimes** whenever metrics are
+enabled. It costs nothing until you call it.
+
+```ts
+// Anywhere in a component, composable, Nitro route or task
+froggerMetrics.counter('order.placed')
+froggerMetrics.counter('email.sent', 3)
+
+froggerMetrics.gauge('queue.depth', pending.length)
+
+froggerMetrics.histogram('db.query.duration', seconds, {
+  unit: 'second',
+  labels: { op: 'select' },
+})
+```
+
+### Timing something
+
+```ts
+const stop = froggerMetrics.timer('report.render')
+await render()
+stop({ labels: { ok: true } })
+```
+
+Or wrap it:
+
+```ts
+const rows = await froggerMetrics.time('db.query', () => db.select(), {
+  labels: { op: 'select' },
+})
+```
+
+`time()` records the duration whether the function resolves or throws, tagging
+the point with `ok: true` / `ok: false`, and rethrows.
+
+### Options
+
+| Option | Meaning |
+| --- | --- |
+| `unit` | Base unit: `'second'`, `'byte'`, or `''`. Follows the OTel/Prometheus convention. |
+| `labels` | **Indexed** dimensions. Every distinct combination is a series — keep them bounded by your source code, never by user data. |
+| `attr` | **Non-indexed** detail carried for this one event. Ids, urls, raw deltas. |
+| `trace` | Exemplar override, for a point whose subject is not the ambient span. |
+| `correlate: false` | Record with no trace, session, user or route at all. |
+| `time` | Epoch-ms override. For deterministic tests. |
+
+### Guard rails
+
+A metric's **kind is locked at first use**. If `counter('x')` and `gauge('x')`
+both appear, the second is dropped with one warning rather than corrupting the
+series — rename one of the two call sites.
+
+**Label cardinality is bounded** at 200 distinct combinations per name. Past
+that, points keep their *value* but their labels are replaced with
+`{ overflow: true }`, and you get one warning. A label that overflows is almost
+always carrying an id, a url or free-form user input — those belong in `attr`.
+
+## Identifying the user
+
+```ts
+frogger.identify(user.id)   // sets the user for logs AND metrics
+frogger.identify(null)      // on sign-out
+```
+
+`frogger.identify()` is the one call to make. It sets the top-level `user`
+field on log rows and the `user` field on metric points, so the two pipelines
+can never disagree about who is acting.
+
+::: warning Deprecated
+`setFroggerMetricsUser()` sets the user for metrics only and is removed in
+0.3.0. Use `frogger.identify()`.
+:::
+
+## Per-request instrumentation
+
+`metrics: { requests: true }` records `http.server.request.duration` for every
+request, from Nitro's own response hooks — no per-handler wrapping.
+
+```ts
+metrics: {
+  requests: true,
+}
+```
+
+Each point carries `http.request.method`, `http.route` and
+`http.response.status_code` as labels.
+
+::: tip Why some requests are not recorded
+`http.route` is always the **matched route pattern** (`/orders/[id]`), never
+the raw path. A raw URL is unbounded cardinality — `/orders/1`, `/orders/2` and
+so on would each be their own series, and a metrics backend does not recover
+from that.
+
+If a request has no matched pattern, the measurement is **dropped** rather than
+falling back to the path. Frogger's own `/api/_frogger/*` routes are excluded
+too, since instrumenting the ingest route is a feedback loop.
+:::
+
+`{ requests: { serverTiming: true } }` additionally sets a `Server-Timing`
+response header from the request's completed spans, so browser devtools show
+the server breakdown inline.
+
+## Node runtime health
+
+`metrics: { runtime: true }` samples the Node process itself from
+`node:perf_hooks`, with no new dependencies:
+
+| Metric | Unit | What it tells you |
+| --- | --- | --- |
+| `nodejs.eventloop.delay.p50/p90/p99` | second | How long the event loop was blocked. This is what explains "the server is slow but every handler is fast". |
+| `nodejs.eventloop.utilization` | — | Fraction of time the loop was busy, as a delta since the last sample. |
+| `v8js.gc.duration` | second | GC pause duration, labelled by `v8js.gc.type`. |
+| `v8js.memory.heap.used` / `.limit` | byte | Heap usage. |
+| `nodejs.memory.rss` | byte | Resident set size. |
+
+Names and units are `@opentelemetry/instrumentation-runtime-node`'s verbatim,
+so nothing downstream needs a translation table.
+
+```ts
+metrics: {
+  runtime: { intervalMs: 15000 },  // sampling period; 15s default
+}
+```
 
 ## Labels vs attributes — the cardinality model
 
@@ -128,7 +253,20 @@ trace's logs may not exist. Treat the link as best-effort.
 metrics: {
   // Web Vitals collection. Default on. `{ reportAllChanges: true }` emits every
   // intermediate value instead of the final per-page value.
+  // `{ attribution: true }` loads the web-vitals/attribution build, which adds
+  // WHY a vital was what it was (the LCP element, the TTFB/load/render split)
+  // into the non-indexed `attr` slot — no cardinality cost. Off by default
+  // because the attribution build is a larger bundle.
   webVitals: true,
+
+  // Per-request server instrumentation from Nitro's response hooks:
+  // http.server.request.duration, labelled by route pattern, method and status.
+  // Off by default. `{ serverTiming: true }` also sets a Server-Timing header.
+  requests: false,
+
+  // Node runtime health from node:perf_hooks: event-loop delay percentiles,
+  // event-loop utilization, GC pause duration and heap usage. Off by default.
+  runtime: false,
 
   // Device / network / viewport envelope. Default on.
   deviceStats: true,

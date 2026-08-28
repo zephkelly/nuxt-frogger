@@ -14,6 +14,7 @@ import {
 } from '../src/runtime/shared/utils/resolve-options';
 
 import { froggerInternal } from '../src/runtime/shared/utils/internal-log';
+import { RECOMMENDED_RULES } from '../src/runtime/scrubber/recommended';
 import type {
     ResolvedHttpTransport,
     ResolvedFileTransport,
@@ -67,7 +68,10 @@ describe('resolveFroggerOptions', () => {
 
         it('standard enables scrub, rate-limit and error capture but not websocket', () => {
             const r = resolveFroggerOptions({ preset: 'standard' });
-            expect(r.scrub).toEqual(DEFAULT_SCRUB);
+            // The preset promises redaction, so it must carry rules: a bare
+            // `scrub: true` resolves to a scrubber that redacts nothing.
+            expect(r.scrub).toMatchObject(DEFAULT_SCRUB);
+            expect((r.scrub as { rules?: unknown[] }).rules?.length).toBe(RECOMMENDED_RULES.length);
             expect(r.rateLimit).toEqual(DEFAULT_RATE_LIMIT);
             expect(r.websocket).toBe(false);
             expect(r.errorCapture).toEqual({
@@ -78,7 +82,8 @@ describe('resolveFroggerOptions', () => {
 
         it('full enables everything including websocket', () => {
             const r = resolveFroggerOptions({ preset: 'full' });
-            expect(r.scrub).toEqual(DEFAULT_SCRUB);
+            expect(r.scrub).toMatchObject(DEFAULT_SCRUB);
+            expect((r.scrub as { rules?: unknown[] }).rules?.length).toBe(RECOMMENDED_RULES.length);
             expect(r.rateLimit).toEqual(DEFAULT_RATE_LIMIT);
             expect(r.websocket).toEqual(DEFAULT_WEBSOCKET);
             expect(r.errorCapture).toEqual({
@@ -96,8 +101,15 @@ describe('resolveFroggerOptions', () => {
 
         it('preset table matches expected toggles', () => {
             expect(FROGGER_PRESETS.minimal).toEqual({ scrub: false, rateLimit: false, websocket: false, errorCapture: false });
-            expect(FROGGER_PRESETS.standard).toEqual({ scrub: true, rateLimit: true, websocket: false, errorCapture: true });
-            expect(FROGGER_PRESETS.full).toEqual({ scrub: true, rateLimit: true, websocket: true, errorCapture: true });
+            expect(FROGGER_PRESETS.standard).toEqual({ scrub: { rules: RECOMMENDED_RULES }, rateLimit: true, websocket: false, errorCapture: true });
+            expect(FROGGER_PRESETS.full).toEqual({ scrub: { rules: RECOMMENDED_RULES }, rateLimit: true, websocket: true, errorCapture: true });
+        });
+
+        it('a bare scrub:true still injects no rules, and says so by resolving empty', () => {
+            // Turning the scrubber on and choosing a rule set are separate
+            // decisions; the build warns about this case rather than guessing.
+            const r = resolveFroggerOptions({ preset: 'minimal', scrub: true });
+            expect((r.scrub as { rules?: unknown[] }).rules).toBeUndefined();
         });
     });
 
@@ -174,8 +186,8 @@ describe('resolveFroggerOptions', () => {
             expect(r.websocket).not.toBe(DEFAULT_WEBSOCKET);
             expect(r.errorCapture.client).not.toBe(DEFAULT_ERROR_CAPTURE_CLIENT);
             expect(r.errorCapture.server).not.toBe(DEFAULT_ERROR_CAPTURE_SERVER);
-            // ...but value-equal
-            expect(r.scrub).toEqual(DEFAULT_SCRUB);
+            // ...but value-equal (scrub additionally carries the preset's rules)
+            expect(r.scrub).toMatchObject(DEFAULT_SCRUB);
             expect(r.rateLimit).toEqual(DEFAULT_RATE_LIMIT);
         });
 
@@ -551,8 +563,11 @@ describe('resolveFroggerOptions', () => {
     });
 
     describe('deprecations', () => {
+        // Config-validation warnings go out on the ungated channel: they run
+        // during module setup, before `configureInternalLog`, where the level
+        // gate resolves to silent and the user was told nothing.
         it('warns when the removed top-level `file` option is present', () => {
-            const warn = vi.spyOn(froggerInternal, 'warn').mockImplementation(() => {});
+            const warn = vi.spyOn(froggerInternal.always, 'warn').mockImplementation(() => {});
             resolveFroggerOptions({ file: { directory: 'logs' } } as any);
             expect(warn).toHaveBeenCalledWith(
                 expect.stringContaining('The top-level `file` option was removed'),
@@ -561,7 +576,7 @@ describe('resolveFroggerOptions', () => {
         });
 
         it('does not warn when `file` is absent', () => {
-            const warn = vi.spyOn(froggerInternal, 'warn').mockImplementation(() => {});
+            const warn = vi.spyOn(froggerInternal.always, 'warn').mockImplementation(() => {});
             resolveFroggerOptions({ transports: [{ type: 'file' }] });
             expect(warn).not.toHaveBeenCalledWith(
                 expect.stringContaining('The top-level `file` option was removed'),

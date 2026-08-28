@@ -1,5 +1,7 @@
 import type { MetricKind, MetricObject } from '../types/metric'
 import type { MetricOptions, MetricStamp } from './types'
+import { uuidv7 } from '../../../shared/utils/uuid'
+import { checkIdentity } from './registry'
 
 /**
  * Pure metric constructor: no Nuxt, no Nitro, no globals, so the validation and
@@ -24,7 +26,14 @@ export function buildMetric(
     const time = options?.time ?? Date.now()
     if (!Number.isFinite(time) || time <= 0) return null
 
+    // Kind is locked at first use, and label cardinality is bounded. A kind
+    // conflict drops the point; an overflow keeps the value and swaps the
+    // labels for an overflow marker.
+    const identity = checkIdentity(name.trim(), kind, options?.unit, options?.labels)
+    if (!identity.ok) return null
+
     const metric: MetricObject = {
+        id: uuidv7(),
         time: Math.trunc(time),
         name: name.trim(),
         kind,
@@ -33,13 +42,18 @@ export function buildMetric(
     }
 
     if (options?.unit !== undefined) metric.unit = options.unit
-    if (options?.labels) metric.labels = options.labels
-    if (options?.attr) metric.attr = options.attr
+    // Copied, not referenced: a caller mutating its own object afterwards used
+    // to mutate a point already sitting in a 15s batch window.
+    if (identity.labels) metric.labels = { ...identity.labels }
+    else if (options?.labels) metric.labels = { ...options.labels }
+    if (options?.attr) metric.attr = { ...options.attr }
 
     // `correlate: false` is the opt-out for a point that must carry no identity.
     if (options?.correlate === false) return metric
 
-    if (stamp.trace) metric.trace = stamp.trace
+    // An explicit per-call exemplar wins over the ambient one.
+    const trace = options?.trace ?? stamp.trace
+    if (trace) metric.trace = trace
     if (stamp.session) metric.session = stamp.session
     if (stamp.user) metric.user = stamp.user
 

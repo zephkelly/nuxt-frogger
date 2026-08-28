@@ -16,6 +16,13 @@ export const PASSWORD_FIELDS: FieldPattern[] = [
     'apiKey', 'api_key', 'apikey',
     'token', 'accessToken', 'refreshToken',
     'privateKey', 'clientSecret',
+    // Request-header names. These carry the two most valuable secrets a
+    // request holds and were covered by no list at all, so an error report
+    // that attached headers shipped them in plaintext.
+    'cookie', 'set-cookie', 'setCookie',
+    'authorization', 'proxy-authorization', 'proxyAuthorization',
+    'x-api-key', 'x-auth-token', 'x-csrf-token',
+    'bearer', 'sessionId', 'session_id',
 ]
 
 export const EMAIL_FIELDS: FieldPattern[] = [

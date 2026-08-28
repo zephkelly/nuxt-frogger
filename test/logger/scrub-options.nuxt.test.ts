@@ -54,7 +54,7 @@ vi.mock('nitropack/runtime/internal/context', () => ({
 
 import { ServerFroggerLogger } from '../../src/runtime/logger/server'
 import { ClientFrogger } from '../../src/runtime/logger/client'
-import { getFrogger } from '../../src/runtime/server/utils/manual'
+import { getFrogger } from '../../src/runtime/server/utils/get-frogger'
 import { defineScrub } from '../../src/runtime/scrubber/builder'
 import { SCRUB_HANDLED } from '../../src/runtime/shared/types/log'
 

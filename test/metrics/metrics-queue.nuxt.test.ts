@@ -11,7 +11,7 @@ mockNuxtImport('useRuntimeConfig', () => useRuntimeConfigMock)
 import { MetricsQueueService } from '../../src/runtime/metrics/app/services/metrics-queue'
 
 function metric(overrides: Partial<MetricObject> = {}): MetricObject {
-    return { time: 0, name: 'web.vital.lcp', kind: 'gauge', value: 1, env: 'client', ...overrides }
+    return { id: 'fixture-id', time: 0, name: 'web.vital.lcp', kind: 'gauge', value: 1, env: 'client', ...overrides }
 }
 
 function observeClientEntry(overrides: Partial<ResolvedMetricClientTransport> = {}): ResolvedMetricClientTransport {

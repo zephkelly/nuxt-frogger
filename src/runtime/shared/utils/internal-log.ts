@@ -104,6 +104,13 @@ function enabled(level: Exclude<InternalLogLevel, 'silent'>): boolean {
     return LEVEL_WEIGHT[currentLevel] >= LEVEL_WEIGHT[level]
 }
 
+const emittedOnce: Set<string> = new Set()
+
+/** Test seam: forget which one-shot keys have already been emitted. */
+export function resetOnceEmitted(): void {
+    emittedOnce.clear()
+}
+
 /**
  * Leveled internal logger. Use `error` for caught failures in Frogger's own
  * machinery, `warn` for recoverable misconfiguration, `info` for noteworthy
@@ -129,5 +136,36 @@ export const froggerInternal = {
         if (enabled('debug')) {
             console.log(PREFIX, ...args)
         }
+    },
+
+    /**
+     * The data-loss channel: bypasses the level gate entirely.
+     *
+     * Everything above is Frogger's chatter about itself and is correctly
+     * silent at the production default. Losing a customer's logs is not
+     * chatter - a misconfigured API key discarding 100% of production logs with
+     * no output anywhere is the failure mode this exists to make impossible.
+     * Use it ONLY where data was, or is about to be, dropped.
+     *
+     * The `once*` variants are keyed and fire at most once per process, so a
+     * failing sink cannot itself become the noise.
+     */
+    always: {
+        error(...args: unknown[]): void {
+            console.error(PREFIX, ...args)
+        },
+        warn(...args: unknown[]): void {
+            console.warn(PREFIX, ...args)
+        },
+        onceError(key: string, ...args: unknown[]): void {
+            if (emittedOnce.has(key)) return
+            emittedOnce.add(key)
+            console.error(PREFIX, ...args)
+        },
+        onceWarn(key: string, ...args: unknown[]): void {
+            if (emittedOnce.has(key)) return
+            emittedOnce.add(key)
+            console.warn(PREFIX, ...args)
+        },
     },
 }

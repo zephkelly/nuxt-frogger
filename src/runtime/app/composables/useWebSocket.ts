@@ -3,6 +3,7 @@ import { ref, onMounted, onBeforeUnmount, nextTick, watch } from "vue"
 import { MessageType, type LogWebSocketMessage, WebSocketMessageAuthor, WebSocketStatus } from "../../websocket/types"
 
 import { useRuntimeConfig } from '#imports';
+import { useFroggerConfig } from '../../shared/utils/use-frogger-config';
 import { froggerInternal } from '../../shared/utils/internal-log';
 
 interface WebSocketOptions {
@@ -79,9 +80,9 @@ export const useWebSocket = (
         }
     }
 
-    const config = useRuntimeConfig()
-
-    const configURL = config.public.frogger.websocket.route
+    // The websocket block is written to public config only when the live-stream
+    // is enabled, so this is genuinely optional rather than a cast away.
+    const configURL = useFroggerConfig().websocket?.route
 
     const {
         onConnected,
@@ -94,7 +95,9 @@ export const useWebSocket = (
         channel
     } = options;
 
-    const urlRef = ref<string>(endpoint || configURL);
+    // With the live-stream disabled there is no configured route, so an
+    // explicit `endpoint` is the only way this composable can connect.
+    const urlRef = ref<string>(endpoint || configURL || '');
     const status = ref<WebSocketStatus>(WebSocketStatus.Closed);
     const socket = ref<WebSocket | undefined>(undefined);
     const channelRef = ref<string | undefined>(channel);

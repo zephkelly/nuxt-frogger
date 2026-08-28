@@ -1,3 +1,4 @@
+import type { ValuePattern } from './value-patterns';
 import type { ScrubStrategy } from "./strategies";
 import { SCRUB_STRATEGY } from "./strategies";
 
@@ -46,6 +47,10 @@ export interface ScrubberConfig {
     preserveTypes: boolean;
     /** Recursion bound for nested objects. `undefined` = no limit (cycle-safe). */
     maxDepth?: number;
+    /** Value-shape patterns; see `ScrubberOptions.values`. Off by default. */
+    values?: boolean | ValuePattern[];
+    /** Also run value patterns over `msg`; see `ScrubberOptions.message`. */
+    message?: boolean;
 }
 
 export interface ScrubResult {

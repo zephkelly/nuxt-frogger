@@ -5,18 +5,28 @@ scrubbing **strategies** (redact, mask, hash, …) and reusable **field-name lis
 and you compose them into rules with a fluent builder. Fields like passwords, emails, phone numbers,
 and card numbers are matched by name and masked, redacted, or hashed.
 
-::: warning Scrubbing is opt-in — and so is every rule
-Scrubbing is **off by default**. Enabling it (`scrub: true`, a `scrub` object, or a
-[preset](../configuration.md#presets)) turns the engine on but adds **zero rules** — nothing is
-scrubbed until *you* declare a rule. This is deliberate: field-name matching is easy to over-apply
-(a key like `name` holds `error.name` or a resource name far more often than a person's name), so
-Frogger never guesses on your behalf.
+::: warning A bare `scrub: true` adds ZERO rules
+Scrubbing is off by default. Setting `scrub: true` or passing a `scrub` object turns the
+engine on but adds **no rules** — nothing is scrubbed until *you* declare one. This is
+deliberate: field-name matching is easy to over-apply (a key like `name` holds `error.name`
+or a resource name far more often than a person's name), so Frogger never guesses on your
+behalf.
 
-In development Frogger prints the active rule count so an empty config is visible:
+The `standard` and `full` [presets](../configuration.md#presets) are the exception: they
+seed [`RECOMMENDED_RULES`](#recommended-bundle), because that is what they promise.
+
+The build warns unconditionally when a scrubber resolves to zero rules, so believing
+redaction is on when it is not is no longer possible:
+
+```
+🐸 FROGGER WARN Scrubbing is enabled but no rules are configured, so nothing is redacted.
+```
+
+In development Frogger also prints the active rule count:
 
 ```
 🐸 FROGGER Ready to log
-🐸 FROGGER scrubbing enabled: 0 rules active
+🐸 FROGGER scrubbing enabled: 7 rules active
 ```
 :::
 
@@ -287,3 +297,89 @@ Rules cross into Nuxt runtime config (and to the client) as JSON. Frogger compil
 pattern to a serialisable `{ source, flags }` form and reconstructs it at runtime, so `/.*email.*/i`
 works identically on the server and in client-beamed logs.
 :::
+
+## What is never scrubbed
+
+Three top-level fields on every log row are **exempt from scrubbing by design**:
+
+- `session` — the browser session id
+- `user` — the acting user's correlation id, set by `frogger.identify()`
+- `route` — the matched route pattern
+
+These are the reader's **index keys**. Redacting them would break every join a
+backend can perform while protecting nothing: `user` is a correlation id rather
+than a name, and `route` is a pattern rather than a path.
+
+`ctx` is the opposite — user-owned, arbitrarily shaped, and always scrubbed.
+Anything genuinely sensitive belongs there.
+
+## Container types
+
+The scrubber walks **`Map`, `Set` and `Headers`** as well as plain objects and
+arrays, converting them on the copy so their contents are reachable by your
+rules.
+
+Other class instances are left alone deliberately: walking an arbitrary class is
+how a scrubber ends up serialising a database connection into a log row.
+
+::: info Fixed in 0.2.0
+`Object.entries()` returns `[]` for `Map`, `Set` and `Headers`, so all three
+used to pass through **by reference, unredacted**. That was the mechanism behind
+error reports shipping `Cookie` and `Authorization` headers verbatim.
+:::
+
+## Value patterns
+
+Key-based rules cannot catch a token pasted into a `note` field or an email
+inside a message. Value patterns match on what a string **looks like**:
+
+```ts
+scrub: {
+    rules: [...],
+    values: true,      // email, Bearer token, JWT, Luhn-valid card number
+    message: true,     // also scan `msg`, not just `ctx`
+}
+```
+
+Both are **off by default**: they run regexes over every string in every log, so
+the zero-config hot path stays free. Measure before enabling them on a hot path.
+
+Bring your own set if the defaults do not fit:
+
+```ts
+values: [
+    { name: 'ticket', pattern: /TICKET-\d+/g, replacement: '[TICKET]' },
+]
+```
+
+::: tip Why the card pattern checks Luhn
+A bare "13–19 digits" pattern also swallows order ids and timestamps, redacting
+real data that was never sensitive. The default card pattern runs a Luhn check
+before replacing.
+:::
+
+## Metrics
+
+Metric `labels` and `attr` are scrubbed with the **same ruleset**, at the server
+metrics queue — the one hop every server-recorded point crosses.
+
+Three fields are carved out and never scrubbed, for the same reason as their log
+equivalents: `name`, `user` and `session`.
+
+::: warning Client-direct metric transports bypass this
+A `client: true` metric transport POSTs straight from the browser and does not
+cross the server queue, so its points are **not** scrubbed. If you fan metrics
+out directly from the browser, do not put anything sensitive in `labels` or
+`attr` — which is advice the cardinality model already gives you.
+:::
+
+## The `hash` strategy pseudonymises, it does not secure
+
+`SCRUB_STRATEGY.HASH` produces a stable token, so the same value still
+correlates across rows. That is the point of choosing it over `REDACT`.
+
+It is **not** a security primitive: a hashed value drawn from a known input
+space can be enumerated. For genuinely sensitive fields, use `REDACT`.
+
+Set `NUXT_FROGGER_SCRUB_SALT` so tokens are not comparable across unrelated
+deployments.

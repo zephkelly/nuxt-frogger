@@ -48,7 +48,6 @@ describe('parseUrlParams', () => {
             const filters = {
                 level: [0, 1],
                 type: ['error', 'warn'],
-                tags: ['api', 'database'],
                 source: ['server']
             };
             const url = new URL(`ws://localhost?channel=main&filters=${encodeURIComponent(JSON.stringify(filters))}`);
@@ -160,31 +159,17 @@ describe('parseUrlParams', () => {
         });
     });
 
-    describe('individual tags parameter', () => {
-        it('should parse single tag', () => {
+    // `tags` was removed in 0.2.0: LoggerObject.tags was set by no code path,
+    // so the filter it fed silently matched nothing.
+    describe('removed tags parameter', () => {
+        it('should ignore a tags parameter entirely', () => {
             const url = new URL('ws://localhost?channel=main&tags=api');
+
             const result = parseUrlParams(url);
 
-            expect(result.channel).toBe('main');
-            expect(result.filters).toEqual({ tags: ['api'] });
+            expect(result.filters).toBeUndefined();
         });
-
-        it('should parse comma-separated tags', () => {
-            const url = new URL('ws://localhost?channel=main&tags=api,database,cache');
-            const result = parseUrlParams(url);
-
-            expect(result.channel).toBe('main');
-            expect(result.filters).toEqual({ tags: ['api', 'database', 'cache'] });
-        });
-
-        it('should trim whitespace from tags', () => {
-            const url = new URL('ws://localhost?channel=main&tags=api , database , cache');
-            const result = parseUrlParams(url);
-
-            expect(result.channel).toBe('main');
-            expect(result.filters).toEqual({ tags: ['api', 'database', 'cache'] });
-        });
-    });
+    })
 
     describe('individual sources parameter', () => {
         it('should parse single source', () => {
@@ -225,40 +210,37 @@ describe('parseUrlParams', () => {
         });
 
         it('should parse all filter parameters together', () => {
-            const url = new URL('ws://localhost?channel=main&level=0,1&type=error,warn&tags=api,db&sources=server');
+            const url = new URL('ws://localhost?channel=main&level=0,1&type=error,warn&sources=server');
             const result = parseUrlParams(url);
 
             expect(result.channel).toBe('main');
             expect(result.filters).toEqual({
                 level: ['0', '1'],
                 type: ['error', 'warn'],
-                tags: ['api', 'db'],
                 source: ['server']
             });
         });
 
         it('should handle single values for all parameters', () => {
-            const url = new URL('ws://localhost?channel=main&level=0&type=error&tags=api&sources=server');
+            const url = new URL('ws://localhost?channel=main&level=0&type=error&sources=server');
             const result = parseUrlParams(url);
 
             expect(result.channel).toBe('main');
             expect(result.filters).toEqual({
                 level: '0',
                 type: 'error',
-                tags: ['api'],
                 source: ['server']
             });
         });
 
         it('should handle mix of single and multiple values', () => {
-            const url = new URL('ws://localhost?channel=main&level=0&type=error,warn&tags=api&sources=server,client');
+            const url = new URL('ws://localhost?channel=main&level=0&type=error,warn&sources=server,client');
             const result = parseUrlParams(url);
 
             expect(result.channel).toBe('main');
             expect(result.filters).toEqual({
                 level: '0',
                 type: ['error', 'warn'],
-                tags: ['api'],
                 source: ['server', 'client']
             });
         });
@@ -293,13 +275,11 @@ describe('parseUrlParams', () => {
         });
 
         it('should handle URL-encoded special characters', () => {
-            const url = new URL('ws://localhost?channel=main&tags=api%2Fv1,test%20tag');
+            const url = new URL('ws://localhost?channel=main%2Fv1&sources=api%2Fv1,test%20source');
             const result = parseUrlParams(url);
 
-            expect(result.channel).toBe('main');
-            expect(result.filters).toEqual({
-                tags: ['api/v1', 'test tag']
-            });
+            expect(result.channel).toBe('main/v1');
+            expect(result.filters).toEqual({ source: ['api/v1', 'test source'] });
         });
 
         it('should handle duplicate parameters (first one wins)', () => {
@@ -314,14 +294,13 @@ describe('parseUrlParams', () => {
 
     describe('real-world scenarios', () => {
         it('should parse typical error filtering scenario', () => {
-            const url = new URL('ws://localhost?channel=production&level=0&type=error,fatal&tags=critical&sources=api-server');
+            const url = new URL('ws://localhost?channel=production&level=0&type=error,fatal&sources=api-server');
             const result = parseUrlParams(url);
 
             expect(result.channel).toBe('production');
             expect(result.filters).toEqual({
                 level: '0',
                 type: ['error', 'fatal'],
-                tags: ['critical'],
                 source: ['api-server']
             });
         });
@@ -338,13 +317,12 @@ describe('parseUrlParams', () => {
         });
 
         it('should parse monitoring scenario with tags', () => {
-            const url = new URL('ws://localhost?channel=monitoring&type=warn,error&tags=performance,security,availability');
+            const url = new URL('ws://localhost?channel=monitoring&type=warn,error');
             const result = parseUrlParams(url);
 
             expect(result.channel).toBe('monitoring');
             expect(result.filters).toEqual({
                 type: ['warn', 'error'],
-                tags: ['performance', 'security', 'availability']
             });
         });
 
@@ -352,7 +330,6 @@ describe('parseUrlParams', () => {
             const filters = {
                 level: [0, 1, 2],
                 type: ['error', 'warn', 'info'],
-                tags: ['auth', 'api', 'database'],
                 source: ['backend-service', 'worker-service']
             };
             const url = new URL(`ws://localhost?channel=staging&filters=${encodeURIComponent(JSON.stringify(filters))}`);

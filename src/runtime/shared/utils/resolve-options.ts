@@ -13,9 +13,11 @@ import type { BatchOptions } from '../types/batch'
 import type { LogContext } from '../types/log'
 import type { FileOptions } from '../types/file'
 import { DEFAULT_FILE } from '../types/file'
+import type { LogType } from 'consola'
 import type { AppInfoOptions } from '../../app-info/types'
 import type { ScrubberOptions } from '../../scrubber/options'
 import { compileScrubRules } from '../../scrubber/compile'
+import { RECOMMENDED_RULES } from '../../scrubber/recommended'
 import type { RateLimitingOptions } from '../../rate-limiter/types'
 import type { WebsocketOptions } from '../../websocket/types/options'
 import type { GlobalErrorCaptureOptions } from '../types/global-error'
@@ -23,6 +25,7 @@ import type {
     FroggerTransportConfig,
     HttpTransportConfig,
     FileTransportConfig,
+    StdoutTransportConfig,
     ObserveTransportConfig,
     MemoryTransportConfig,
     ResolvedHttpTransport,
@@ -31,7 +34,20 @@ import type {
 } from '../types/transports'
 import type { InternalLogLevel } from './internal-log'
 import { froggerInternal } from './internal-log'
+
+/**
+ * Validation warnings from this module are about the user's CONFIG being
+ * wrong - a transport that will be silently skipped, a removed option that no
+ * longer does anything. They run during module setup, where
+ * `configureInternalLog` has not been called yet, so `froggerInternal.warn`
+ * resolves to silent and the user was told nothing.
+ *
+ * These go out on the ungated channel: a dropped transport is a destination
+ * that will never receive logs, which is a data-loss outcome, not chatter.
+ */
+const configWarn = (...args: unknown[]): void => froggerInternal.always.warn(...args)
 import { DEFAULT_SPAN_EVENTS, type ResolvedSpanEvents } from './span-events'
+import { resolveSampling, type ResolvedSampling } from './sampling'
 import type { ResolvedMetricsOptions } from '../../metrics/shared/types/metric-options'
 import { resolveMetricsOptions } from '../../metrics/shared/utils/resolve-metrics'
 
@@ -53,9 +69,18 @@ import { resolveMetricsOptions } from '../../metrics/shared/utils/resolve-metric
 
 export const DEFAULT_PRESET: FroggerPreset = 'minimal'
 
-/** Which heavy subsystems each preset enables. */
+/**
+ * Which heavy subsystems each preset enables.
+ *
+ * `scrub` is a config object rather than a bare `true` on the presets that
+ * promise redaction: a bare `true` resolves to a scrubber with ZERO rules
+ * (deliberately - see {@link resolveScrub}), so a preset documented as
+ * "redaction on" that passed `true` shipped plaintext passwords to anyone who
+ * believed it. The preset layer is the right place to state which rules a
+ * preset implies.
+ */
 interface PresetToggles {
-    scrub: boolean
+    scrub: boolean | ScrubberOptions
     rateLimit: boolean
     websocket: boolean
     errorCapture: boolean
@@ -66,17 +91,42 @@ export const FROGGER_PRESETS: Record<FroggerPreset, PresetToggles> = {
     minimal: { scrub: false, rateLimit: false, websocket: false, errorCapture: false },
     // production-sensible safety net: redaction, ingest rate-limiting and error
     // capture on; the dev-only websocket live-stream stays off.
-    standard: { scrub: true, rateLimit: true, websocket: false, errorCapture: true },
+    standard: { scrub: { rules: [...RECOMMENDED_RULES] }, rateLimit: true, websocket: false, errorCapture: true },
     // everything on, including the dev websocket live-stream (pre-0.2 behaviour).
-    full: { scrub: true, rateLimit: true, websocket: true, errorCapture: true },
+    full: { scrub: { rules: [...RECOMMENDED_RULES] }, rateLimit: true, websocket: true, errorCapture: true },
 }
 
 // --- Detailed default configs, applied only when a subsystem is enabled. -----
 
 export const DEFAULT_APP: AppInfoOptions = 'nuxt-frogger'
 
+/** Application-log threshold. Unchanged from the previously hardcoded value. */
+export const DEFAULT_LOG_LEVEL: LogType = 'info'
+
+export interface ResolvedLogLevel {
+    client: LogType
+    server: LogType
+}
+
+/**
+ * Normalise the `level` option to a per-runtime pair. A bare name applies to
+ * both sides; a partial object leaves the unspecified side at the default.
+ */
+export function normalizeLevel(
+    value: LogType | { client?: LogType, server?: LogType } | undefined,
+): ResolvedLogLevel {
+    if (value === undefined) return { client: DEFAULT_LOG_LEVEL, server: DEFAULT_LOG_LEVEL }
+    if (typeof value === 'string') return { client: value, server: value }
+    return {
+        client: value.client ?? DEFAULT_LOG_LEVEL,
+        server: value.server ?? DEFAULT_LOG_LEVEL,
+    }
+}
+
 export const DEFAULT_BATCH: BatchOptions = {
     maxSize: 200,
+    maxQueueSize: 2048,
+    maxConcurrentRetries: 3,
     maxAge: 15000,
     retryOnFailure: true,
     maxRetries: 5,
@@ -87,6 +137,11 @@ export const DEFAULT_BATCH: BatchOptions = {
 export const DEFAULT_PUBLIC_BATCH: BatchOptions = {
     maxAge: 3000,
     maxSize: 100,
+    // Decoupled from `maxSize`: the client queue previously wired its queue
+    // ceiling to the batch size, so the queue could never hold more than one
+    // batch and a single failed flush discarded everything behind it.
+    maxQueueSize: 1000,
+    maxConcurrentRetries: 3,
     retryOnFailure: true,
     maxRetries: 3,
     retryDelay: 3000,
@@ -120,6 +175,8 @@ export const DEFAULT_CONSOLE_OUTPUT: ResolvedConsoleOutput = {
 }
 
 export const DEFAULT_RATE_LIMIT: RateLimitingOptions = {
+    // Socket peer only. See TrustProxyOption for why this must not default on.
+    trustProxy: false,
     storage: {
         driver: undefined,
         options: {},
@@ -148,29 +205,34 @@ export const DEFAULT_RATE_LIMIT: RateLimitingOptions = {
 export const DEFAULT_WEBSOCKET: WebsocketOptions = {
     route: DEFAULT_WEBSOCKET_ENDPOINT,
     defaultChannel: 'main',
-    maxConcurrentQueries: 10,
-    maxQueryResults: 1000,
-    defaultQueryTimeout: 30000,
 }
 
 type ClientErrorCapture = GlobalErrorCaptureOptions['client']
 type ServerErrorCapture = GlobalErrorCaptureOptions['server']
 
+// Props and outerHTML are opt-in: both are user data the app author never
+// chose to send, and outerHTML is unbounded on top of that.
 export const DEFAULT_ERROR_CAPTURE_CLIENT: ClientErrorCapture = {
     includeComponent: true,
-    includeComponentProps: true,
-    includeComponentOuterHTML: true,
+    includeComponentProps: false,
+    includeComponentOuterHTML: false,
     includeInfo: true,
     includeStack: true,
 }
 
+// Headers are opt-in, and even when opted in the deny-list still applies:
+// `Cookie` and `Authorization` are the two most valuable secrets a request
+// carries, and no scrub rule list covered them.
 export const DEFAULT_ERROR_CAPTURE_SERVER: ServerErrorCapture = {
     includeRequestContext: true,
-    includeHeaders: true,
+    includeHeaders: false,
     includeRejectionHandled: false,
     includeWarnings: false,
     includeStack: true,
     dedupe: true,
+    takeoverSignals: false,
+    exitOnUncaught: false,
+    drainTimeoutMs: 3000,
 }
 
 // --- Resolved shape ----------------------------------------------------------
@@ -190,6 +252,18 @@ export interface ResolvedFroggerOptions {
     clientModule: boolean
     serverModule: boolean | { autoEventCapture?: boolean }
     app: AppInfoOptions
+    /** Application-log threshold, resolved per runtime. */
+    level: ResolvedLogLevel
+    /**
+     * Outbound trace-header propagation. `false` off; otherwise same-origin
+     * plus any explicit allow-list. Function matchers cannot cross runtime
+     * config, so only serialisable entries survive the boundary.
+     */
+    tracePropagation: false | { urls?: (string | RegExp)[] }
+    /** Trace sampling. `rate: 1` by default, i.e. no sampling. */
+    sampling: ResolvedSampling
+    /** Deployment environment, if the user set one explicitly. */
+    environment?: string
     /** Static base context stamped onto every ambient log (serializable only). */
     context?: LogContext
     verbose?: boolean
@@ -291,13 +365,13 @@ function normalizeHttp(t: HttpTransportConfig): ResolvedHttpTransport | null {
             endpoint = u.pathname + u.search
         }
         catch {
-            froggerInternal.warn(`Invalid transport url "${t.url}" — skipping this transport.`)
+            configWarn(`Invalid transport url "${t.url}" — skipping this transport.`)
             return null
         }
     }
 
     if (!endpoint && !baseUrl) {
-        froggerInternal.warn('Transport entry has no url/baseUrl/endpoint — skipping.')
+        configWarn('Transport entry has no url/baseUrl/endpoint — skipping.')
         return null
     }
 
@@ -310,6 +384,8 @@ function normalizeHttp(t: HttpTransportConfig): ResolvedHttpTransport | null {
         apiKeyLocation: t.apiKeyLocation ?? 'header',
         headers: { ...t.headers },
         vendor: t.vendor,
+        minLevel: t.minLevel,
+        shape: t.shape ?? 'frogger',
         timeout: t.timeout,
         retryOnFailure: t.retryOnFailure,
         maxRetries: t.maxRetries,
@@ -319,10 +395,11 @@ function normalizeHttp(t: HttpTransportConfig): ResolvedHttpTransport | null {
 
 /** Normalise a `file` entry into a `ResolvedFileTransport`. Server-only. */
 function normalizeFile(t: FileTransportConfig): ResolvedFileTransport {
-    const { type: _type, name, ...fileOptions } = t
+    const { type: _type, name, minLevel, ...fileOptions } = t
     return {
         type: 'file',
         name: name ?? 'file',
+        minLevel,
         options: defu(fileOptions, DEFAULT_FILE) as Required<FileOptions>,
     }
 }
@@ -341,7 +418,7 @@ function normalizeObserve(t: ObserveTransportConfig): {
         origin = new URL(t.url).origin
     }
     catch {
-        froggerInternal.warn(`Invalid observe url "${t.url}" — skipping this transport.`)
+        configWarn(`Invalid observe url "${t.url}" — skipping this transport.`)
         return null
     }
 
@@ -358,6 +435,7 @@ function normalizeObserve(t: ObserveTransportConfig): {
         retryOnFailure: t.retryOnFailure,
         maxRetries: t.maxRetries,
         retryDelay: t.retryDelay,
+        minLevel: t.minLevel,
         maxBatchEvents: OBSERVE_MAX_BATCH_EVENTS,
         maxBodyBytes: OBSERVE_MAX_BODY_BYTES,
     }
@@ -393,18 +471,24 @@ function resolveTransports(transports: FroggerTransportConfig[] | undefined): {
         if (type === 'file') {
             const file = t as FileTransportConfig
             if ((file as { client?: boolean }).client === true) {
-                froggerInternal.warn('A `file` transport is server-only; `client: true` is ignored.')
+                configWarn('A `file` transport is server-only; `client: true` is ignored.')
             }
             server.push(normalizeFile(file))
+            continue
+        }
+
+        if (type === 'stdout') {
+            const out = t as StdoutTransportConfig
+            server.push({ type: 'stdout', name: out.name ?? 'stdout', minLevel: out.minLevel })
             continue
         }
 
         if (type === 'memory') {
             const mem = t as MemoryTransportConfig
             if (mem.client === true) {
-                froggerInternal.warn('A `memory` transport is server-only; `client: true` is ignored.')
+                configWarn('A `memory` transport is server-only; `client: true` is ignored.')
             }
-            server.push({ type: 'memory', name: mem.name ?? 'memory' })
+            server.push({ type: 'memory', name: mem.name ?? 'memory', minLevel: mem.minLevel })
             continue
         }
 
@@ -469,8 +553,15 @@ function normalizeErrorCapture(value: ErrorCaptureInput | undefined): ResolvedEr
  * Normalise scrub config, then compile every rule's field patterns into a
  * serialisation-safe form (RegExp → `{ source, flags }`) so the rule set
  * survives being written into Nuxt runtime config and JSON-serialised across the
- * SSR→client boundary. Enabling scrubbing never injects rules — an enabled
- * scrubber with no user rules is a deliberate no-op.
+ * SSR→client boundary.
+ *
+ * A bare `scrub: true` deliberately injects NO rules: "turn the scrubber on"
+ * and "apply this rule set" are separate decisions, and silently choosing a
+ * rule set on the user's behalf is how a redaction config becomes a surprise.
+ * Presets that advertise redaction therefore carry
+ * {@link RECOMMENDED_RULES} explicitly (see {@link FROGGER_PRESETS}), so the
+ * no-op case is only ever reached by someone who wrote `scrub: true` themselves
+ * - and the build warns when it is.
  */
 function resolveScrub(value: ScrubberOptions | boolean | undefined): ScrubberOptions | false {
     const normalized = normalizeToggle(value, DEFAULT_SCRUB)
@@ -479,6 +570,36 @@ function resolveScrub(value: ScrubberOptions | boolean | undefined): ScrubberOpt
         normalized.rules = compileScrubRules(normalized.rules)
     }
     return normalized
+}
+
+/**
+ * Normalise `tracePropagation`. Same-origin-only is the default, expressed as
+ * an empty allow-list.
+ *
+ * Function matchers are dropped with a warning: this value is serialised into
+ * runtime config, so a closure cannot survive the boundary and would silently
+ * become "no match" - which for an allow-list means the destination the user
+ * wrote the function for stops being traced, with no output at all.
+ */
+function resolveTracePropagation(
+    value: ModuleOptions['tracePropagation'],
+): false | { urls?: (string | RegExp)[] } {
+    if (value === false) return false
+    if (!value?.urls?.length) return {}
+
+    const serialisable: (string | RegExp)[] = []
+    for (const matcher of value.urls) {
+        if (typeof matcher === 'function') {
+            configWarn(
+                'A function matcher in `tracePropagation.urls` cannot be serialised into runtime '
+                + 'config and has been ignored. Use a string prefix or an anchored RegExp instead.',
+            )
+            continue
+        }
+        serialisable.push(matcher)
+    }
+
+    return { urls: serialisable }
 }
 
 /**
@@ -520,7 +641,7 @@ export function resolveFroggerOptions(options: ModuleOptions = {}): ResolvedFrog
     // The top-level `file` option was removed in favour of `fileTransport()`.
     // Warn if a legacy config still sets it so the file logs aren't silently lost.
     if ((options as { file?: unknown }).file !== undefined) {
-        froggerInternal.warn(
+        configWarn(
             'The top-level `file` option was removed; add `fileTransport({...})` to `transports` instead.',
         )
     }
@@ -536,6 +657,10 @@ export function resolveFroggerOptions(options: ModuleOptions = {}): ResolvedFrog
         clientModule: options.clientModule ?? true,
         serverModule: options.serverModule ?? { autoEventCapture: true },
         app: options.app ?? DEFAULT_APP,
+        level: normalizeLevel(options.level),
+        tracePropagation: resolveTracePropagation(options.tracePropagation),
+        sampling: resolveSampling(options.sampling),
+        environment: options.environment,
         context: options.context,
         verbose: options.verbose,
         logLevel: options.logLevel,

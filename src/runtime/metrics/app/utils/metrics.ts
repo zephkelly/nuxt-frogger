@@ -4,6 +4,7 @@ import type { MetricObject } from '../../shared/types/metric'
 import type { FroggerMetrics, MetricStamp } from '../../shared/api/types'
 
 import { getMetricsQueue } from '../services/get-metrics-queue'
+import { deprecate } from '../../../shared/utils/deprecate'
 import { createMetricsFacade } from '../../shared/api/facade'
 import { traceFromLogger } from '../../shared/api/trace-of'
 import { getActiveLogger } from '../../../logger/active-context.client'
@@ -85,10 +86,15 @@ function record(metric: MetricObject): void {
 export const froggerMetrics: FroggerMetrics = createMetricsFacade(record, clientStamp)
 
 /**
- * Stamp the acting user onto this session's metric batches. Call once at
- * sign-in and pass `undefined` at sign-out; never per point.
+ * Stamp the acting user onto this session's metric batches.
+ *
+ * @deprecated Use `frogger.identify(user)` instead, which sets the user for
+ * logs AND metrics in one call and works on both runtimes. This sets it for
+ * metrics only. Removed in 0.3.0.
  */
 export function setFroggerMetricsUser(user: string | undefined): void {
+    deprecate('setFroggerMetricsUser()', 'frogger.identify()', '0.3.0')
+
     const host = resolveHost()
     if (host) getMetricsQueue(host).setUser(user)
 }

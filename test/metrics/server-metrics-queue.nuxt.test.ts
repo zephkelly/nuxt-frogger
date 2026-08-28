@@ -50,7 +50,7 @@ function httpEntry(overrides: Record<string, unknown> = {}): ResolvedMetricServe
 }
 
 function makeMetric(overrides: Partial<MetricObject> = {}): MetricObject {
-    return { time: 0, name: 'web.vital.lcp', kind: 'gauge', value: 1.2, env: 'client', ...overrides }
+    return { id: 'fixture-id', time: 0, name: 'web.vital.lcp', kind: 'gauge', value: 1.2, env: 'client', ...overrides }
 }
 
 function setConfig(transports: ResolvedMetricServerTransport[], extra: Record<string, unknown> = {}) {

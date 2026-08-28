@@ -13,9 +13,11 @@ export interface SplitBatchCaps {
  * greedy byte accumulation over `JSON.stringify(log).length` against `maxBytes`
  * minus an envelope allowance for the `app`/`meta` wrapper.
  *
- * Every chunk keeps the original `app`; `meta` is dropped so the send site can
- * stamp a fresh one per chunk. When no caps are set the input is returned as a
- * single-element array (zero-copy fast path).
+ * Every chunk keeps the original `app`, `resource` and `meta`: the chunks are
+ * all the same hop, so they must carry the same schema version, resource block
+ * and process chain. Dropping `meta` here left chunked batches unversioned and
+ * invisible to the receiver's loop detection. When no caps are set the input is
+ * returned as a single-element array (zero-copy fast path).
  */
 export function splitLoggerBatch(
     batch: LoggerObjectBatch,
@@ -30,7 +32,7 @@ export function splitLoggerBatch(
     // Envelope allowance: the `{ logs: [...], app, meta }` wrapper plus a fresh
     // meta object. Reserve room so a full-byte chunk still fits after wrapping.
     const envelopeBytes = maxBytes
-        ? JSON.stringify({ logs: [], app: batch.app, meta: {} }).length + 256
+        ? JSON.stringify({ logs: [], app: batch.app, resource: batch.resource, meta: batch.meta }).length + 256
         : 0
     const byteBudget = maxBytes ? Math.max(0, maxBytes - envelopeBytes) : 0
 
@@ -40,7 +42,7 @@ export function splitLoggerBatch(
 
     const flush = () => {
         if (current.length === 0) return
-        chunks.push({ logs: current, app: batch.app })
+        chunks.push({ logs: current, app: batch.app, resource: batch.resource, meta: batch.meta })
         current = []
         currentBytes = 0
     }

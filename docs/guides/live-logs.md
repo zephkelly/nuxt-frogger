@@ -56,15 +56,13 @@ Every filter is chainable. Combine as many as you like — they're ANDed togethe
 | `.levels(levels)` | Log levels (numbers or names) | `.levels([0, 1])` / `.levels(['error', 'warn'])` |
 | `.type(types)` | Log type(s) | `.type(['error', 'fatal'])` |
 | `.sources(sources)` | Source app name(s) | `.sources(['my-api'])` |
-| `.tags(tags)` | Log tags | `.tags(['checkout'])` |
-| `.filters(obj)` | Several at once | `.filters({ level: [0, 1], tags: ['auth'] })` |
+| `.filters(obj)` | Several at once | `.filters({ level: [0, 1], source: ['api'] })` |
 
 ```ts
 const socket = useFroggerWebSocket()
     .channel('main')
     .levels(['error', 'warn'])     // only errors and warnings
     .sources(['checkout-service']) // from one app
-    .tags(['payment'])
     .onMessage((ws, message) => { /* ... */ })
     .connect()
 ```
@@ -137,7 +135,7 @@ useFroggerWebSocket()
 
 The live-stream is off by default. Turn it on with `websocket: true` (sensible defaults) or
 the [`full` preset](../configuration.md#presets). Passing an object both enables it and
-configures the route and limits under the `websocket` module option:
+configures the route under the `websocket` module option:
 
 ```ts
 export default defineNuxtConfig({
@@ -148,12 +146,17 @@ export default defineNuxtConfig({
             defaultChannel: 'main',
             // Gate who may open the socket (return false to reject):
             upgrade: (request) => true,
-            maxConcurrentQueries: 10,
-            maxQueryResults: 1000,
-            defaultQueryTimeout: 30000,
         },
     },
 })
 ```
+
+::: info Bursts are coalesced, not dropped
+Each channel is throttled to one frame per 100 ms. Logs arriving inside that
+window are buffered and replayed on the next boundary rather than discarded, so
+a burst arrives late rather than not at all. Past 500 buffered rows the oldest
+are dropped and counted in `getStatus().droppedRows` — a live tail is more
+useful showing the newest lines.
+:::
 
 See the [Configuration](/configuration) page for the full `websocket` option reference.

@@ -1,6 +1,7 @@
 import type { Metric } from 'web-vitals'
 
 import type { MetricObject } from '../../shared/types/metric'
+import { uuidv7 } from '../../../shared/utils/uuid'
 
 /**
  * Web Vitals collector. `web-vitals` touches browser globals at import, so the
@@ -51,6 +52,7 @@ export function webVitalToMetric(metric: Metric, stamp: WebVitalStamp = {}): Met
     }
 
     return {
+        id: uuidv7(),
         time: stamp.time ?? Date.now(),
         name: spec.name,
         kind: 'gauge',
@@ -65,12 +67,47 @@ export function webVitalToMetric(metric: Metric, stamp: WebVitalStamp = {}): Met
             id: metric.id,
             delta: spec.toBase(metric.delta),
             navigationType: metric.navigationType,
+            // Attribution detail when the attribution build is loaded. `attr`
+            // is NOT indexed, so an element selector here costs nothing in
+            // series count - which is what the labels/attr split is for.
+            ...flattenAttribution(metric),
         },
     }
 }
 
+/**
+ * Flatten `web-vitals/attribution`'s nested attribution object into scalar
+ * `attr` entries. Only scalars survive: an attribution object can contain live
+ * DOM nodes and PerformanceEntry instances, neither of which belongs on the wire.
+ */
+function flattenAttribution(metric: Metric): Record<string, string | number | boolean> {
+    const attribution = (metric as Metric & { attribution?: Record<string, unknown> }).attribution
+    if (!attribution) return {}
+
+    const flat: Record<string, string | number | boolean> = {}
+    for (const [key, value] of Object.entries(attribution)) {
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            flat[`attribution.${key}`] = value
+        }
+        else if (typeof value === 'string') {
+            flat[`attribution.${key}`] = value.slice(0, 512)
+        }
+    }
+
+    return flat
+}
+
 export interface WebVitalsCollectorOptions {
     reportAllChanges?: boolean
+    /**
+     * Load the `web-vitals/attribution` build, which reports WHY a vital was
+     * what it was: the LCP element, and how the time split across TTFB,
+     * resource load and render delay.
+     *
+     * Only the import string differs, and the extra detail goes into the
+     * non-indexed `attr` slot, so it costs no cardinality.
+     */
+    attribution?: boolean
 }
 
 /**
@@ -88,7 +125,11 @@ export async function registerWebVitals(
     onMetric: (metric: MetricObject) => void,
     resolveStamp: () => WebVitalStamp,
 ): Promise<void> {
-    const { onLCP, onCLS, onINP, onFCP, onTTFB } = await import('web-vitals')
+    // Two entry points of the SAME dependency; only the import string differs,
+    // so the attribution build is opted into without a second package.
+    const { onLCP, onCLS, onINP, onFCP, onTTFB } = options.attribution
+        ? await import('web-vitals/attribution')
+        : await import('web-vitals')
 
     const opts = { reportAllChanges: options.reportAllChanges ?? false }
     const handler = (metric: Metric) => {

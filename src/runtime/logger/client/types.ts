@@ -7,10 +7,14 @@ import type { LogContext } from "../../shared/types/log";
 
 export interface ClientLoggerOptions extends FroggerOptions {
     /**
-     * API endpoint to send logs to
-     * @default '/api/_logger/logs'
+     * Ingest route the browser POSTs to. `false` when the client POST is
+     * deliberately disabled (`public.endpoint: false`), which is a real
+     * resolved value, not an absent one - `hasPrimaryLogSink` treats it as
+     * "no primary sink" while client transports still fan out.
+     *
+     * @default '/api/_frogger/logs'
      */
-    endpoint?: string;
+    endpoint?: string | false;
 
     baseUrl?: string;
 }

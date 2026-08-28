@@ -32,6 +32,20 @@ export class WebSocketTransport implements IFroggerTransport {
     private readonly MESSAGE_RATE_LIMIT = 100;
     private lastMessageTimes: Map<string, number> = new Map();
 
+    /**
+     * Rows held back by the per-channel throttle, replayed on the next
+     * boundary. The throttle used to `continue` past a whole batch, so a burst
+     * of logs was silently discarded rather than delayed - in the one
+     * subsystem whose entire job is showing the developer their logs.
+     */
+    private pending: Map<string, { logs: LoggerObject[]; dropped: number; timer: ReturnType<typeof setTimeout> | null }> = new Map();
+
+    /** Per-channel coalescing buffer ceiling; beyond it the OLDEST rows go. */
+    private readonly MAX_PENDING_ROWS = 500;
+
+    /** Rows dropped because a channel's coalescing buffer was full. */
+    private droppedRows = 0;
+
     private constructor(storage: IWebSocketStateStorage | null) {
         this.transportId = `websocket-reporter-${Date.now()}`;
         this.state = storage;
@@ -151,6 +165,11 @@ export class WebSocketTransport implements IFroggerTransport {
             this.channels.clear();
             this.subscriptions.clear();
             this.lastMessageTimes.clear();
+
+            for (const entry of this.pending.values()) {
+                if (entry.timer) clearTimeout(entry.timer);
+            }
+            this.pending.clear();
         }
         catch (error) {
             froggerInternal.error('WebSocketTransport: Error during shutdown:', error);
@@ -166,12 +185,15 @@ export class WebSocketTransport implements IFroggerTransport {
         try {
             const persistPromises: Promise<void>[] = [];
 
+            // Channel metadata only. `subscribers` is a live `Map<string, Peer>`
+            // of open sockets: it JSON-serialises to `{}`, is meaningless in
+            // another process, and was never read back by loadPersistedData.
             for (const [channelId, channel] of this.channels.entries()) {
                 const persistedChannel: PersistedChannel = {
                     channel_uuid: channel.channel_uuid,
                     created_at: channel.created_at,
                     last_activity: channel.last_activity,
-                    subscribers: channel.subscribers
+                    subscribers: new Map()
                 };
 
                 persistPromises.push(this.state.setChannel(channelId, persistedChannel));
@@ -315,62 +337,6 @@ export class WebSocketTransport implements IFroggerTransport {
         }
     }
 
-    public async reconnectSubscription(peer: Peer): Promise<boolean> {
-        if (!this.state) {
-            froggerInternal.warn('WebSocketTransport: Storage not available for reconnection');
-            return false;
-        }
-
-        try {
-            await this.ensurePersistedDataLoaded();
-
-            const persistedSubscription = await this.state.getSubscription(peer.id);
-
-            if (!persistedSubscription) {
-                return false;
-            }
-
-            const subscription: PersistedSubscription = {
-                peer_id: persistedSubscription.peer_id,
-                channels: persistedSubscription.channels,
-                filters: persistedSubscription.filters,
-                subscribed_at: persistedSubscription.subscribed_at,
-                last_activity: new Date().getTime()
-            };
-
-            this.subscriptions.set(peer.id, subscription);
-
-            for (const channelId of subscription.channels) {
-                let channel = this.channels.get(channelId);
-
-                if (!channel) {
-                    channel = await this.createChannel(channelId);
-                }
-
-                channel.subscribers.set(peer.id, peer);
-                channel.last_activity = new Date().getTime();
-            }
-
-            try {
-                await Promise.all([
-                    this.state.updateSubscriptionActivity(peer.id),
-                    ...subscription.channels.map(channelId =>
-                        this.state!.updateChannelActivity(channelId)
-                    )
-                ]);
-            }
-            catch (error) {
-                froggerInternal.error(`WebSocketTransport: Failed to update activities for reconnected admin ${peer.id}:`, error);
-            }
-
-            return true;
-        }
-        catch (error) {
-            froggerInternal.error('WebSocketTransport: Error reconnecting admin:', error);
-            return false;
-        }
-    }
-
     public async removeSubscription(peerId: string): Promise<void> {
         try {
             const subscription = this.subscriptions.get(peerId);
@@ -437,16 +403,11 @@ export class WebSocketTransport implements IFroggerTransport {
             }
 
             if (!this.shouldSendMessage(channelId)) {
+                this.holdForNextWindow(channelId, logs);
                 continue;
             }
 
             channel.last_activity = new Date().getTime();
-
-            if (this.state && Math.random() < 0.1) {
-                this.state.updateChannelActivity(channelId).catch((error: unknown) => {
-                    froggerInternal.error(`WebSocketTransport: Failed to update channel activity:`, error);
-                });
-            }
 
             const subscriberGroups = this.groupSubscribersByFilters(channel);
 
@@ -554,9 +515,6 @@ export class WebSocketTransport implements IFroggerTransport {
             parts.push(`source:${filters.source.sort().join(',')}`);
         }
 
-        if (filters.tags && filters.tags.length > 0) {
-            parts.push(`tags:${filters.tags.sort().join(',')}`);
-        }
 
         return parts.length > 0 ? parts.join('|') : 'no-filter';
     }
@@ -641,17 +599,59 @@ export class WebSocketTransport implements IFroggerTransport {
             }
         }
 
-        if (filters.tags && filters.tags.length > 0) {
-            const logTags = logObj.tags || [];
-            const hasMatchingTag = filters.tags.some(filterTag =>
-                logTags.includes(filterTag)
-            );
-            if (!hasMatchingTag) {
-                return false;
-            }
+        return true;
+    }
+
+    /**
+     * Hold rows the throttle just rejected and schedule one replay at the next
+     * window boundary, so a burst arrives late rather than not at all. Past
+     * {@link MAX_PENDING_ROWS} the OLDEST rows are discarded and counted - a
+     * live tail is more useful showing the newest lines plus a gap marker than
+     * the start of a burst nobody is still looking at.
+     */
+    private holdForNextWindow(channelId: string, logs: LoggerObject[]): void {
+        let entry = this.pending.get(channelId);
+        if (!entry) {
+            entry = { logs: [], dropped: 0, timer: null };
+            this.pending.set(channelId, entry);
         }
 
-        return true;
+        entry.logs.push(...logs);
+
+        if (entry.logs.length > this.MAX_PENDING_ROWS) {
+            const overflow = entry.logs.length - this.MAX_PENDING_ROWS;
+            entry.logs.splice(0, overflow);
+            entry.dropped += overflow;
+            this.droppedRows += overflow;
+        }
+
+        if (entry.timer) return;
+
+        const lastTime = this.lastMessageTimes.get(channelId) || 0;
+        const wait = Math.max(0, this.MESSAGE_RATE_LIMIT - (Date.now() - lastTime));
+
+        entry.timer = setTimeout(() => {
+            entry!.timer = null;
+            this.flushPending(channelId);
+        }, wait);
+
+        // A replay must never keep a Node process alive on its own.
+        (entry.timer as unknown as { unref?: () => void }).unref?.();
+    }
+
+    /** Replay one channel's coalesced rows as a single frame. */
+    private flushPending(channelId: string): void {
+        const entry = this.pending.get(channelId);
+        if (!entry || entry.logs.length === 0) return;
+
+        const logs = entry.logs;
+        entry.logs = [];
+        entry.dropped = 0;
+        this.pending.delete(channelId);
+
+        this.broadcastLogBatch(logs).catch(error => {
+            froggerInternal.error('WebSocketTransport: Error replaying coalesced logs:', error);
+        });
     }
 
     private shouldSendMessage(channelId: string): boolean {
@@ -781,6 +781,9 @@ export class WebSocketTransport implements IFroggerTransport {
         }>;
         rateLimitEntries: number;
         orphanedRateLimits: number;
+        pendingChannels: number;
+        pendingRows: number;
+        droppedRows: number;
     }> {
         const channelDetails = Array.from(this.channels.values()).map(channel => ({
             uuid: channel.channel_uuid,
@@ -817,6 +820,9 @@ export class WebSocketTransport implements IFroggerTransport {
             activeSubscriptions: this.subscriptions.size,
             state: stateStats,
             channelDetails,
+            pendingChannels: this.pending.size,
+            pendingRows: Array.from(this.pending.values()).reduce((sum, e) => sum + e.logs.length, 0),
+            droppedRows: this.droppedRows,
             rateLimitEntries: this.lastMessageTimes.size,
             orphanedRateLimits
         };
@@ -874,9 +880,6 @@ export class WebSocketTransport implements IFroggerTransport {
             parts.push(`Sources: ${filters.source.join(', ')}`);
         }
 
-        if (filters.tags && filters.tags.length > 0) {
-            parts.push(`Tags: ${filters.tags.join(', ')}`);
-        }
 
         return parts.length > 0 ? parts.join(' | ') : 'No filters (all logs)';
     }

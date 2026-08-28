@@ -7,7 +7,6 @@ export interface SubscriptionFilter {
     level?: LogLevelInput | LogLevelInput[];
     type?: LogType | LogType[];
     source?: string[];
-    tags?: string[];
 }
 
 export interface PersistedChannel {

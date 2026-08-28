@@ -1,10 +1,11 @@
 import type { H3Event } from 'h3'
-import { useRuntimeConfig } from '#imports'
+import { useFroggerConfig } from '../../shared/utils/use-frogger-config'
 import { useEvent } from 'nitropack/runtime/internal/context'
 
 import { ServerFroggerLogger } from '../../logger/server'
 import { createAmbientFrogger } from '../../logger/ambient'
 import { getActiveLogger } from '../../logger/active-context.server'
+import { adoptInboundTracestate, adoptRequestSession } from './get-frogger'
 import type { FroggerAmbient } from '../../logger/ambient'
 
 import type { IFroggerLogger } from '../../logger/types'
@@ -16,27 +17,29 @@ import type { ServerLoggerOptions } from '../types/logger'
 let fallbackLogger: IFroggerLogger | null = null
 
 function buildServerLogger(event?: H3Event): IFroggerLogger {
-    const config = useRuntimeConfig()
+    const config = useFroggerConfig()
 
     const froggerOptions = {
-        //@ts-ignore
-        batch: config.public.frogger.batch,
-        //@ts-ignore
-        endpoint: config.public.frogger.endpoint,
+        batch: config.batch,
+        endpoint: config.endpoint,
         // Static boot-context from `frogger.config.ts`, applied to the ambient
         // server logger to match the client. Dynamic per-request context still
         // comes from the event/trace scope.
-        //@ts-ignore
-        context: config.public.frogger.context,
+        context: config.context,
     } as ServerLoggerOptions
 
     // event.context.frogger is populated by the trace-headers server plugin from
     // the incoming traceparent, so the first server log continues the client trace.
     const traceContext = event?.context?.frogger as TraceContext | undefined
 
-    return traceContext
-        ? new ServerFroggerLogger(froggerOptions, traceContext)
-        : new ServerFroggerLogger(froggerOptions)
+    if (!traceContext) {
+        return new ServerFroggerLogger(froggerOptions)
+    }
+
+    const logger = new ServerFroggerLogger(froggerOptions, traceContext)
+    adoptInboundTracestate(logger, event)
+    adoptRequestSession(logger, event)
+    return logger
 }
 
 function getAmbientServerLogger(): IFroggerLogger {

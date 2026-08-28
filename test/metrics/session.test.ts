@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { decideSampled, parseSession } from '../../src/runtime/metrics/app/session'
+import { decideSampled, parseSession } from '../../src/runtime/shared/session'
 
 describe('decideSampled', () => {
     it('rate >= 1 always samples, regardless of the draw', () => {

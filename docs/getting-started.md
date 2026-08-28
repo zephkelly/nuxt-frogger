@@ -96,20 +96,32 @@ Frogger is opinionated about the structure of its logs to ensure consistency and
 
 ``` ts
 export interface LoggerObject {
-    time: number;
-    lvl: number;
+    id: string;                  // uuidv7 — dedupe and sort key
+    time: number;                // epoch ms, as the emitter claimed
+    obsTime?: number;            // epoch ms, as the collector observed
+    lvl: number;                 // frogger level — LOWER is more important
+    sev: number;                 // OTel SeverityNumber — HIGHER is more serious
     type: LogType;
+    kind?: 'event';              // set by frogger.event()
     msg: string;
     ctx: LogContext;
-    tags?: string[];
     env: 'ssr' | 'csr' | 'client' | 'server';
+    session?: { id: string; sampled: boolean };
+    user?: string;
+    route?: string;
     source?: {
         name: string;
         version: string;
     };
+    resource?: Record<string, string>;
     trace: TraceContext;
 }
 ```
+
+`session`, `user` and `route` are top-level fields, not `ctx` keys, and are
+**never scrubbed** — they are the index keys a backend joins on. `ctx` is
+user-owned and *is* scrubbed. The full contract is in the
+[wire format reference](/reference/wire-format).
 The fields we are most interested in for now are `msg` and `ctx`.
 
 ### - `msg` 
@@ -156,7 +168,6 @@ logger.info('User logged in',
         userName: 'john_doe',
         sessionId: 'abcde-12345-fghij-67890',
     },
-    tags: [],
     env: 'csr',
     source: {
         name: 'my-nuxt-app',
@@ -164,7 +175,7 @@ logger.info('User logged in',
     },
     trace: {
         traceId: '123e4567-e89b-12d3-a456-426614174000',
-        parentId: '123e4567-e89b-12d3-a456-426614174001',
+        parentSpanId: '123e4567-e89b-12d3-a456-426614174001',
         spanId: '123e4567-e89b-12d3-a456-426614174002',
         flags: []
     },
@@ -535,7 +546,7 @@ await frogger.span('processOrder', async () => {
 });
 ```
 
-The span name is recorded on each log's context as `ctx.span`, and each log's `parentId` chains under the enclosing span — so the whole operation reads as one tree in your log output.
+The span name is recorded on each log's context as `ctx.span`. Every log emitted inside the span shares one `trace.spanId`, and that span's `trace.parentSpanId` names the span that created it — so the whole operation reads as one tree, and "the logs inside this span" is a single predicate.
 
 Spans nest: a `span()` opened inside another becomes its child. Calls to `getFrogger()` inside a span continue the tree too, instead of starting a new branch from the request root.
 

@@ -15,7 +15,8 @@ import { configureInternalLog, type InternalLogLevel } from '../../shared/utils/
  * Responsibilities:
  *  - configure Frogger's internal diagnostics level,
  *  - track `app:mounted` so client logs are tagged `client` vs `csr`,
- *  - flush any buffered batch on page hide so navigating away never drops logs.
+ *  - drain any buffered batch on page exit (beacon / keepalive) so navigating
+ *    away never drops logs.
  */
 export default defineNuxtPlugin({
     name: 'frogger:log-queue',
@@ -32,10 +33,35 @@ export default defineNuxtPlugin({
         });
 
         if (import.meta.client && typeof window !== 'undefined') {
-            // `pagehide` fires on both navigation and tab close and is the
-            // reliable last chance to drain buffered logs before unload.
-            window.addEventListener('pagehide', () => {
-                void getLogQueue(nuxtApp as Record<string, any>).flush();
+            // `visibilitychange -> hidden` is the primary exit signal: it is
+            // the only one that reliably fires on mobile Safari and Chrome.
+            // `pagehide` is the secondary net for desktop navigation and tab
+            // close. `exitFlush` is idempotent, so both firing sends once.
+            const drain = () => {
+                try {
+                    getLogQueue(nuxtApp as Record<string, any>).exitFlush();
+                }
+                catch {
+                    // The page is unloading; there is nothing left to recover to.
+                }
+            };
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') drain();
+            });
+            window.addEventListener('pagehide', drain);
+
+            // A bfcache restore is not an exit after all: re-arm so the next
+            // real exit still drains.
+            window.addEventListener('pageshow', (event) => {
+                if ((event as PageTransitionEvent).persisted) {
+                    try {
+                        getLogQueue(nuxtApp as Record<string, any>).resumeAfterExit();
+                    }
+                    catch {
+                        // Queue not resolvable yet: nothing was buffered anyway.
+                    }
+                }
             });
         }
     },

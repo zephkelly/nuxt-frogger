@@ -1,38 +1,102 @@
-# Transports & HttpTransport
+# Transports
 
-Once a log reaches the server it's handed to one or more **transports** — the things that
-actually persist or forward it. Frogger ships with a file transport (the default sink) and an
-`HttpTransport` for forwarding elsewhere. On the logger side, **reporters** let you fan out logs
-to anywhere you like.
+Once a log reaches the server it's handed to zero or more **transports** — the things that
+actually persist or forward it.
 
-## File transport (the default)
+::: warning A bare install writes no files
+Frogger is quiet by default: with no `transports` configured, logs reach the **console only**.
+Nothing is written to disk and nothing is forwarded. Persistence is always something you ask
+for, by adding an entry to `transports`.
+:::
 
-By default, every ingested log is appended as a line of JSON to a rotated log file:
+```ts
+// frogger.config.ts
+import { defineFroggerOptions, fileTransport } from '#frogger/config'
+
+export default defineFroggerOptions({
+    transports: [
+        fileTransport(),
+    ],
+})
+```
+
+## Choosing a transport
+
+| Factory | Where it writes | Use it when |
+| --- | --- | --- |
+| `fileTransport()` | Rotated JSON-lines on the server's disk | You run on a long-lived Node process with a writable filesystem |
+| `stdoutTransport()` | JSON-lines to fd 1 | Anywhere — including edge and serverless. Every platform's log collector already reads stdout |
+| `httpTransport()` | Any HTTP ingest endpoint | You have a log backend of your own, or want OTLP |
+| `observeTransport()` | A nuxt-observe deployment | You use nuxt-observe |
+| `memoryTransport()` | An in-process array | Tests |
+
+::: tip No writable disk?
+`fileTransport()` needs a long-lived process and a writable filesystem. On an edge or serverless
+preset the build **fails** with a message pointing here, rather than failing at the first write.
+Use `stdoutTransport()` or `httpTransport()` there.
+:::
+
+## File transport
+
+`fileTransport()` appends each log as a line of JSON to a rotated file:
 
 ```bash
 logs/2026-06-26.log     # one JSON object per line (JSON-lines)
 ```
 
 - **Date rotation** — a new file per day, named by `fileNameFormat` (default `YYYY-MM-DD.log`).
-- **Size rotation** — when a file passes `maxSize` (default 10 MB) it's rotated.
+- **Size rotation** — when a file passes `maxSize` (default 10 MB) it's rotated aside.
 - **Buffered writes** — logs are buffered and flushed on an interval for throughput, controlled
   by `flushInterval`, `bufferMaxSize`, and `highWaterMark`.
 
 ```ts
 // frogger.config.ts
-import { defineFroggerOptions } from '#frogger/config'
+import { defineFroggerOptions, fileTransport } from '#frogger/config'
 
 export default defineFroggerOptions({
-    file: {
-        directory: 'logs',            // where files are written (resolved at build time)
-        fileNameFormat: 'YYYY-MM-DD.log',
-        maxSize: 10 * 1024 * 1024,    // 10 MB
-        flushInterval: 1000,          // ms
-        bufferMaxSize: 1 * 1024 * 1024,
-        highWaterMark: 64 * 1024,
-    },
+    transports: [
+        fileTransport({
+            directory: 'logs',            // where files are written
+            fileNameFormat: 'YYYY-MM-DD.log',
+            maxSize: 10 * 1024 * 1024,    // 10 MB
+            flushInterval: 1000,          // ms
+            bufferMaxSize: 1 * 1024 * 1024,
+            highWaterMark: 64 * 1024,
+        }),
+    ],
 })
 ```
+
+If the filesystem refuses writes (disk full, read-only mount, no permission), the transport
+**degrades**: it stops buffering, prints one unconditional error, and the rest of your pipeline
+carries on. It never grows a buffer that can no longer drain.
+
+## Stdout transport
+
+```ts
+transports: [stdoutTransport()]
+```
+
+JSON-lines to file descriptor 1. No configuration, no infrastructure, and it works on every
+Nitro preset including edge. Vector, Fluent Bit, Promtail, Docker and every hosting platform's
+own log view already read stdout.
+
+This is a different thing from `consoleOutput`, which is human-formatted output for a developer
+watching a terminal. This is machine-readable output for a collector.
+
+## Per-destination levels
+
+Every transport accepts `minLevel`, a severity threshold for that destination alone:
+
+```ts
+transports: [
+    fileTransport(),                                  // everything
+    httpTransport({ url: '...', minLevel: 'warn' }),  // warn and above only
+]
+```
+
+This composes with the module-wide `level`: the logger decides what a record even is, and each
+destination decides what it wants.
 
 ::: info Reading logs in production
 There is no built-in query API or viewer for production — logs are plain JSON-lines files on

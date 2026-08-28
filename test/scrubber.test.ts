@@ -8,8 +8,10 @@ import type { LoggerObject } from './../src/runtime/shared/types/log';
 
 function makeLog(ctx: Record<string, any>): LoggerObject {
     return {
+        id: 'fixture-id',
         time: 1_700_000_000_000,
         lvl: 3,
+        sev: 9,
         type: 'info',
         msg: 'test',
         ctx,

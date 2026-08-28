@@ -2,15 +2,17 @@ import type { LogObject } from 'consola/basic';
 
 import { BaseFroggerLogger } from '../base-frogger';
 import type { ServerLoggerOptions } from '../../server/types/logger';
-import { SCRUB_HANDLED } from '../../shared/types/log';
+import { SCRUB_HANDLED, levelOf, severityOf } from '../../shared/types/log';
+import { eventKind } from '../../shared/utils/event-kind';
 import type { LoggerObject, LogContext } from '../../shared/types/log';
 import { ServerLogQueueService } from '../../server/services/server-log-queue';
 import { parseAppInfoConfig } from '../../app-info/parse';
+import { uuidv7 } from '../../shared/utils/uuid';
 
 import type { TraceContext } from '../../shared/types/trace-headers';
 
 import { defu } from 'defu';
-import { useRuntimeConfig } from '#imports';
+import { useFroggerConfig } from '../../shared/utils/use-frogger-config';
 import { froggerInternal } from '../../shared/utils/internal-log';
 import { normalizeContextErrors } from '../../shared/utils/normalize-errors';
 import { runSpanWithEvent, type SpanOptions } from '../../shared/utils/span-events';
@@ -28,10 +30,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         super(options);
         this.options = options;
 
-        //@ts-ignore
-        const config = useRuntimeConfig();
-        //@ts-ignore
-        const { isSet, name, version } = parseAppInfoConfig(config?.public?.frogger?.app);
+        const { isSet, name, version } = parseAppInfoConfig(useFroggerConfig().app);
 
         this.appInfo = isSet ? { 
             name: name,
@@ -40,6 +39,13 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
 
         this.logQueue = ServerLogQueueService.getInstance();
         this.traceContext = traceContext;
+
+        // Adopt the inbound decision immediately: a request that logs nothing
+        // itself but issues an outbound call must still propagate the flags it
+        // was given, and `getHeaders()` can run before the first row exists.
+        if (traceContext?.flags) {
+            this.traceFlags = traceContext.flags;
+        }
     }
 
     protected override getConsoleScope(): 'client' | 'server' {
@@ -64,8 +70,12 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         }
         
         const loggerObject: LoggerObject = {
+            id: uuidv7(),
             time: logObj.date.getTime(),
-            lvl: logObj.level,
+            // Derived from `type`, never copied off consola's LogObject: consola
+            // uses ±Infinity for silent/verbose, which JSON-serialise to null.
+            lvl: levelOf(logObj.type),
+            sev: severityOf(logObj.type),
             type: logObj.type,
             msg: logObj.args?.[0],
             // Errors in ctx are flattened to JSON-safe objects here, or their
@@ -81,6 +91,8 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
                 version: this.appInfo?.version || 'unknown',
             } : undefined,
             trace: currentTraceContext,
+            ...this.correlationFields(),
+            ...eventKind(logObj.args?.slice(1)[0]),
         };
 
         return loggerObject;
@@ -104,7 +116,7 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
 
 
     private createChild(options: ServerLoggerOptions, reactive: boolean): ServerFroggerLogger {
-        const { traceId, parentSpanId } = this.createChildTraceContext();
+        const { traceId, parentSpanId, flags } = this.createChildTraceContext();
         const childContext = this.createChildContext(reactive);
 
         const childOptions: ServerLoggerOptions = {
@@ -121,10 +133,14 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
                 : (defu(options.context, childContext) as LogContext),
         };
 
+        // The child is a NEW span parented under this logger's stable span.
+        // `spanId` is left to the child's own constructor: seeding it with the
+        // parent's id is what made a child indistinguishable from its parent.
         const childTraceContext: TraceContext = {
             traceId: traceId,
-            parentId: parentSpanId || undefined,
-            spanId: parentSpanId  as string
+            parentSpanId: parentSpanId,
+            spanId: '',
+            flags,
         };
 
         const child = new ServerFroggerLogger(childOptions, childTraceContext);
@@ -133,7 +149,8 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
         // grandchild created before the child's first log (e.g. a nested span
         // opened right away) stays on the same trace instead of branching
         // onto the child's fresh random trace ID.
-        child.setTraceContext(traceId, parentSpanId);
+        child.setTraceContext(traceId, parentSpanId, flags);
+        this.inheritCorrelation(child);
 
         if (reactive) {
             child.parentGlobalContext = this.globalContext;
@@ -160,6 +177,6 @@ export class ServerFroggerLogger extends BaseFroggerLogger {
 
     public span<T>(name: string, fn: () => T | Promise<T>, options?: SpanOptions): Promise<T> {
         const child = this.startSpan(name);
-        return runSpanWithEvent(child, name, this.spanEvents, () => runWithLogger(child, fn), this.spanMetricEnd(name, options));
+        return runSpanWithEvent(child, name, this.spanEvents, () => runWithLogger(child, fn), this.spanMetricEnd(name, options), options);
     }
 }

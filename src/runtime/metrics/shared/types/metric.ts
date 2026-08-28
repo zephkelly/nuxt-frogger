@@ -1,4 +1,5 @@
 import type { MetricContext } from './metric-batch'
+import type { FroggerResource } from '../../../shared/types/resource'
 
 /**
  * The metrics subsystem's raw event type. Deliberately shares ZERO types with
@@ -23,6 +24,13 @@ export type MetricKind = 'counter' | 'gauge' | 'histogram'
 export type MetricLabels = Record<string, string | number | boolean>
 
 export interface MetricObject {
+    /**
+     * uuidv7, minted where the point is constructed and preserved across relay
+     * hops. Time-ordered, so it doubles as a sort and dedupe key for a batch
+     * retried after a lost response.
+     */
+    id: string
+
     /** Epoch milliseconds the measurement was taken. */
     time: number
 
@@ -83,6 +91,12 @@ export interface MetricObject {
      * best-effort link, never a foreign key.
      */
     trace?: { traceId: string; spanId?: string }
+
+    /**
+     * Deployment identity, denormalised from the batch envelope at ingest like
+     * {@link context}.
+     */
+    resource?: FroggerResource
 
     /**
      * Non-indexed detail: high-cardinality fields carried for a single event

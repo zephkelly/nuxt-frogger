@@ -36,6 +36,16 @@ export interface FroggerAmbient {
 
     // Pass-throughs to the underlying logger -----------------------------
     getHeaders(customVendor?: string): Record<string, string>
+    /**
+     * Attach the acting user to every subsequent row in this scope. See
+     * {@link IFroggerLogger.identify}.
+     */
+    identify(user: string | { id: string, [key: string]: unknown } | null): void
+    /**
+     * Record a business fact (`frogger.event('order.placed', { orderId })`).
+     * See {@link IFroggerLogger.event}.
+     */
+    event(name: string, attributes?: Record<string, unknown>): void
     addContext(context: object, options?: AddContextOptions): void
     setContext(context: object): void
     clearContext(): void
@@ -89,6 +99,8 @@ export function createAmbientFrogger(resolve: () => IFroggerLogger): FroggerAmbi
     }
 
     facade.getHeaders = (customVendor?: string) => resolve().getHeaders(customVendor)
+    facade.identify = (user: string | { id: string, [key: string]: unknown } | null) => resolve().identify(user)
+    facade.event = (name: string, attributes?: Record<string, unknown>) => resolve().event(name, attributes)
     facade.addContext = (context: object, options?: AddContextOptions) => resolve().addContext(context, options)
     facade.setContext = (context: object) => resolve().setContext(context)
     facade.clearContext = () => resolve().clearContext()

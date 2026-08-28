@@ -119,19 +119,15 @@ describe('WebSocketLogHandler', () => {
             );
         });
 
-        it('should handle connection with tag filters', async () => {
+        // `tags` was removed in 0.2.0: the LoggerObject field it filtered on
+        // was set by no code path, so the filter matched nothing.
+        it('should subscribe without filters when only a tags parameter is given', async () => {
             const url = 'ws://localhost:3000/ws?channel=test-channel&tags=critical,security';
             const peer = createMockPeer('peer-5', url);
 
             await handler.handleOpen(peer);
 
-            expect(mockTransport.subscribe).toHaveBeenCalledWith(
-                peer,
-                'test-channel',
-                expect.objectContaining({
-                    tags: ['critical', 'security'],
-                })
-            );
+            expect(mockTransport.subscribe).toHaveBeenCalledWith(peer, 'test-channel', undefined);
         });
 
         it('should close connection if channel parameter is missing', async () => {
@@ -521,14 +517,16 @@ describe('WebSocketLogHandler', () => {
             expect(params.filters?.source).toEqual(['api', 'db']);
         });
 
-        it('should extract multiple tag filters', () => {
+        // `tags` was removed in 0.2.0: the field it filtered on was set by no
+        // code path, so the filter silently matched nothing.
+        it('should ignore a tags parameter, which no longer exists', () => {
             const peer = createMockPeer(
                 'peer-5',
                 'ws://localhost:3000/ws?channel=test&tags=critical,security'
             );
             const params = handler.extractParams(peer);
 
-            expect(params.filters?.tags).toEqual(['critical', 'security']);
+            expect(params.filters).toBeUndefined();
         });
 
         it('should handle missing URL with empty string fallback', () => {

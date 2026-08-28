@@ -1,4 +1,11 @@
 import type { MetricObject } from './metric'
+import type { FroggerResource } from '../../../shared/types/resource'
+
+/**
+ * Wire-format version of the metric envelope. Bumped only on a field removal
+ * or a semantic change; additive fields do not bump it.
+ */
+export const METRIC_BATCH_SCHEMA = 'frogger.metrics/1' as const
 
 /**
  * Device / network / viewport envelope, collected and transmitted ONCE per
@@ -49,11 +56,18 @@ export interface MetricObjectBatch {
     /** Acting user, denormalised onto points at ingest like {@link context}. */
     user?: string
 
+    /** Deployment identity, denormalised onto points at ingest like {@link context}. */
+    resource?: FroggerResource
+
     /** Same loop-detection convention as the log pipeline. */
     meta?: {
+        /** Wire-format version, see {@link METRIC_BATCH_SCHEMA}. */
+        schema?: string
         processed?: true
         processChain?: string[]
         source?: string
         time?: number
+        /** Server-authoritative receipt facts, stamped by the ingest route. */
+        received?: { at: number; ip?: string }
     }
 }

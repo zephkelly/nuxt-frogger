@@ -1,9 +1,42 @@
+import { DEFAULT_VALUE_PATTERNS, scrubStringValue, type ValuePattern } from './value-patterns';
 import type { LoggerObject } from "../shared/types/log";
 import { type ScrubberConfig, type ScrubRule, type ScrubResult, type FieldPattern } from "./types";
 import { applyStrategy } from "./strategies";
 
 import { defu } from "defu";
 
+
+/**
+ * Convert a container the scrubber cannot see inside into one it can.
+ *
+ * `Object.entries` returns `[]` for `Map`, `Set` and `Headers`, so the generic
+ * object branch found nothing to scrub and passed the instance through by
+ * reference. This is the mechanism behind the unredacted-headers leak.
+ *
+ * Other class instances are deliberately left alone and returned `null`:
+ * walking an arbitrary class is how a scrubber ends up serialising a database
+ * connection into a log row. That is now an explicit decision rather than an
+ * accident of `Object.entries`.
+ */
+function toScrubbableContainer(value: object): { plain: unknown } | null {
+    if (typeof Headers !== 'undefined' && value instanceof Headers) {
+        const plain: Record<string, string> = {}
+        for (const [key, entry] of (value as Headers).entries()) plain[key] = entry
+        return { plain }
+    }
+
+    if (value instanceof Map) {
+        const plain: Record<string, unknown> = {}
+        for (const [key, entry] of value.entries()) plain[String(key)] = entry
+        return { plain }
+    }
+
+    if (value instanceof Set) {
+        return { plain: Array.from(value) }
+    }
+
+    return null
+}
 
 export class LogScrubber {
     private config: ScrubberConfig;
@@ -12,6 +45,12 @@ export class LogScrubber {
     private scrubStats: { totalProcessed: number; totalScrubbed: number };
     private fieldRuleCache: Map<string, ScrubRule | null>;
     private readonly MAX_CACHE_SIZE = 1000;
+
+    /**
+     * Value-shape patterns, or `null` when off (the default). Resolved once so
+     * the hot path is a null check rather than an option lookup.
+     */
+    private valuePatterns: ValuePattern[] | null = null;
 
     constructor(config: Partial<ScrubberConfig> = {}) {
         // No default rules: scrubbing is fully opt-in. An enabled scrubber with
@@ -24,6 +63,16 @@ export class LogScrubber {
             deepScrub: true,
             preserveTypes: true,
         }) as ScrubberConfig;
+
+        // Opt-in: running regexes over every string in every log is a real
+        // cost, so an unset option means "do not".
+        const values = (config as { values?: boolean | ValuePattern[] }).values;
+        if (values === true) {
+            this.valuePatterns = DEFAULT_VALUE_PATTERNS;
+        }
+        else if (Array.isArray(values) && values.length > 0) {
+            this.valuePatterns = values;
+        }
 
         this.fieldRuleMap = new Map();
         this.regexRules = [];
@@ -153,9 +202,34 @@ export class LogScrubber {
             const fieldsModified: string[] = [];
             let result = value;
 
+            // Map, Set and Headers all walk to `[]` under `Object.entries`,
+            // so the generic branch below sees no entries and returns them by
+            // reference - unredacted. Convert to a plain object (Headers, Map)
+            // or array (Set) on the COPY so their contents are actually
+            // reachable by the rules.
+            const container = toScrubbableContainer(value);
+            if (container) {
+                const nested = this.scrubValue(container.plain, depth, visited);
+                // Always modified: the container itself had to be replaced for
+                // its contents to be inspectable downstream at all.
+                return { value: nested.value, modified: true, fieldsModified: nested.fieldsModified };
+            }
+
             if (Array.isArray(value)) {
                 for (let i = 0; i < value.length; i++) {
                     const item = value[i];
+
+                    if (this.valuePatterns && typeof item === 'string') {
+                        const scrubbed = scrubStringValue(item, this.valuePatterns);
+                        if (scrubbed !== item) {
+                            if (result === value) result = this.shallowClone(value);
+                            result[i] = scrubbed;
+                            modified = true;
+                            fieldsModified.push(`[${i}]`);
+                        }
+                        continue;
+                    }
+
                     if (item && typeof item === 'object') {
                         const nested = this.scrubValue(item, depth + 1, visited);
                         if (nested.modified) {
@@ -180,6 +254,17 @@ export class LogScrubber {
                             fieldsModified.push(key);
                         }
                     }
+                    else if (this.valuePatterns && typeof entryValue === 'string') {
+                        // No key rule matched, but the VALUE may still look
+                        // like a secret - a token pasted into a `note` field.
+                        const scrubbed = scrubStringValue(entryValue, this.valuePatterns);
+                        if (scrubbed !== entryValue) {
+                            if (result === value) result = this.shallowClone(value);
+                            result[key] = scrubbed;
+                            modified = true;
+                            fieldsModified.push(key);
+                        }
+                    }
                     else if (this.config.deepScrub && entryValue && typeof entryValue === 'object') {
                         const nested = this.scrubValue(entryValue, depth + 1, visited);
                         if (nested.modified) {
@@ -200,12 +285,32 @@ export class LogScrubber {
     }
 
 
+    /**
+     * Scrub a log row's context.
+     *
+     * ONLY `ctx` is touched, and that is a deliberate invariant, not an
+     * oversight: `ctx` is user-owned and arbitrarily shaped, whereas the
+     * top-level `session`, `user` and `route` fields are the reader's index
+     * keys. Redacting them would break every join a backend can perform while
+     * protecting nothing - `user` is already a correlation id, not a name, and
+     * `route` is a pattern, not a path.
+     */
     public scrubLoggerObject(logObj: LoggerObject): ScrubResult {
         if (!this.config.enabled) {
             return { scrubbed: false, fieldsModified: [] };
         }
 
         this.scrubStats.totalProcessed++;
+
+        // The message is opt-in separately from context: it is the line a
+        // developer reads to understand what happened, so redacting inside it
+        // is a bigger behavioural change than redacting a context field.
+        if (this.valuePatterns && this.config.message && typeof logObj.msg === 'string') {
+            const scrubbedMsg = scrubStringValue(logObj.msg, this.valuePatterns);
+            if (scrubbedMsg !== logObj.msg) {
+                logObj.msg = scrubbedMsg;
+            }
+        }
 
         const result = this.scrubValue(logObj.ctx, 0, new WeakSet());
 

@@ -1,21 +1,50 @@
-import { useRuntimeConfig } from '#imports';
+import { useFroggerConfig, useFroggerServerConfig } from '../../shared/utils/use-frogger-config';
 import { parseAppInfoConfig } from "../../app-info/parse";
 
 import { generateW3CTraceHeaders } from "../../shared/utils/trace-headers";
 import { splitLoggerBatch } from "../../shared/utils/split-batch";
+import { toOtlpLogs } from "./otlp-shape";
 
 import type { IFroggerTransport } from "./types";
-import type { LoggerObject } from "~/src/runtime/shared/types/log";
-import type { LoggerObjectBatch } from "~/src/runtime/shared/types/batch";
+import type { LoggerObject } from "../../shared/types/log";
+import type { LoggerObjectBatch } from "../../shared/types/batch";
+import { LOG_BATCH_SCHEMA } from "../../shared/types/batch";
+import type { FroggerResource } from "../../shared/types/resource";
+import type { SpanObject } from "../../shared/types/span";
 
 import { uuidv7 } from '../../shared/utils/uuid';
 import { froggerInternal } from '../../shared/utils/internal-log';
+import { backoffDelay, retryAfterMs } from '../../shared/utils/backoff';
+import { recordDelivered, recordDropped } from '../../shared/utils/health';
 
 
 
 export interface HttpTransportOptions {
     endpoint: string;
     baseUrl?: string;
+
+    /**
+     * Wire shape for the request body.
+     *
+     * - `'frogger'` (default): `{ logs, spans, app, resource, meta }`, the
+     *   format nuxt-observe consumes.
+     * - `'otlp-logs'`: an OTLP/HTTP `ExportLogsServiceRequest`, which reaches
+     *   the OTel Collector, Alloy, SigNoz, Datadog, Axiom, Better Stack and
+     *   ClickStack without any of them knowing what Frogger is.
+     *
+     * A pure mapping applied just before the POST, so retry, backoff, chunking
+     * and 4xx-drop behaviour are identical either way.
+     */
+    shape?: 'frogger' | 'otlp-logs';
+
+    /**
+     * `tracestate` vendor key for this destination's entry. Defaults to
+     * `frogger`.
+     *
+     * This was assigned and never read: every outgoing `tracestate` was written
+     * under the hardcoded key `frogger`, so pointing two transports at
+     * different vendors produced identical headers.
+     */
     vendor?: string;
     headers?: Record<string, string>;
     /** Sent on every batch POST. Location is controlled by `apiKeyLocation`. */
@@ -42,6 +71,7 @@ export interface HttpTransportOptions {
 
 export const defaultHttpTransportOptions: HttpTransportOptions = {
     endpoint: '',
+    shape: 'frogger',
     vendor: 'frogger',
     headers: {},
     apiKey: '',
@@ -66,18 +96,21 @@ export class HttpTransport implements IFroggerTransport {
 
     private options: Required<HttpTransportOptions>;
     private retries: Map<string, number> = new Map();
+    private readonly resource: FroggerResource | undefined;
 
     constructor(options: HttpTransportOptions) {
         this.transportId = `frogger-http-${uuidv7()}`;
 
-        const config = useRuntimeConfig()
-        //@ts-ignore
-        const { isSet, name, version } = parseAppInfoConfig(config.public.frogger.app);
+        const config = useFroggerConfig()
+        const { isSet, name, version } = parseAppInfoConfig(config.app);
+        // Prefer the server resource (it carries this boot's instance id); the
+        // public block is the client-side fallback.
+        this.resource = useFroggerServerConfig().resource ?? config.resource;
 
         this.options = {
             endpoint: options.endpoint,
-            //@ts-ignore
-            baseUrl: options.baseUrl || config.public.frogger.baseUrl || '',
+            baseUrl: options.baseUrl || config.baseUrl || '',
+            shape: options.shape || 'frogger',
             vendor: options.vendor || 'frogger',
             appInfo: isSet ? {
                 name: name || 'unknown',
@@ -105,38 +138,45 @@ export class HttpTransport implements IFroggerTransport {
     }
 
     async log(logObj: LoggerObject): Promise<void> {
-        const batch: LoggerObjectBatch = {
+        await this.sendBatch(this.addBatchMetadata({
             logs: [logObj],
             app: this.options.appInfo
-        };
-
-        await this.sendBatch(batch);
+        }));
     }
 
+    /**
+     * Stamp the envelope for this hop. `processChain` APPENDS: rebuilding it as
+     * a fresh one-element array made the receiver's duplicate-hop check
+     * unreachable, so a genuine A -> B -> A loop could only ever be caught by
+     * the staleness heuristic.
+     */
     private addBatchMetadata(logBatch: LoggerObjectBatch): LoggerObjectBatch {
+        const chain = logBatch.meta?.processChain ?? [];
+
         return {
             ...logBatch,
+            resource: logBatch.resource ?? this.resource,
             meta: {
+                ...logBatch.meta,
+                schema: LOG_BATCH_SCHEMA,
                 processed: true,
-                processChain: [this.transportId],
+                processChain: [...chain, this.transportId],
                 source: this.options.appInfo.name,
                 time: Date.now()
             }
         };
     }
 
-    async logBatch(logs: LoggerObject[]): Promise<void> {
-        if (logs.length === 0) {
+    async logBatch(logs: LoggerObject[], spans?: SpanObject[]): Promise<void> {
+        if (logs.length === 0 && (!spans || spans.length === 0)) {
             return;
         }
 
-        const batch: LoggerObjectBatch = {
+        await this.sendBatch(this.addBatchMetadata({
             logs,
+            ...(spans && spans.length > 0 ? { spans } : {}),
             app: this.options.appInfo
-        };
-
-        const metadataBatch = this.addBatchMetadata(batch);
-        await this.sendBatch(metadataBatch);
+        }));
     }
 
     private async sendBatch(batch: LoggerObjectBatch): Promise<void> {
@@ -157,6 +197,7 @@ export class HttpTransport implements IFroggerTransport {
 
         try {
             await this.performHttpRequest(batch);
+            recordDelivered(batch.logs.length);
             this.retries.delete(batchId);
         }
         catch (error) {
@@ -166,18 +207,20 @@ export class HttpTransport implements IFroggerTransport {
                 froggerInternal.warn(
                     `HttpTransport: destination rejected the batch (${this.statusOf(error)}). Dropping ${batch.logs.length} logs.`
                 );
+                recordDropped('rejected4xx', batch.logs.length, `${this.options.endpoint} rejected the batch (${this.statusOf(error)})`);
                 this.retries.delete(batchId);
                 return;
             }
 
             if (this.options.retryOnFailure) {
-                await this.handleSendFailure(batchId, batch);
+                await this.handleSendFailure(batchId, batch, error);
             }
             else {
                 froggerInternal.error(
                     `HttpTransport: failed to send logs (retries disabled). Dropping ${batch.logs.length} logs.`,
                     error
                 );
+                recordDropped('retriesExhausted', batch.logs.length, 'retries disabled on this transport');
             }
         }
     }
@@ -201,7 +244,9 @@ export class HttpTransport implements IFroggerTransport {
         const w3cHeaders = generateW3CTraceHeaders({
             traceId: traceContext?.traceId,
             parentSpanId: traceContext?.spanId,
-            vendorData: { frogger: this.transportId }
+            // Honours the configured vendor key rather than hardcoding
+            // `frogger`, which is what made the option inert.
+            vendorData: { [this.options.vendor || 'frogger']: this.transportId }
         });
 
         const headers: Headers = new Headers({
@@ -246,7 +291,10 @@ export class HttpTransport implements IFroggerTransport {
                 query: this.options.apiKeyLocation === 'query' && this.options.apiKey
                     ? { key: this.options.apiKey }
                     : undefined,
-                body: batch,
+                // The ONE place the shape is applied: everything above this
+                // line - retry, backoff, chunking, drop classification - is
+                // shape-agnostic and stays that way.
+                body: this.options.shape === 'otlp-logs' ? toOtlpLogs(batch) : batch,
                 signal: controller.signal
             });
         }
@@ -255,20 +303,24 @@ export class HttpTransport implements IFroggerTransport {
         }
     }
 
-    private async handleSendFailure(batchId: string, batch: LoggerObjectBatch): Promise<void> {
+    private async handleSendFailure(batchId: string, batch: LoggerObjectBatch, error?: unknown): Promise<void> {
         const retryCount = this.retries.get(batchId) || 0;
 
         if (retryCount >= this.options.maxRetries) {
             froggerInternal.error(`HttpTransport: maximum retry attempts (${this.options.maxRetries}) reached for batch ${batchId}. Dropping ${batch.logs.length} logs.`);
+            recordDropped('retriesExhausted', batch.logs.length, `${this.options.endpoint} failed after ${this.options.maxRetries} retries`);
             this.retries.delete(batchId);
             return;
         }
 
         this.retries.set(batchId, retryCount + 1);
 
-        const backoffDelay = this.options.retryDelay * Math.pow(2, retryCount);
+        // Jittered: without it every instance retries a recovering sink at the
+        // same instant, and its first moment of recovery is the next herd.
+        const delay = retryAfterMs(error)
+            ?? backoffDelay(retryCount, { baseMs: this.options.retryDelay });
 
-        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+        await new Promise(resolve => setTimeout(resolve, delay));
 
         try {
             await this.performHttpRequest(batch);
@@ -280,10 +332,11 @@ export class HttpTransport implements IFroggerTransport {
                 froggerInternal.warn(
                     `HttpTransport: destination rejected the batch (${this.statusOf(error)}). Dropping ${batch.logs.length} logs.`
                 );
+                recordDropped('rejected4xx', batch.logs.length, `${this.options.endpoint} rejected the batch (${this.statusOf(error)})`);
                 this.retries.delete(batchId);
                 return;
             }
-            await this.handleSendFailure(batchId, batch);
+            await this.handleSendFailure(batchId, batch, error);
         }
     }
 

@@ -2,7 +2,7 @@ import { uuidv7 } from '../../shared/utils/uuid';
 
 import { BaseTransport } from './base-transport';
 
-import type { LoggerObject } from '~/src/runtime/shared/types/log';
+import type { LoggerObject } from '../../shared/types/log';
 
 
 

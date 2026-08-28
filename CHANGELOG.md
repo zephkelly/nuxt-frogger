@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.27
+
+[compare changes](https://github.com/zephkelly/nuxt-frogger/compare/v0.1.26...v0.1.27)
+
+### 🚀 Enhancements
+
+- Large range of changes and improvements to metric pipeline ([6d0ebd1](https://github.com/zephkelly/nuxt-frogger/commit/6d0ebd1))
+
+### ❤️ Contributors
+
+- Zephkelly <masterevank@gmail.com>
+
 ## v0.2.0 (unreleased)
 
 Breaking. See `docs/migration/0.2.md` for the full migration.

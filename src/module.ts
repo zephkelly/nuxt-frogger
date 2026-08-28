@@ -29,13 +29,15 @@ import { resolveInternalLogLevel, type InternalLogLevel } from './runtime/shared
 // Re-export the declarative transport factories + config types so nuxt.config
 // users can `import { fileTransport } from 'nuxt-frogger'`. frogger.config.ts
 // users import the same names from '#frogger/config' (runtime/options.ts).
-export {
-    fileTransport,
-    httpTransport,
-    stdoutTransport,
-    observeTransport,
-    memoryTransport,
-} from './runtime/shared/transports/factories'
+//
+// A STAR re-export, deliberately. @nuxt/module-builder generates dist/types.d.mts
+// by rewriting this file's re-exports, and it hardcodes a `type ` prefix onto
+// every NAMED one: `(n === 'default' ? '' : 'type ') + n`. A named list here
+// therefore ships `export { type observeTransport }`, leaving the factory callable
+// at runtime but a TYPE to TypeScript, so consumers cannot call it and fall back to
+// hand-written literal config. Star re-exports are emitted untouched. factories.ts
+// exports nothing but these five functions, so nothing internal leaks.
+export * from './runtime/shared/transports/factories'
 export type {
     FroggerTransportConfig,
     FileTransportConfig,
@@ -54,12 +56,9 @@ export type {
 export type { IFroggerTransport } from './runtime/logger/_transports/types'
 export type { FroggerHealth, FroggerDropCounts } from './runtime/shared/utils/health'
 
-// Metric-transport factories + config types (parallel to the log factories).
-export {
-    metricFileTransport,
-    metricMemoryTransport,
-    metricObserveTransport,
-} from './runtime/metrics/shared/transports/factories'
+// Metric-transport factories + config types (parallel to the log factories, and
+// starred for the same dist/types.d.mts reason).
+export * from './runtime/metrics/shared/transports/factories'
 export type {
     FroggerMetricTransportConfig,
     MetricFileTransportConfig,
